@@ -27,6 +27,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/prestamos', [LoanController::class, 'index'])->name('loans.index');
     Route::get('/prestamos/nuevo/crear', [LoanCreationController::class, 'create'])->name('loans.create');
+    Route::post('/prestamos/nuevo/cotizar-redondeo', [LoanCreationController::class, 'quote'])->name('loans.quote-rounded');
+    Route::post('/prestamos/nuevo/confirmar-redondeo', [LoanCreationController::class, 'confirmRounded'])->name('loans.confirm-rounded');
     Route::post('/prestamos/nuevo/crear', [LoanCreationController::class, 'store'])->name('loans.store');
     Route::get('/prestamos/{loan}/editar', [LoanController::class, 'edit'])->name('loans.edit');
     Route::put('/prestamos/{loan}', [LoanController::class, 'update'])->name('loans.update');

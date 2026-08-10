@@ -18,6 +18,13 @@
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="client_name" value="{{ $input['client_name'] }}" required>
                 </div>
                 <div>
+                    <label class="text-sm font-semibold text-slate-700">Metodo</label>
+                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method" required>
+                        <option value="regular" @selected(($input['calculation_method'] ?? 'regular') === 'regular')>Prestamo regular</option>
+                        <option value="rounded" @selected(($input['calculation_method'] ?? 'regular') === 'rounded')>Prestamo con redondeo</option>
+                    </select>
+                </div>
+                <div>
                     <label class="text-sm font-semibold text-slate-700">Operador</label>
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="operator_id" required>
                         <option value="">Seleccionar</option>
@@ -80,6 +87,10 @@
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $input['start_date'] }}" required>
                 </div>
                 <div>
+                    <label class="text-sm font-semibold text-slate-700">Primer pago</label>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_payment_date" type="date" value="{{ $input['first_payment_date'] ?? $input['start_date'] }}">
+                </div>
+                <div>
                     <label class="text-sm font-semibold text-slate-700">Dia pago</label>
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="payment_day" type="number" min="1" max="31" value="{{ $input['payment_day'] }}" required>
                 </div>
@@ -90,7 +101,39 @@
         </form>
 
         <section class="simulator-print rounded-lg border border-slate-200 bg-white shadow-sm">
-            @if ($schedule)
+            @if ($roundedQuote)
+                <div class="border-b border-slate-200 px-5 py-4">
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Simulacion con redondeo</p>
+                    <h3 class="mt-1 text-xl font-bold text-slate-950">{{ $input['client_name'] }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">Ambas opciones tienen el mismo total; cambia el primer pago y los pagos restantes.</p>
+                </div>
+                <div class="grid gap-4 p-5 xl:grid-cols-2">
+                    @foreach ($roundedQuote['options'] as $option)
+                        <section class="rounded-lg border border-slate-200">
+                            <div class="border-b border-slate-200 p-4">
+                                <p class="text-xs font-bold uppercase tracking-[0.16em] text-[#0f766e]">{{ $option['name'] }}</p>
+                                <h4 class="mt-1 font-bold text-slate-950">{{ $option['description'] }}</h4>
+                                <dl class="mt-3 grid gap-3 sm:grid-cols-2">
+                                    <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Primer pago</dt><dd class="font-bold">{{ Money::mxn($option['first_payment']) }}</dd></div>
+                                    <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Restantes</dt><dd class="font-bold">{{ $option['remaining_payments'] }} de {{ Money::mxn($option['regular_payment']) }}</dd></div>
+                                    <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Interes total</dt><dd class="font-bold">{{ Money::mxn(Money::decimal($roundedQuote['input']['interest_total_cents'])) }}</dd></div>
+                                    <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Total</dt><dd class="font-bold">{{ Money::mxn($option['total']) }}</dd></div>
+                                </dl>
+                            </div>
+                            <div class="max-h-[420px] overflow-auto">
+                                <table class="w-full min-w-[760px] text-left text-sm">
+                                    <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Pago</th><th class="px-4 py-3">Vence</th><th class="px-4 py-3 text-right">Capital</th><th class="px-4 py-3 text-right">Interes</th><th class="px-4 py-3 text-right">Cobranza</th><th class="px-4 py-3 text-right">Pagaré</th><th class="px-4 py-3 text-right">Capital vivo</th></tr></thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach ($option['installments'] as $installment)
+                                            <tr><td class="px-4 py-3">{{ $installment['number'] }}</td><td class="px-4 py-3">{{ \Carbon\CarbonImmutable::parse($installment['due_date'])->format('d/m/Y') }}</td><td class="px-4 py-3 text-right">{{ Money::mxn($installment['principal']) }}</td><td class="px-4 py-3 text-right">{{ Money::mxn($installment['interest']) }}</td><td class="px-4 py-3 text-right">{{ Money::mxn($installment['administration_fee']) }}</td><td class="px-4 py-3 text-right font-semibold">{{ Money::mxn($installment['amount']) }}</td><td class="px-4 py-3 text-right">{{ Money::mxn($installment['balance']) }}</td></tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    @endforeach
+                </div>
+            @elseif ($schedule)
                 <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Simulacion de prestamo</p>

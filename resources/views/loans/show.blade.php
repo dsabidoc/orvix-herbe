@@ -31,6 +31,9 @@
                         @if (Money::cents($loan->administration_fee ?? 0) > 0)
                             · Gtos Admon {{ Money::mxn($loan->administration_fee) }} fijo mensual
                         @endif
+                        @if (($loan->calculation_method ?? 'regular') === 'rounded')
+                            · Redondeo a {{ $loan->rounding_multiple === 100 ? 'centenas' : 'decenas' }}
+                        @endif
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
