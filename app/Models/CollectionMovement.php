@@ -15,9 +15,12 @@ class CollectionMovement extends Model
         'loan_id',
         'target_installment_id',
         'operator_id',
+        'weekly_cut_id',
         'registered_by',
         'confirmed_by',
+        'reversed_movement_id',
         'operated_on',
+        'registered_at',
         'confirmed_at',
         'contract_amount',
         'operator_surcharge_amount',
@@ -33,6 +36,7 @@ class CollectionMovement extends Model
     {
         return [
             'operated_on' => 'date',
+            'registered_at' => 'datetime',
             'confirmed_at' => 'datetime',
         ];
     }
@@ -57,6 +61,11 @@ class CollectionMovement extends Model
         return $this->belongsTo(Operator::class);
     }
 
+    public function weeklyCut(): BelongsTo
+    {
+        return $this->belongsTo(WeeklyCut::class);
+    }
+
     public function registeredBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'registered_by');
@@ -65,5 +74,10 @@ class CollectionMovement extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class);
+    }
+
+    public function reversedMovement(): BelongsTo
+    {
+        return $this->belongsTo(CollectionMovement::class, 'reversed_movement_id');
     }
 }

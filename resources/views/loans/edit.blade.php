@@ -41,7 +41,9 @@
 
             <section class="space-y-4">
                 <h3 class="font-bold text-slate-950">Condiciones</h3>
-                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="capital" placeholder="Capital requerido" type="number" step="0.01" value="{{ old('capital', $loan->capital) }}" @disabled(! $canEditConditions) required>
+                <label class="block text-sm font-semibold text-slate-700">Capital requerido
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="capital" placeholder="Capital requerido" type="number" step="0.01" value="{{ old('capital', $loan->capital) }}" @disabled(! $canEditConditions) required>
+                </label>
                 @php
                     $administrationFeeDisplay = old('administration_fee', $loan->administration_fee ?? '0.00');
                     $vatEnabledValue = old('vat_enabled', $loan->vat_enabled ? '1' : '0');
@@ -49,15 +51,21 @@
                     $rateValue = old('rate_value', number_format(((float) $loan->monthly_rate) * 100, 6, '.', ''));
                 @endphp
                 <div class="grid grid-cols-2 gap-3">
-                    <select class="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="rate_type" @disabled(! $canEditConditions) required>
-                        <option value="monthly" @selected($rateType === 'monthly')>Tasa mensual</option>
-                        <option value="annual" @selected($rateType === 'annual')>Tasa anual</option>
-                    </select>
-                    <input class="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="rate_value" placeholder="Porcentaje, ej. 2" type="number" step="0.000001" value="{{ $rateValue }}" @disabled(! $canEditConditions) required>
+                    <label class="block text-sm font-semibold text-slate-700">Tipo de tasa
+                        <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="rate_type" @disabled(! $canEditConditions) required>
+                            <option value="monthly" @selected($rateType === 'monthly')>Tasa mensual</option>
+                            <option value="annual" @selected($rateType === 'annual')>Tasa anual</option>
+                        </select>
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">Porcentaje
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="rate_value" placeholder="Ej. 2" type="number" step="0.000001" value="{{ $rateValue }}" @disabled(! $canEditConditions) required>
+                    </label>
                 </div>
                 <p class="-mt-2 text-xs text-slate-500">Captura el porcentaje en numero: para 2% escribe 2; para 24% escribe 24.</p>
                 <div>
-                    <input class="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="administration_fee" placeholder="Gtos Admon" type="number" step="0.01" value="{{ $administrationFeeDisplay }}" @disabled(! $canEditConditions)>
+                    <label class="block text-sm font-semibold text-slate-700">Gtos Admon fijo por pago
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="administration_fee" placeholder="0.00" type="number" step="0.01" value="{{ $administrationFeeDisplay }}" @disabled(! $canEditConditions)>
+                    </label>
                 </div>
                 <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="vat_enabled" @disabled(! $canEditConditions) required>
                     <option value="1" @selected($vatEnabledValue === '1')>Con IVA</option>
@@ -68,10 +76,19 @@
                     <option value="outstanding_balance" @selected(old('interest_calculation_method', $loan->interest_calculation_method) === 'outstanding_balance')>Interes sobre saldo insoluto</option>
                 </select>
                 <div class="grid grid-cols-3 gap-3">
-                    <input class="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="term_months" placeholder="Meses" type="number" value="{{ old('term_months', $loan->term_months) }}" @disabled(! $canEditConditions) required>
-                    <input class="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ old('payment_day', $loan->payment_day) }}" @disabled(! $canEditConditions) required>
-                    <input class="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="start_date" type="date" value="{{ old('start_date', $loan->start_date->toDateString()) }}" @disabled(! $canEditConditions) required>
+                    <label class="block text-sm font-semibold text-slate-700">Meses
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="term_months" placeholder="Meses" type="number" value="{{ old('term_months', $loan->term_months) }}" @disabled(! $canEditConditions) required>
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">Dia de pago
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ old('payment_day', $loan->payment_day) }}" @disabled(! $canEditConditions) required>
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">Fecha inicio
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="start_date" type="date" value="{{ old('start_date', $loan->start_date->toDateString()) }}" @disabled(! $canEditConditions) required>
+                    </label>
                 </div>
+                <label class="block text-sm font-semibold text-slate-700">Fecha cobranza
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="first_payment_date" type="date" value="{{ old('first_payment_date', optional($loan->first_payment_date ?? $loan->start_date)->toDateString()) }}" @disabled(! $canEditConditions) required>
+                </label>
 
                 @unless ($canEditConditions)
                     <input name="capital" type="hidden" value="{{ $loan->capital }}">
@@ -83,6 +100,7 @@
                     <input name="term_months" type="hidden" value="{{ $loan->term_months }}">
                     <input name="payment_day" type="hidden" value="{{ $loan->payment_day }}">
                     <input name="start_date" type="hidden" value="{{ $loan->start_date->toDateString() }}">
+                    <input name="first_payment_date" type="hidden" value="{{ optional($loan->first_payment_date ?? $loan->start_date)->toDateString() }}">
                 @endunless
 
                 <div class="flex gap-2">

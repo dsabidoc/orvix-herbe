@@ -9,8 +9,6 @@
     $overdueCount = $loan->installments->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0 && $installment->due_date->toDateString() < $today)->count();
     $interestMethodLabel = $loan->interest_calculation_method === 'outstanding_balance' ? 'saldo insoluto' : 'capital fijo';
     $totalInterest = $loan->installments->sum(fn ($installment) => Money::cents($installment->interest_amount));
-    $primaryInvestment = $loan->investments->first(fn ($investment) => $investment->investor?->name === 'Herbe Rodriguez');
-    $externalInvestments = $loan->investments->reject(fn ($investment) => $investment->investor?->name === 'Herbe Rodriguez')->values();
 @endphp
 
 <x-layouts.app title="{{ $loan->folio }} · {{ $loan->client->first_name }} {{ $loan->client->last_name }}">
@@ -84,6 +82,54 @@
         </section>
 
         <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 px-5 py-4">
+                <h3 class="font-bold text-slate-950">Origen del desembolso</h3>
+                <p class="mt-1 text-sm text-slate-500">Entrega de fondos relacionada con este prestamo.</p>
+            </div>
+            <div class="divide-y divide-slate-100">
+                @forelse ($loan->fundDisbursements as $disbursement)
+                    <div class="grid gap-3 p-5 text-sm md:grid-cols-6">
+                        <div>
+                            <p class="text-slate-500">Fecha entrega</p>
+                            <p class="font-bold text-slate-950">{{ $disbursement->delivered_on->format('d/m/Y') }}</p>
+                            @if ($disbursement->is_delivery_date_inferred)
+                                <p class="mt-1 text-xs text-amber-700">Inferida historica</p>
+                            @endif
+                        </div>
+                        <div>
+                            <p class="text-slate-500">Importe</p>
+                            <p class="font-bold text-slate-950">{{ Money::mxn($disbursement->amount) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500">Operador</p>
+                            <p class="font-bold text-slate-950">{{ $disbursement->operator?->name }}</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500">Corte</p>
+                            @if ($disbursement->weeklyCut)
+                                <a class="font-bold text-[#0f766e]" href="{{ route('cuts.show', $disbursement->weeklyCut) }}">
+                                    {{ $disbursement->weeklyCut->settlement_on?->format('d/m/Y') ?? $disbursement->weeklyCut->period_ends_on->format('d/m/Y') }}
+                                </a>
+                            @else
+                                <p class="font-bold text-slate-950">Fuera de corte</p>
+                            @endif
+                        </div>
+                        <div>
+                            <p class="text-slate-500">Registro</p>
+                            <p class="font-bold text-slate-950">{{ $disbursement->registeredBy?->name ?? 'Sistema' }}</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500">Origen capital</p>
+                            <p class="font-bold text-slate-950">{{ ucfirst(str_replace('_', ' ', (string) $disbursement->capital_source)) }}</p>
+                        </div>
+                    </div>
+                @empty
+                    <p class="p-5 text-sm text-slate-500">Este prestamo no tiene origen de desembolso registrado. Puede tratarse de informacion historica anterior al control de cortes.</p>
+                @endforelse
+            </div>
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h3 class="font-bold text-slate-950">Inversionistas del prestamo</h3>
@@ -113,7 +159,7 @@
                                 <td class="px-5 py-3 text-right">{{ Money::mxn($investment->amount) }}</td>
                                 <td class="px-5 py-3 text-right">{{ number_format($interestSharePercent, 2) }}%</td>
                                 <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($estimatedInterest)) }}</td>
-                                <td class="px-5 py-3 text-slate-500">{{ ($investment->agreement_snapshot['role'] ?? 'inversionista') === 'principal' ? 'Principal' : 'Inversionista' }}</td>
+                                <td class="px-5 py-3 text-slate-500">Inversionista</td>
                             </tr>
                         @empty
                             <tr>
@@ -249,8 +295,7 @@
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="type" name="type">
                         <option value="ordinary">Mensualidad</option>
                         <option value="partial">Abono parcial</option>
-                        <option value="advance">Adelanto desde ultima letra</option>
-                        <option value="settlement">Liquidacion</option>
+                        <option value="advance">Abono a capital: cuotas completas desde el final</option>
                     </select>
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2">
@@ -259,7 +304,7 @@
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operated_on" name="operated_on" type="date" value="{{ now('America/Merida')->toDateString() }}">
                     </div>
                     <div>
-                        <label class="text-sm font-semibold text-slate-700" for="contract_amount">Pagaré</label>
+                        <label class="text-sm font-semibold text-slate-700" for="contract_amount">Monto contractual</label>
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="contract_amount" name="contract_amount" type="number" step="0.01" value="{{ $next?->remaining_amount ?? '0.00' }}">
                     </div>
                 </div>
@@ -291,39 +336,40 @@
             <div class="border-b border-slate-200 px-5 py-4">
                 <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Inversionistas</p>
                 <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</h3>
-                <p class="mt-1 text-sm text-slate-500">Herbe Rodriguez queda como principal por default con el capital e intereses restantes.</p>
+                <p class="mt-1 text-sm text-slate-500">La suma debe cubrir {{ Money::mxn($loan->capital) }} y el 100% de intereses. No hay inversionista default.</p>
             </div>
             <div class="space-y-4 px-5 py-4">
-                <div class="grid gap-3 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-3">
-                    <div>
-                        <p class="text-slate-500">Principal default</p>
-                        <p class="mt-1 font-bold text-slate-950">Herbe Rodriguez</p>
-                    </div>
-                    <div>
-                        <p class="text-slate-500">Capital actual</p>
-                        <p class="mt-1 font-bold text-slate-950">{{ Money::mxn($primaryInvestment?->amount ?? $loan->capital) }}</p>
-                    </div>
-                    <div>
-                        <p class="text-slate-500">% interes actual</p>
-                        <p class="mt-1 font-bold text-slate-950">{{ number_format(((float) ($primaryInvestment?->investor_share_rate ?? 1)) * 100, 2) }}%</p>
-                    </div>
-                </div>
-
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[760px] text-left text-sm">
                         <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                             <tr>
-                                <th class="px-3 py-2">Nombre inversionista</th>
+                                <th class="px-3 py-2">Inversionista</th>
+                                <th class="px-3 py-2 text-right">Disponible</th>
                                 <th class="px-3 py-2 text-right">Capital que aporta</th>
                                 <th class="px-3 py-2 text-right">% de intereses</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @for ($index = 0; $index < 6; $index++)
-                                @php $investment = $externalInvestments->get($index); @endphp
+                                @php
+                                    $investment = $loan->investments->values()->get($index);
+                                    $oldInvestorId = old("investors.$index.investor_id", $investment?->investor_id);
+                                @endphp
                                 <tr>
                                     <td class="px-3 py-2">
-                                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="investors[{{ $index }}][name]" placeholder="Nombre" value="{{ old("investors.$index.name", $investment?->investor?->name) }}">
+                                        <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="investors[{{ $index }}][investor_id]">
+                                            <option value="">Seleccionar</option>
+                                            @foreach ($investors as $investor)
+                                                <option value="{{ $investor->id }}" @selected((string) $oldInvestorId === (string) $investor->id)>{{ $investor->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                    <td class="px-3 py-2 text-right text-slate-500">
+                                        @if ($investment)
+                                            {{ Money::mxn(Money::decimal(Money::cents($investment->investor?->available_capital) + Money::cents($investment->amount))) }}
+                                        @else
+                                            -
+                                        @endif
                                     </td>
                                     <td class="px-3 py-2">
                                         <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-right text-sm" name="investors[{{ $index }}][capital_amount]" type="number" step="0.01" min="0" placeholder="0.00" value="{{ old("investors.$index.capital_amount", $investment?->amount) }}">
@@ -336,7 +382,7 @@
                         </tbody>
                     </table>
                 </div>
-                <p class="text-sm text-slate-500">La suma de capital no puede exceder {{ Money::mxn($loan->capital) }} y la suma de porcentajes no puede exceder 100%.</p>
+                <p class="text-sm text-slate-500">La suma de capital debe ser exactamente {{ Money::mxn($loan->capital) }} y la suma de porcentajes debe ser exactamente 100%.</p>
             </div>
             <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
                 <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>
@@ -414,6 +460,17 @@
                 </div>
                 <div class="space-y-4 px-5 py-4">
                     <p class="text-sm leading-6 text-slate-600">Cierra el credito para Orvix; el operador puede continuar la cobranza fuera del sistema si aplica.</p>
+                    @if ($settlementQuote)
+                        <div class="rounded-md bg-slate-50 p-3">
+                            <p class="text-sm text-slate-500">Saldo calculado para liquidar hoy</p>
+                            <p class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($settlementQuote['total_cents'])) }}</p>
+                            <p class="mt-1 text-xs text-slate-500">Incluye capital de cuotas futuras y solo intereses vencidos o del mes corriente. No incluye intereses futuros.</p>
+                        </div>
+                    @endif
+                    <div>
+                        <label class="text-sm font-semibold text-slate-700" for="settled_on">Fecha de liquidacion</label>
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="settled_on" name="settled_on" type="date" value="{{ now('America/Merida')->toDateString() }}">
+                    </div>
                     <div>
                         <label class="text-sm font-semibold text-slate-700" for="settlement_reason">Motivo de liquidacion</label>
                         <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="settlement_reason" name="settlement_reason" required>

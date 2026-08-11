@@ -153,7 +153,30 @@
                     <h3 class="font-bold text-slate-950">Comenzar credito</h3>
                     <form class="mt-4 space-y-3" method="POST" action="{{ route('applications.start', $application) }}">
                         @csrf
-                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $conditions['start_date'] }}">
+                        <div>
+                            <label class="text-sm font-semibold text-slate-700">Fecha de inicio</label>
+                            <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $conditions['start_date'] }}">
+                        </div>
+                        <div class="rounded-md bg-slate-50 p-3">
+                            <p class="font-bold text-slate-950">Inversionistas</p>
+                            <p class="mt-1 text-xs text-slate-500">Capital total {{ Money::mxn($conditions['capital']) }} · intereses 100%</p>
+                            <div class="mt-3 space-y-2">
+                                @for ($index = 0; $index < 4; $index++)
+                                    <div class="grid gap-2">
+                                        <select class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" name="investors[{{ $index }}][investor_id]">
+                                            <option value="">Seleccionar inversionista</option>
+                                            @foreach ($investors as $investor)
+                                                <option value="{{ $investor->id }}">{{ $investor->name }} · {{ Money::mxn($investor->available_capital) }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][capital_amount]" type="number" step="0.01" min="0" placeholder="Capital">
+                                            <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][interest_share_percent]" type="number" step="0.0001" min="0" max="100" placeholder="% interes">
+                                        </div>
+                                    </div>
+                                @endfor
+                            </div>
+                        </div>
                         <button class="w-full rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">Comenzar</button>
                     </form>
                 </section>

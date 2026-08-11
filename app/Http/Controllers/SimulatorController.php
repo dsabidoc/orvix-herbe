@@ -43,7 +43,7 @@ class SimulatorController extends Controller
         if ($request->filled('capital')) {
             $data = $request->validate([
                 'client_name' => ['required', 'string', 'max:180'],
-                'calculation_method' => ['required', 'in:regular,rounded'],
+                'calculation_method' => ['nullable', 'in:regular,rounded'],
                 'operator_id' => ['required', 'exists:operators,id'],
                 'capital' => ['required', 'numeric', 'min:1'],
                 'rate_type' => ['required', 'in:monthly,annual'],
@@ -59,6 +59,7 @@ class SimulatorController extends Controller
                 'opening_fee_value' => ['required', 'numeric', 'min:0'],
             ]);
 
+            $data['calculation_method'] ??= 'regular';
             $monthlyRate = $this->monthlyRate((float) $data['rate_value'], $data['rate_type']);
             $data['monthly_rate'] = number_format($monthlyRate, 6, '.', '');
             $data['administration_fee_type'] = 'monthly';

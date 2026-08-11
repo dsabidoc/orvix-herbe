@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Loans\LoanSettlementService;
 use App\Models\Loan;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class LoanSettlementController extends Controller
 {
-    public function store(Request $request, Loan $loan): RedirectResponse
+    public function store(Request $request, Loan $loan, LoanSettlementService $service): RedirectResponse
     {
         abort_unless($request->user()->can('settlements.authorize') || $request->user()->hasRole('operador-cartera'), 403);
 
@@ -18,19 +20,15 @@ class LoanSettlementController extends Controller
 
         $data = $request->validate([
             'settlement_reason' => ['required', 'in:pronto_pago_cliente,dejo_de_pagar'],
+            'settled_on' => ['nullable', 'date'],
         ]);
 
-        $loan->installments()->where('remaining_amount', '>', 0)->update([
-            'status' => 'cancelled_by_settlement',
-            'remaining_amount' => '0.00',
-        ]);
-
-        $loan->update([
-            'status' => 'settled',
-            'settlement_reason' => $data['settlement_reason'],
-            'settled_at' => now('America/Merida'),
-            'settled_by' => $request->user()->id,
-        ]);
+        $service->settle(
+            $loan,
+            $data['settlement_reason'],
+            $request->user()->id,
+            CarbonImmutable::parse($data['settled_on'] ?? now('America/Merida')->toDateString(), 'America/Merida'),
+        );
 
         return redirect()->route('loans.show', $loan)->with('status', 'Credito liquidado para Orvix.');
     }

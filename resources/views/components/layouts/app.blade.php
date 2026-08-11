@@ -16,23 +16,39 @@
                         <img class="h-12 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
                     </a>
 
+                    @php
+                        $canOpenInvestors = auth()->user()->can('investors.manage') || auth()->user()->can('investments.view-own');
+                        $isInvestorOnly = auth()->user()->can('investments.view-own') && ! auth()->user()->can('investors.manage');
+                        $mainNavItems = $isInvestorOnly
+                            ? [
+                                ['Inversionistas', 'investors.index', 'portfolio'],
+                            ]
+                            : [
+                                ['Dashboard', 'dashboard', 'chart'],
+                                ['Cartera y saldos', 'portfolio-balances.index', 'portfolio'],
+                                ['Cobranza', 'collections.index', 'cash'],
+                                ['Simulador', 'simulator.index', 'calculator'],
+                                ['Cartera', 'loans.index', 'wallet'],
+                                ['Cortes', 'cuts.index', 'receipt'],
+                                ['Solicitudes', 'applications.index', 'file'],
+                                ['Clientes', 'clients.index', 'users'],
+                            ];
+                        if (! $isInvestorOnly && $canOpenInvestors) {
+                            $mainNavItems[] = ['Inversionistas', 'investors.index', 'portfolio'];
+                        }
+                    @endphp
+
                     <nav class="mt-8 space-y-1 text-sm font-medium text-slate-600">
-                        @foreach ([
-                            ['Dashboard', 'dashboard', 'chart'],
-                            ['Cobranza', 'collections.index', 'cash'],
-                            ['Simulador', 'simulator.index', 'calculator'],
-                            ['Cartera', 'loans.index', 'wallet'],
-                            ['Cortes', 'cuts.index', 'receipt'],
-                            ['Solicitudes', 'applications.index', 'file'],
-                            ['Clientes', 'clients.index', 'users'],
-                            ['Expedientes', 'documents.index', 'folder'],
-                        ] as [$label, $route, $icon])
+                        @foreach ($mainNavItems as [$label, $route, $icon])
                             <a class="{{ request()->routeIs($route) ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} flex items-center justify-between rounded-md px-3 py-2.5" href="{{ route($route) }}">
                                 <span class="flex items-center gap-2.5">
                                     <span class="grid size-5 place-items-center rounded bg-[#e6f7f4] text-[#0d9488]">
                                         @switch($icon)
                                             @case('chart')
                                                 <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5"/><path d="M12 16V8"/><path d="M16 16v-8"/></svg>
+                                                @break
+                                            @case('portfolio')
+                                                <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18"/><path d="M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"/><path d="M8 11h8"/><path d="M8 15h5"/><path d="M9 3h6l2 4H7z"/></svg>
                                                 @break
                                             @case('users')
                                                 <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -105,16 +121,7 @@
                     </div>
 
                     <nav class="mt-6 flex-1 space-y-1 overflow-y-auto text-sm font-medium text-slate-600">
-                        @foreach ([
-                            ['Dashboard', 'dashboard'],
-                            ['Cobranza', 'collections.index'],
-                            ['Simulador', 'simulator.index'],
-                            ['Cartera', 'loans.index'],
-                            ['Cortes', 'cuts.index'],
-                            ['Solicitudes', 'applications.index'],
-                            ['Clientes', 'clients.index'],
-                            ['Expedientes', 'documents.index'],
-                        ] as [$label, $route])
+                        @foreach (collect($mainNavItems)->map(fn ($item) => [$item[0], $item[1]]) as [$label, $route])
                             <a class="{{ request()->routeIs($route) ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} flex items-center justify-between rounded-md px-3 py-3" href="{{ route($route) }}">
                                 <span class="flex items-center gap-2.5"><span class="size-2 rounded-full bg-[#0d9488]"></span>{{ $label }}</span>
                                 @if (request()->routeIs($route))

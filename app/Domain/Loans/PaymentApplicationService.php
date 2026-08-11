@@ -2,6 +2,8 @@
 
 namespace App\Domain\Loans;
 
+use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Investors\InvestorReturnRecorder;
 use App\Models\AuditEvent;
 use App\Models\CollectionMovement;
 use App\Models\PaymentAllocation;
@@ -11,6 +13,11 @@ use RuntimeException;
 
 class PaymentApplicationService
 {
+    public function __construct(
+        private readonly InvestorReturnRecorder $investorReturnRecorder,
+        private readonly WeeklyCutPeriodService $cutPeriodService,
+    ) {}
+
     public function confirm(CollectionMovement $movement, int $confirmedByUserId): CollectionMovement
     {
         return DB::transaction(function () use ($movement, $confirmedByUserId) {
@@ -21,6 +28,10 @@ class PaymentApplicationService
 
             if ($movement->confirmation_status !== 'reported') {
                 throw new RuntimeException('Este movimiento ya no esta pendiente de confirmacion.');
+            }
+
+            if ($movement->type === 'settlement') {
+                throw new RuntimeException('La liquidacion se aplica desde el boton Liquidar credito para calcular solo capital futuro e interes del mes corriente.');
             }
 
             $remainingCents = Money::cents($movement->contract_amount);
@@ -35,6 +46,10 @@ class PaymentApplicationService
                 )
                 ->lockForUpdate()
                 ->get();
+
+            if ($movement->type === 'advance') {
+                $this->assertAdvanceCoversFullTrailingInstallments($remainingCents, $installments);
+            }
 
             foreach ($installments as $installment) {
                 if ($remainingCents <= 0) {
@@ -58,6 +73,8 @@ class PaymentApplicationService
                     'amount' => Money::decimal($applied),
                 ]);
 
+                $this->recordInvestorReturns($movement, $installment, $applied, $confirmedByUserId);
+
                 $remainingCents -= $applied;
             }
 
@@ -70,6 +87,10 @@ class PaymentApplicationService
                 'confirmed_by' => $confirmedByUserId,
                 'confirmed_at' => now('America/Merida'),
             ]);
+
+            if ($movement->weekly_cut_id) {
+                $this->cutPeriodService->refreshTotals($movement->weeklyCut()->first());
+            }
 
             AuditEvent::query()->create([
                 'user_id' => $confirmedByUserId,
@@ -92,5 +113,39 @@ class PaymentApplicationService
     private function statusForCoveredInstallment(string $movementType): string
     {
         return $movementType === 'advance' ? 'advanced' : 'confirmed';
+    }
+
+    private function assertAdvanceCoversFullTrailingInstallments(int $amountCents, $installments): void
+    {
+        $runningCents = 0;
+
+        foreach ($installments as $installment) {
+            $runningCents += Money::cents($installment->remaining_amount);
+
+            if ($runningCents === $amountCents) {
+                return;
+            }
+
+            if ($runningCents > $amountCents) {
+                break;
+            }
+        }
+
+        throw new RuntimeException('El abono a capital debe liquidar cuotas completas desde la ultima letra; no se permiten abonos parciales arbitrarios.');
+    }
+
+    private function recordInvestorReturns(CollectionMovement $movement, $installment, int $appliedCents, int $userId): void
+    {
+        $contractCents = Money::cents($installment->contract_amount);
+
+        if ($appliedCents <= 0 || $contractCents <= 0) {
+            return;
+        }
+
+        $paidRatio = min(1, $appliedCents / $contractCents);
+        $principalCents = (int) round(Money::cents($installment->principal_amount) * $paidRatio);
+        $interestCents = (int) round(Money::cents($installment->interest_amount) * $paidRatio);
+
+        $this->investorReturnRecorder->record($movement->loan, $installment, $principalCents, $interestCents, $movement, $userId);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Loan;
@@ -13,7 +14,7 @@ use RuntimeException;
 
 class PaymentController extends Controller
 {
-    public function store(Request $request, Loan $loan): RedirectResponse
+    public function store(Request $request, Loan $loan, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
     {
         $this->authorizeLoanAccess($request, $loan);
 
@@ -35,15 +36,17 @@ class PaymentController extends Controller
             $data['reference'] ?? '',
         ]));
 
+        $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
         $movement = CollectionMovement::query()->firstOrCreate(
             ['idempotency_key' => $idempotencyKey],
             [
                 'public_id' => (string) Str::ulid(),
-                'folio' => 'MOV-'.now('America/Merida')->format('ymd').'-'.str_pad((string) (CollectionMovement::query()->count() + 1), 4, '0', STR_PAD_LEFT),
+                'folio' => 'MOV-'.$registeredAt->format('ymd').'-'.str_pad((string) (CollectionMovement::query()->count() + 1), 4, '0', STR_PAD_LEFT),
                 'loan_id' => $loan->id,
                 'operator_id' => $loan->operator_id,
                 'registered_by' => $request->user()->id,
                 'operated_on' => $data['operated_on'],
+                'registered_at' => $registeredAt,
                 'contract_amount' => Money::decimal(Money::cents($data['contract_amount'])),
                 'operator_surcharge_amount' => Money::decimal(Money::cents($data['operator_surcharge_amount'] ?? 0)),
                 'external_concepts_amount' => Money::decimal(Money::cents($data['external_concepts_amount'] ?? 0)),
@@ -54,6 +57,10 @@ class PaymentController extends Controller
                 'confirmation_status' => 'reported',
             ],
         );
+
+        if ($movement->wasRecentlyCreated) {
+            $cutPeriodService->attachMovement($movement, $request->user()->id);
+        }
 
         return redirect()
             ->route('loans.show', $loan)

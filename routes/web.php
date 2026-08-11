@@ -5,12 +5,14 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\InvestorController;
 use App\Http\Controllers\LoanApplicationController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\LoanCreationController;
 use App\Http\Controllers\LoanInvestmentController;
 use App\Http\Controllers\LoanSettlementController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PortfolioBalanceController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SimulatorController;
 use App\Http\Controllers\WeeklyCutController;
@@ -26,6 +28,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/prestamos', [LoanController::class, 'index'])->name('loans.index');
+    Route::get('/cartera-y-saldos', [PortfolioBalanceController::class, 'index'])->name('portfolio-balances.index');
+    Route::get('/cartera-y-saldos/exportar', [PortfolioBalanceController::class, 'export'])->name('portfolio-balances.export');
     Route::get('/prestamos/nuevo/crear', [LoanCreationController::class, 'create'])->name('loans.create');
     Route::post('/prestamos/nuevo/cotizar-redondeo', [LoanCreationController::class, 'quote'])->name('loans.quote-rounded');
     Route::post('/prestamos/nuevo/confirmar-redondeo', [LoanCreationController::class, 'confirmRounded'])->name('loans.confirm-rounded');
@@ -39,6 +43,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/expedientes', [DocumentController::class, 'index'])->name('documents.index');
     Route::get('/expedientes/{document}/descargar', [DocumentController::class, 'download'])->name('documents.download');
     Route::delete('/expedientes/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+    Route::get('/inversionistas', [InvestorController::class, 'index'])->name('investors.index');
+    Route::post('/inversionistas', [InvestorController::class, 'store'])->name('investors.store');
+    Route::get('/inversionistas/{investor}', [InvestorController::class, 'show'])->name('investors.show');
+    Route::post('/inversionistas/{investor}/retiros', [InvestorController::class, 'requestWithdrawal'])->name('investors.withdrawals.request');
+    Route::post('/inversionistas/retiros/{withdrawal}/resolver', [InvestorController::class, 'processWithdrawal'])->name('investors.withdrawals.process');
+    Route::post('/inversionistas/{investor}/retornos', [InvestorController::class, 'creditReturns'])->name('investors.returns.credit');
+    Route::post('/inversionistas/{investor}/reinvertir', [InvestorController::class, 'reinvest'])->name('investors.reinvest');
+    Route::post('/inversionistas/{investor}/retiro-directo', [InvestorController::class, 'directWithdrawal'])->name('investors.withdrawals.direct');
     Route::get('/cobranza', [CollectionController::class, 'index'])->name('collections.index');
     Route::post('/cobranza/letras/{installment}/pagado', [CollectionController::class, 'markPaid'])->name('collections.mark-paid');
     Route::post('/prestamos/{loan}/cobros', [PaymentController::class, 'store'])->name('payments.store');
@@ -48,6 +60,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/cortes', [WeeklyCutController::class, 'store'])->name('cuts.store');
     Route::get('/cortes/{cut}', [WeeklyCutController::class, 'show'])->name('cuts.show');
     Route::post('/cortes/{cut}/confirmar', [WeeklyCutController::class, 'confirm'])->name('cuts.confirm');
+    Route::post('/cortes/{cut}/cerrar', [WeeklyCutController::class, 'close'])->name('cuts.close');
+    Route::post('/cortes/{cut}/reabrir', [WeeklyCutController::class, 'reopen'])->name('cuts.reopen');
     Route::post('/cortes/{cut}/liquidar-saldo', [WeeklyCutController::class, 'settleBalance'])->name('cuts.settle-balance');
 
     Route::get('/clientes', [ClientController::class, 'index'])->name('clients.index');

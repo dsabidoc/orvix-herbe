@@ -17,6 +17,7 @@ class LoanScheduleCalculator
      *     vat_enabled?:bool|int|string,
      *     term_months:int,
      *     start_date:string,
+     *     first_payment_date?:string,
      *     payment_day:int,
      *     interest_calculation_method?:'fixed_principal'|'outstanding_balance',
      *     rounding_increment?:int,
@@ -78,6 +79,7 @@ class LoanScheduleCalculator
                 termMonths: $termMonths,
                 paymentDay: $paymentDay,
                 startDate: CarbonImmutable::parse($input['start_date']),
+                firstPaymentDate: isset($input['first_payment_date']) ? CarbonImmutable::parse($input['first_payment_date']) : null,
                 firstDueRule: $firstDueRule,
                 incrementCents: $roundingIncrement * 100,
             );
@@ -114,7 +116,9 @@ class LoanScheduleCalculator
             'second' => min(2, $termMonths),
             default => $termMonths,
         };
-        $dueDate = $this->firstDueDate(CarbonImmutable::parse($input['start_date']), $paymentDay, $firstDueRule);
+        $dueDate = isset($input['first_payment_date'])
+            ? CarbonImmutable::parse($input['first_payment_date'])
+            : $this->firstDueDate(CarbonImmutable::parse($input['start_date']), $paymentDay, $firstDueRule);
 
         for ($number = 1; $number <= $termMonths; $number++) {
             $amountCents = $number === $adjustedNumber ? $adjustedInstallmentCents : $baseInstallmentCents;
@@ -158,6 +162,7 @@ class LoanScheduleCalculator
         int $termMonths,
         int $paymentDay,
         CarbonImmutable $startDate,
+        ?CarbonImmutable $firstPaymentDate,
         string $firstDueRule,
         int $incrementCents,
     ): LoanSchedule {
@@ -167,7 +172,7 @@ class LoanScheduleCalculator
             : (int) round(($capitalCents * $effectiveRate) / (1 - ((1 + $effectiveRate) ** (-$termMonths))));
         $basePaymentCents = $this->roundDownToIncrement($basePaymentCents, $incrementCents);
         $administrationFeeVatCents = (int) round($administrationFeeCents * $vatRate);
-        $dueDate = $this->firstDueDate($startDate, $paymentDay, $firstDueRule);
+        $dueDate = $firstPaymentDate ?: $this->firstDueDate($startDate, $paymentDay, $firstDueRule);
         $remainingCents = $capitalCents;
         $interestCents = 0;
         $installments = [];

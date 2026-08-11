@@ -36,6 +36,7 @@ class Loan extends Model
         'term_months',
         'contract_total',
         'start_date',
+        'first_payment_date',
         'payment_day',
         'status',
         'settlement_reason',
@@ -52,6 +53,7 @@ class Loan extends Model
     {
         return [
             'start_date' => 'date',
+            'first_payment_date' => 'date',
             'settled_at' => 'datetime',
             'vat_enabled' => 'boolean',
             'quote_snapshot' => 'array',
@@ -93,5 +95,10 @@ class Loan extends Model
     public function investments(): HasMany
     {
         return $this->hasMany(Investment::class);
+    }
+
+    public function fundDisbursements(): HasMany
+    {
+        return $this->hasMany(FundDisbursement::class);
     }
 }

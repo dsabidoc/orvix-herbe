@@ -2,11 +2,10 @@
 
 namespace App\Domain\Loans;
 
+use App\Domain\Investors\InvestmentAllocationService;
 use App\Models\Client;
-use App\Models\Investor;
 use App\Models\Loan;
 use App\Models\Vehicle;
-use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -15,7 +14,7 @@ class LoanFormalizer
     public function __construct(private readonly LoanScheduleCalculator $calculator) {}
 
     /**
-     * @param  array{capital:string,monthly_rate:string,administration_fee?:string,administration_fee_type?:string,vat_enabled?:bool|int|string,term_months:int,start_date:string,payment_day:int,operator_id:int|null,interest_calculation_method?:string,vehicle_id?:int|null,loan_application_id?:int|null,status?:string}  $data
+     * @param  array{capital:string,monthly_rate:string,administration_fee?:string,administration_fee_type?:string,vat_enabled?:bool|int|string,term_months:int,start_date:string,first_payment_date?:string,payment_day:int,operator_id:int|null,interest_calculation_method?:string,vehicle_id?:int|null,loan_application_id?:int|null,status?:string}  $data
      */
     public function create(Client $client, array $data): Loan
     {
@@ -29,6 +28,7 @@ class LoanFormalizer
                 'interest_calculation_method' => $data['interest_calculation_method'] ?? 'fixed_principal',
                 'term_months' => (int) $data['term_months'],
                 'start_date' => $data['start_date'],
+                'first_payment_date' => $data['first_payment_date'] ?? $data['start_date'],
                 'payment_day' => (int) $data['payment_day'],
             ]);
 
@@ -48,6 +48,7 @@ class LoanFormalizer
                 'term_months' => (int) $data['term_months'],
                 'contract_total' => $schedule->contractTotal(),
                 'start_date' => $data['start_date'],
+                'first_payment_date' => $data['first_payment_date'] ?? $data['start_date'],
                 'payment_day' => (int) $data['payment_day'],
                 'status' => $data['status'] ?? 'active',
             ]);
@@ -67,30 +68,9 @@ class LoanFormalizer
                 ]);
             }
 
-            $primaryInvestor = Investor::query()->firstOrCreate(
-                ['name' => 'Herbe Rodriguez'],
-                [
-                    'public_id' => (string) Str::ulid(),
-                    'status' => 'active',
-                ],
-            );
-
-            $loan->investments()->create([
-                'public_id' => (string) Str::ulid(),
-                'investor_id' => $primaryInvestor->id,
-                'vehicle_id' => $loan->vehicle_id,
-                'amount' => $schedule->capital(),
-                'investor_share_rate' => '1.000000',
-                'administrator_share_rate' => '0.000000',
-                'starts_on' => $loan->start_date,
-                'status' => 'active',
-                'agreement_snapshot' => [
-                    'role' => 'principal',
-                    'capital_percent' => 100,
-                    'interest_share_percent' => 100,
-                    'capital_cents' => Money::cents($schedule->capital()),
-                ],
-            ]);
+            if (isset($data['investors'])) {
+                app(InvestmentAllocationService::class)->assignFromInput($loan, $data['investors'], $data['created_by'] ?? null);
+            }
 
             return $loan;
         });

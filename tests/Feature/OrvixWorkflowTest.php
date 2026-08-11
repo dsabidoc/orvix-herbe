@@ -2,15 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Loans\LoanSettlementService;
 use App\Models\CollectionMovement;
 use App\Models\Document;
+use App\Models\FundDisbursement;
 use App\Models\Installment;
+use App\Models\Investor;
 use App\Models\Loan;
 use App\Models\LoanApplication;
 use App\Models\Operator;
+use App\Models\OperatorLedgerEntry;
 use App\Models\Simulation;
 use App\Models\User;
 use App\Models\WeeklyCut;
+use App\Models\WeeklyCutItem;
 use App\Support\Money;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
@@ -53,6 +58,9 @@ class OrvixWorkflowTest extends TestCase
             ->firstOrFail();
 
         $before = $movement->loan->installments()->sum('remaining_amount');
+        $investment = $movement->loan->investments()->with('investor')->firstOrFail();
+        $returnedBefore = Money::cents($investment->investor->returned_capital_balance);
+        $interestBefore = Money::cents($investment->investor->generated_interest_balance);
 
         $this->actingAs($admin)
             ->post(route('payments.confirm', $movement))
@@ -66,6 +74,78 @@ class OrvixWorkflowTest extends TestCase
         $this->assertDatabaseHas('payment_allocations', [
             'collection_movement_id' => $movement->id,
         ]);
+        $this->assertGreaterThan($returnedBefore, Money::cents($investment->investor->fresh()->returned_capital_balance));
+        $this->assertGreaterThanOrEqual($interestBefore, Money::cents($investment->investor->fresh()->generated_interest_balance));
+    }
+
+    public function test_advance_payment_must_cover_full_trailing_installments(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $loan = Loan::query()
+            ->where('status', 'active')
+            ->whereHas('installments', fn ($query) => $query->where('remaining_amount', '>', 0))
+            ->with(['installments' => fn ($query) => $query->where('remaining_amount', '>', 0)->orderByDesc('number')])
+            ->firstOrFail();
+        $lastInstallment = $loan->installments->first();
+        $remainingBefore = $lastInstallment->remaining_amount;
+        $invalidAmount = Money::decimal(Money::cents($remainingBefore) + 100);
+
+        $movement = CollectionMovement::query()->create([
+            'public_id' => (string) str()->ulid(),
+            'folio' => 'MOV-ADV-TEST',
+            'idempotency_key' => (string) str()->uuid(),
+            'loan_id' => $loan->id,
+            'operator_id' => $loan->operator_id,
+            'registered_by' => $admin->id,
+            'operated_on' => '2026-08-10',
+            'contract_amount' => $invalidAmount,
+            'operator_surcharge_amount' => '0.00',
+            'external_concepts_amount' => '0.00',
+            'type' => 'advance',
+            'payment_method' => 'cash',
+            'confirmation_status' => 'reported',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('payments.confirm', $movement))
+            ->assertSessionHas('warning');
+
+        $this->assertSame($remainingBefore, $lastInstallment->fresh()->remaining_amount);
+    }
+
+    public function test_settlement_charges_future_principal_without_future_interest(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $settledOn = CarbonImmutable::parse('2026-08-10', 'America/Merida');
+        $loan = Loan::query()
+            ->where('status', 'active')
+            ->whereHas('installments', fn ($query) => $query
+                ->whereDate('due_date', '>', $settledOn->endOfMonth()->toDateString())
+                ->where('remaining_amount', '>', 0)
+                ->where('interest_amount', '>', 0))
+            ->with('installments')
+            ->firstOrFail();
+        $quote = app(LoanSettlementService::class)->quote($loan, $settledOn);
+        $remainingBeforeCents = $loan->installments->sum(fn (Installment $installment) => Money::cents($installment->remaining_amount));
+
+        $this->assertGreaterThan($quote['total_cents'], $remainingBeforeCents);
+
+        $this->actingAs($admin)
+            ->post(route('loans.settle', $loan), [
+                'settlement_reason' => 'pronto_pago_cliente',
+                'settled_on' => $settledOn->toDateString(),
+            ])
+            ->assertRedirect(route('loans.show', $loan));
+
+        $movement = CollectionMovement::query()->where('loan_id', $loan->id)->where('type', 'settlement')->firstOrFail();
+
+        $this->assertSame($quote['total_cents'], Money::cents($movement->contract_amount));
+        $this->assertSame('settled', $loan->fresh()->status);
+        $this->assertSame(0, $loan->installments()->sum('remaining_amount') * 100);
     }
 
     public function test_operator_collection_screen_only_lists_own_installments(): void
@@ -147,6 +227,33 @@ class OrvixWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_dashboard_action_buttons_match_user_profile(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
+        $investorUser = Investor::query()->whereNotNull('user_id')->with('user')->firstOrFail()->user;
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Crear Prestamo')
+            ->assertSee('Registrar Cobro')
+            ->assertDontSee('Solicitar Prestamo');
+
+        $this->actingAs($operator)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Solicitar Prestamo')
+            ->assertSee('Registrar Cobro')
+            ->assertDontSee('Crear Prestamo');
+
+        $this->actingAs($investorUser)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('investors.index'));
+    }
+
     public function test_unmarked_installment_rolls_into_next_week_cut_as_overdue(): void
     {
         $this->seed(DatabaseSeeder::class);
@@ -157,7 +264,7 @@ class OrvixWorkflowTest extends TestCase
         $samuel = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
         $overdue = Installment::query()
             ->with('loan.client')
-            ->whereDate('due_date', '2026-08-01')
+            ->whereDate('due_date', '<', '2026-08-04')
             ->where('remaining_amount', '>', 0)
             ->whereDoesntHave('reportedMovement')
             ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
@@ -187,19 +294,26 @@ class OrvixWorkflowTest extends TestCase
 
         $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Natalia')->where('last_name', 'Canek Moo'))
+            ->with('installments')
             ->where('status', 'active')
+            ->whereHas('installments', fn ($query) => $query
+                ->whereDate('due_date', '<', '2026-08-04')
+                ->where('remaining_amount', '>', 0))
             ->firstOrFail();
+        $overdueCount = $loan->installments
+            ->filter(fn (Installment $installment) => $installment->due_date->toDateString() < '2026-08-04' && Money::cents($installment->remaining_amount) > 0)
+            ->count();
 
         $this->actingAs($admin)
-            ->get(route('loans.index'))
+            ->get(route('loans.index', ['bucket' => 'overdue']))
             ->assertOk()
-            ->assertSee('3 vencida(s)');
+            ->assertSee($loan->client->first_name)
+            ->assertSee($overdueCount.' vencida(s)');
 
         $this->actingAs($admin)
             ->get(route('loans.show', $loan))
             ->assertOk()
-            ->assertSee('3 letra(s) vencida(s)')
+            ->assertSee($overdueCount.' letra(s) vencida(s)')
             ->assertSee('Vencida');
 
         Carbon::setTestNow();
@@ -250,10 +364,12 @@ class OrvixWorkflowTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame(-100000, Money::cents($nextCut->previous_balance));
-        $this->assertSame(
-            Money::cents($nextCut->reported_total) + 100000,
-            Money::cents($nextCut->expected_total),
-        );
+        $contractualExpectedCents = (int) round(Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id)->where('status', 'active'))
+            ->whereBetween('due_date', [$nextCut->period_starts_on->toDateString(), $nextCut->period_ends_on->toDateString()])
+            ->where('remaining_amount', '>', 0)
+            ->sum('remaining_amount') * 100);
+        $this->assertSame($contractualExpectedCents, Money::cents($nextCut->expected_total));
 
         Carbon::setTestNow();
         CarbonImmutable::setTestNow();
@@ -311,7 +427,12 @@ class OrvixWorkflowTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame(0, Money::cents($nextCut->previous_balance));
-        $this->assertSame(Money::cents($nextCut->reported_total), Money::cents($nextCut->expected_total));
+        $contractualExpectedCents = (int) round(Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id)->where('status', 'active'))
+            ->whereBetween('due_date', [$nextCut->period_starts_on->toDateString(), $nextCut->period_ends_on->toDateString()])
+            ->where('remaining_amount', '>', 0)
+            ->sum('remaining_amount') * 100);
+        $this->assertSame($contractualExpectedCents, Money::cents($nextCut->expected_total));
 
         Carbon::setTestNow();
         CarbonImmutable::setTestNow();
@@ -366,6 +487,8 @@ class OrvixWorkflowTest extends TestCase
 
         $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
         $operator = Operator::query()->firstOrFail();
+        $investor = Investor::query()->where('available_capital', '>=', 100000)->firstOrFail();
+        $availableBeforeCents = Money::cents($investor->available_capital);
 
         $this->actingAs($admin)
             ->post(route('loans.store'), [
@@ -378,6 +501,10 @@ class OrvixWorkflowTest extends TestCase
                 'term_months' => 12,
                 'payment_day' => 10,
                 'start_date' => '2026-08-05',
+                'first_payment_date' => '2026-08-10',
+                'investors' => [
+                    ['investor_id' => $investor->id, 'capital_amount' => '100000', 'interest_share_percent' => '100'],
+                ],
             ])
             ->assertRedirect();
 
@@ -389,6 +516,12 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame(0.02, (float) $loan->monthly_rate);
         $this->assertSame('Sin marca', $loan->vehicle->brand);
         $this->assertSame('Vehiculo', $loan->vehicle->model);
+        $this->assertDatabaseHas('investments', [
+            'loan_id' => $loan->id,
+            'investor_id' => $investor->id,
+            'amount' => '100000',
+        ]);
+        $this->assertSame($availableBeforeCents - 10000000, Money::cents($investor->fresh()->available_capital));
     }
 
     public function test_user_can_upload_document_to_loan_file(): void
@@ -618,5 +751,279 @@ class OrvixWorkflowTest extends TestCase
 
         $this->assertSame('responsable-documental-plus', $role->name);
         $this->assertTrue($role->hasPermissionTo($permission->name));
+    }
+
+    public function test_thursday_and_friday_payments_are_assigned_to_official_cut_periods(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $samuel = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
+        $installments = Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->take(2)
+            ->get();
+
+        Carbon::setTestNow('2026-08-13 23:30:00');
+        CarbonImmutable::setTestNow('2026-08-13 23:30:00');
+        $this->actingAs($samuel)->post(route('collections.mark-paid', $installments[0]), [
+            'operated_on' => '2026-08-01',
+            'contract_amount' => $installments[0]->remaining_amount,
+            'operator_surcharge_amount' => 0,
+            'external_concepts_amount' => 0,
+        ]);
+
+        $thursdayMovement = CollectionMovement::query()->where('target_installment_id', $installments[0]->id)->firstOrFail();
+        $this->assertSame('2026-08-07', $thursdayMovement->weeklyCut->period_starts_on->toDateString());
+        $this->assertSame('2026-08-13', $thursdayMovement->weeklyCut->period_ends_on->toDateString());
+        $this->assertSame('2026-08-14', $thursdayMovement->weeklyCut->settlement_on->toDateString());
+
+        Carbon::setTestNow('2026-08-14 00:01:00');
+        CarbonImmutable::setTestNow('2026-08-14 00:01:00');
+        $this->actingAs($samuel)->post(route('collections.mark-paid', $installments[1]), [
+            'operated_on' => '2026-08-01',
+            'contract_amount' => $installments[1]->remaining_amount,
+            'operator_surcharge_amount' => 0,
+            'external_concepts_amount' => 0,
+        ]);
+
+        $fridayMovement = CollectionMovement::query()->where('target_installment_id', $installments[1]->id)->firstOrFail();
+        $this->assertSame('2026-08-14', $fridayMovement->weeklyCut->period_starts_on->toDateString());
+        $this->assertSame('2026-08-20', $fridayMovement->weeklyCut->period_ends_on->toDateString());
+        $this->assertSame('2026-08-21', $fridayMovement->weeklyCut->settlement_on->toDateString());
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_declared_payment_date_and_confirmation_do_not_move_cut_assignment(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-08-10 12:00:00');
+        CarbonImmutable::setTestNow('2026-08-10 12:00:00');
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $samuel = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
+        $installment = Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->firstOrFail();
+
+        $this->actingAs($samuel)->post(route('collections.mark-paid', $installment), [
+            'operated_on' => '2026-07-01',
+            'contract_amount' => $installment->remaining_amount,
+            'operator_surcharge_amount' => 0,
+            'external_concepts_amount' => 0,
+        ]);
+
+        $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+        $cutId = $movement->weekly_cut_id;
+
+        $movement->update(['operated_on' => '2026-06-01']);
+        $this->assertSame($cutId, $movement->fresh()->weekly_cut_id);
+
+        $this->actingAs($admin)->post(route('payments.confirm', $movement))->assertSessionHas('status');
+        $this->assertSame($cutId, $movement->fresh()->weekly_cut_id);
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_operator_cannot_mark_overdue_from_cut_adjustment_action(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $samuel = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
+        $cut = WeeklyCut::query()->where('operator_id', $samuel->operatorProfile->id)->firstOrFail();
+        $installment = Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->firstOrFail();
+
+        $this->actingAs($samuel)
+            ->post(route('collections.mark-paid', $installment), [
+                'return_to' => 'cut',
+                'cut_id' => $cut->id,
+                'operated_on' => now('America/Merida')->toDateString(),
+                'contract_amount' => $installment->remaining_amount,
+                'operator_surcharge_amount' => 0,
+                'external_concepts_amount' => 0,
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_admin_marking_overdue_from_cut_registers_payment_in_that_cut(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-08-10 12:00:00');
+        CarbonImmutable::setTestNow('2026-08-10 12:00:00');
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $samuel = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
+        $cut = WeeklyCut::query()
+            ->where('operator_id', $samuel->operatorProfile->id)
+            ->where('status', 'submitted')
+            ->firstOrFail();
+        $installment = Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
+            ->whereDate('due_date', '<', $cut->period_starts_on->toDateString())
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'return_to' => 'cut',
+                'cut_id' => $cut->id,
+                'operated_on' => '2026-07-30',
+                'contract_amount' => $installment->remaining_amount,
+                'operator_surcharge_amount' => 0,
+                'external_concepts_amount' => 0,
+                'notes' => 'Ajuste desde atrasados del corte',
+            ])
+            ->assertRedirect(route('cuts.show', $cut));
+
+        $movement = CollectionMovement::query()
+            ->where('target_installment_id', $installment->id)
+            ->firstOrFail();
+
+        $this->assertSame($cut->id, $movement->weekly_cut_id);
+        $this->assertTrue(WeeklyCutItem::query()
+            ->where('weekly_cut_id', $cut->id)
+            ->where('collection_movement_id', $movement->id)
+            ->exists());
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_open_cut_can_be_updated_after_reception_until_it_is_closed(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-08-10 12:00:00');
+        CarbonImmutable::setTestNow('2026-08-10 12:00:00');
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $samuel = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
+        $cut = WeeklyCut::query()
+            ->where('operator_id', $samuel->operatorProfile->id)
+            ->where('status', 'submitted')
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('cuts.confirm', $cut), [
+                'received_total' => $cut->reported_total,
+                'reason' => 'Primera recepcion',
+            ])
+            ->assertSessionHas('status');
+
+        $installment = Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
+            ->whereDate('due_date', '<', $cut->period_starts_on->toDateString())
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'return_to' => 'cut',
+                'cut_id' => $cut->id,
+                'operated_on' => '2026-07-30',
+                'contract_amount' => $installment->remaining_amount,
+                'operator_surcharge_amount' => 0,
+                'external_concepts_amount' => 0,
+            ])
+            ->assertRedirect(route('cuts.show', $cut));
+
+        $cut->refresh();
+        $this->actingAs($admin)
+            ->post(route('cuts.confirm', $cut), [
+                'received_total' => $cut->reported_total,
+                'reason' => 'Recepcion actualizada',
+            ])
+            ->assertSessionHas('status');
+
+        $this->assertSame(1, OperatorLedgerEntry::query()
+            ->where('weekly_cut_id', $cut->id)
+            ->whereIn('type', ['confirmed_delivery', 'shortfall', 'overage'])
+            ->count());
+        $this->assertSame(Money::cents($cut->fresh()->reported_total), Money::cents($cut->fresh()->received_total));
+        $this->assertSame('applied', CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail()->confirmation_status);
+
+        $this->actingAs($admin)->post(route('cuts.close', $cut))->assertSessionHas('status');
+
+        $anotherInstallment = Installment::query()
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $anotherInstallment), [
+                'return_to' => 'cut',
+                'cut_id' => $cut->id,
+                'operated_on' => '2026-07-30',
+                'contract_amount' => $anotherInstallment->remaining_amount,
+                'operator_surcharge_amount' => 0,
+                'external_concepts_amount' => 0,
+            ])
+            ->assertStatus(422);
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_loan_created_from_cut_records_fund_disbursement_link(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-08-10 12:00:00');
+        CarbonImmutable::setTestNow('2026-08-10 12:00:00');
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+        $investor = Investor::query()->where('available_capital', '>=', 50000)->firstOrFail();
+
+        $this->actingAs($admin)->post(route('cuts.store'), ['operator_id' => $operator->id]);
+        $cut = WeeklyCut::query()->where('operator_id', $operator->id)->latest('id')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('loans.store'), [
+                'first_name' => 'Cliente Corte',
+                'operator_id' => $operator->id,
+                'capital' => '50000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'administration_fee' => '0',
+                'vat_enabled' => '1',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'start_date' => '2026-08-10',
+                'first_payment_date' => '2026-09-10',
+                'payment_day' => 10,
+                'weekly_cut_id' => $cut->id,
+                'disbursement_delivered_on' => '2026-08-10',
+                'investors' => [
+                    ['investor_id' => $investor->id, 'capital_amount' => '50000', 'interest_share_percent' => 100],
+                ],
+            ])
+            ->assertSessionHas('status');
+
+        $loan = Loan::query()->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Corte'))->firstOrFail();
+        $disbursement = FundDisbursement::query()->where('loan_id', $loan->id)->firstOrFail();
+
+        $this->assertSame($cut->id, $disbursement->weekly_cut_id);
+        $this->assertSame($loan->operator_id, $disbursement->operator_id);
+        $this->assertSame(5000000, Money::cents($disbursement->amount));
+        $this->assertSame(5000000, Money::cents($cut->fresh()->funds_delivered_total));
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
     }
 }

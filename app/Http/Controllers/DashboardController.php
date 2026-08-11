@@ -2,21 +2,30 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
+use App\Models\Investor;
 use App\Models\Loan;
 use App\Models\Operator;
 use App\Models\WeeklyCut;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request): View|RedirectResponse
     {
         $user = $request->user();
+
+        if ($user->can('investments.view-own') && ! $user->can('investors.manage')) {
+            return redirect()->route('investors.index');
+        }
+
         $periodType = $request->string('period_type')->toString() === 'year' ? 'year' : 'month';
         $period = $request->string('period')->toString() ?: CarbonImmutable::now('America/Merida')->format($periodType === 'year' ? 'Y' : 'Y-m');
         $periodDate = $periodType === 'year'
@@ -26,8 +35,9 @@ class DashboardController extends Controller
         $periodEnd = $periodType === 'year' ? $periodDate->endOfYear() : $periodDate->endOfMonth();
         $loanIds = $this->visibleLoanQuery($request)->pluck('id');
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
-        $weekStart = $today->startOfWeek();
-        $weekEnd = $today->endOfWeek();
+        $cutPeriod = app(WeeklyCutPeriodService::class)->periodFor($today);
+        $weekStart = $cutPeriod['start'];
+        $weekEnd = $cutPeriod['end'];
 
         $remainingCents = Installment::query()
             ->whereIn('loan_id', $loanIds)
@@ -47,7 +57,7 @@ class DashboardController extends Controller
         $pendingReportedCents = CollectionMovement::query()
             ->whereIn('loan_id', $loanIds)
             ->where('confirmation_status', 'reported')
-            ->whereBetween('operated_on', [$periodStart->toDateString(), $periodEnd->toDateString()])
+            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$periodStart->startOfDay(), $periodEnd->endOfDay()])
             ->sum('contract_amount') * 100;
 
         $overdueCents = Installment::query()
@@ -104,8 +114,12 @@ class DashboardController extends Controller
                 ->when($user->hasRole('operador-cartera'), fn ($query) => $query->whereKey($user->operatorProfile?->id))
                 ->withCount('loans')
                 ->get(),
+            'investors' => $user->hasRole('operador-cartera')
+                ? collect()
+                : Investor::query()->where('status', 'active')->orderBy('name')->get(),
             'filters' => [
                 'operator_id' => $request->input('operator_id'),
+                'investor_id' => $request->input('investor_id'),
                 'period_type' => $periodType,
                 'period' => $period,
             ],
@@ -120,6 +134,12 @@ class DashboardController extends Controller
             $query->where('operator_id', $request->user()->operatorProfile?->id);
         } elseif ($request->filled('operator_id')) {
             $query->where('operator_id', $request->integer('operator_id'));
+        }
+
+        if (! $request->user()->hasRole('operador-cartera') && $request->filled('investor_id')) {
+            $query->whereHas('investments', fn ($query) => $query
+                ->where('investor_id', $request->integer('investor_id'))
+                ->where('status', 'active'));
         }
 
         return $query;

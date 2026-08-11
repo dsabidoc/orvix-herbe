@@ -19,22 +19,41 @@
         $chartStops[] = "{$color} {$chartCursor}% ".($chartCursor + $percent).'%';
         $chartCursor += $percent;
     }
+
+    $dashboardUser = auth()->user();
+    $canCreateLoan = $dashboardUser->can('loans.formalize');
+    $canRequestLoan = $dashboardUser->can('applications.create') && ! $canCreateLoan;
+    $canRegisterPayment = $dashboardUser->hasRole('operador-cartera') || $dashboardUser->can('payments.confirm') || $dashboardUser->can('payments.report');
 @endphp
 
 <x-layouts.app title="Dashboard">
-    <div class="mb-4 flex flex-wrap justify-end gap-2">
-        <a class="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" href="{{ route('applications.create') }}">
-            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
-            Solicitar Prestamo
-        </a>
-        <button class="inline-flex items-center gap-2 rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="button" data-open-modal="quick-payment-modal">
-            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
-            Registrar Cobro
-        </button>
-    </div>
+    @if ($canCreateLoan || $canRequestLoan || $canRegisterPayment)
+        <div class="mb-4 flex flex-wrap justify-end gap-2">
+            @if ($canCreateLoan)
+                <a class="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" href="{{ route('loans.create') }}">
+                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2z"/></svg>
+                    Crear Prestamo
+                </a>
+            @endif
+
+            @if ($canRequestLoan)
+                <a class="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" href="{{ route('applications.create') }}">
+                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
+                    Solicitar Prestamo
+                </a>
+            @endif
+
+            @if ($canRegisterPayment)
+                <button class="inline-flex items-center gap-2 rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="button" data-open-modal="quick-payment-modal">
+                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    Registrar Cobro
+                </button>
+            @endif
+        </div>
+    @endif
 
     <section class="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <form class="grid gap-3 md:grid-cols-[1fr_180px_180px_auto] md:items-end" method="GET" action="{{ route('dashboard') }}">
+        <form class="grid gap-3 md:grid-cols-2 xl:grid-cols-[220px_220px_180px_180px_auto] md:items-end" method="GET" action="{{ route('dashboard') }}">
             @unless (auth()->user()->hasRole('operador-cartera'))
                 <div>
                     <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
@@ -42,6 +61,15 @@
                         <option value="">Todos los operadores</option>
                         @foreach ($operators as $operator)
                             <option value="{{ $operator->id }}" @selected((string) $filters['operator_id'] === (string) $operator->id)>{{ $operator->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-semibold text-slate-700" for="investor_id">Inversionista</label>
+                    <select class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" id="investor_id" name="investor_id">
+                        <option value="">Todos</option>
+                        @foreach ($investors as $investor)
+                            <option value="{{ $investor->id }}" @selected((string) ($filters['investor_id'] ?? '') === (string) $investor->id)>{{ $investor->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -216,76 +244,78 @@
         </div>
     </section>
 
-    <dialog id="quick-payment-modal" class="w-[min(96vw,980px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
-        <div class="border-b border-slate-200 px-5 py-4">
-            <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Cobranza rapida</p>
-            <h3 class="mt-1 text-lg font-bold text-slate-950">Registrar Cobro</h3>
-        </div>
-        <div class="px-5 py-4">
-            <label class="text-sm font-semibold text-slate-700" for="quick_payment_loan">Cliente</label>
-            <select class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" id="quick_payment_loan" data-quick-payment-select>
-                <option value="">Selecciona un cliente o prestamo</option>
-                @foreach ($quickCollectionLoans as $loan)
-                    <option value="{{ $loan->public_id }}">{{ $loan->client->first_name }} {{ $loan->client->last_name }} · {{ $loan->folio }} · {{ $loan->vehicle?->model }}</option>
-                @endforeach
-            </select>
-
-            <div class="mt-4 rounded-md border border-slate-200">
-                @forelse ($quickCollectionLoans as $loan)
-                    <section class="hidden" data-quick-payment-panel="{{ $loan->public_id }}">
-                        <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                            <p class="font-bold text-slate-950">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</p>
-                            <p class="mt-1 text-sm text-slate-500">{{ $loan->folio }} · {{ $loan->vehicle?->model }} {{ $loan->vehicle?->year }} · {{ $loan->operator?->name }}</p>
-                        </div>
-                        <div class="max-h-[420px] overflow-auto">
-                            <table class="w-full text-left text-sm">
-                                <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
-                                    <tr>
-                                        <th class="px-4 py-3">Letra</th>
-                                        <th class="px-4 py-3">Vence</th>
-                                        <th class="px-4 py-3 text-right">Saldo</th>
-                                        <th class="px-4 py-3 text-right">Accion</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100">
-                                    @foreach ($loan->installments as $installment)
-                                        @php
-                                            $isOverdue = $installment->due_date->toDateString() < now('America/Merida')->toDateString();
-                                        @endphp
-                                        <tr class="{{ $isOverdue ? 'bg-red-50/40' : '' }}">
-                                            <td class="px-4 py-3 font-semibold">{{ $installment->number }}</td>
-                                            <td class="px-4 py-3">
-                                                {{ $installment->due_date->format('d/m/Y') }}
-                                                @if ($isOverdue)
-                                                    <span class="ml-2 rounded bg-red-50 px-2 py-1 text-xs font-bold text-red-700">Vencida</span>
-                                                @endif
-                                            </td>
-                                            <td class="px-4 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
-                                            <td class="px-4 py-3 text-right">
-                                                <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid>
-                                                    @csrf
-                                                    <input name="return_to" type="hidden" value="dashboard">
-                                                    <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
-                                                    <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
-                                                    <input name="operator_surcharge_amount" type="hidden" value="0">
-                                                    <input name="external_concepts_amount" type="hidden" value="0">
-                                                    <button class="rounded-md bg-[#0d9488] px-3 py-2 text-xs font-bold text-white" type="submit">Pagado</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-                @empty
-                    <p class="px-4 py-6 text-sm text-slate-500">No hay pagos pendientes para registrar.</p>
-                @endforelse
-                <p class="px-4 py-6 text-sm text-slate-500" data-quick-payment-empty>Selecciona un cliente para ver sus pagos pendientes.</p>
+    @if ($canRegisterPayment)
+        <dialog id="quick-payment-modal" class="w-[min(96vw,980px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <div class="border-b border-slate-200 px-5 py-4">
+                <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Cobranza rapida</p>
+                <h3 class="mt-1 text-lg font-bold text-slate-950">Registrar Cobro</h3>
             </div>
-        </div>
-        <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4">
-            <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cerrar</button>
-        </div>
-    </dialog>
+            <div class="px-5 py-4">
+                <label class="text-sm font-semibold text-slate-700" for="quick_payment_loan">Cliente</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" id="quick_payment_loan" data-quick-payment-select>
+                    <option value="">Selecciona un cliente o prestamo</option>
+                    @foreach ($quickCollectionLoans as $loan)
+                        <option value="{{ $loan->public_id }}">{{ $loan->client->first_name }} {{ $loan->client->last_name }} · {{ $loan->folio }} · {{ $loan->vehicle?->model }}</option>
+                    @endforeach
+                </select>
+
+                <div class="mt-4 rounded-md border border-slate-200">
+                    @forelse ($quickCollectionLoans as $loan)
+                        <section class="hidden" data-quick-payment-panel="{{ $loan->public_id }}">
+                            <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                                <p class="font-bold text-slate-950">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</p>
+                                <p class="mt-1 text-sm text-slate-500">{{ $loan->folio }} · {{ $loan->vehicle?->model }} {{ $loan->vehicle?->year }} · {{ $loan->operator?->name }}</p>
+                            </div>
+                            <div class="max-h-[420px] overflow-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+                                        <tr>
+                                            <th class="px-4 py-3">Letra</th>
+                                            <th class="px-4 py-3">Vence</th>
+                                            <th class="px-4 py-3 text-right">Saldo</th>
+                                            <th class="px-4 py-3 text-right">Accion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach ($loan->installments as $installment)
+                                            @php
+                                                $isOverdue = $installment->due_date->toDateString() < now('America/Merida')->toDateString();
+                                            @endphp
+                                            <tr class="{{ $isOverdue ? 'bg-red-50/40' : '' }}">
+                                                <td class="px-4 py-3 font-semibold">{{ $installment->number }}</td>
+                                                <td class="px-4 py-3">
+                                                    {{ $installment->due_date->format('d/m/Y') }}
+                                                    @if ($isOverdue)
+                                                        <span class="ml-2 rounded bg-red-50 px-2 py-1 text-xs font-bold text-red-700">Vencida</span>
+                                                    @endif
+                                                </td>
+                                                <td class="px-4 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
+                                                <td class="px-4 py-3 text-right">
+                                                    <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid>
+                                                        @csrf
+                                                        <input name="return_to" type="hidden" value="dashboard">
+                                                        <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
+                                                        <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
+                                                        <input name="operator_surcharge_amount" type="hidden" value="0">
+                                                        <input name="external_concepts_amount" type="hidden" value="0">
+                                                        <button class="rounded-md bg-[#0d9488] px-3 py-2 text-xs font-bold text-white" type="submit">Pagado</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    @empty
+                        <p class="px-4 py-6 text-sm text-slate-500">No hay pagos pendientes para registrar.</p>
+                    @endforelse
+                    <p class="px-4 py-6 text-sm text-slate-500" data-quick-payment-empty>Selecciona un cliente para ver sus pagos pendientes.</p>
+                </div>
+            </div>
+            <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4">
+                <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cerrar</button>
+            </div>
+        </dialog>
+    @endif
 </x-layouts.app>

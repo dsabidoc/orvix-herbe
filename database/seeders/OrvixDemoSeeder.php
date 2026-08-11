@@ -2,10 +2,14 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Investors\InvestmentAllocationService;
 use App\Domain\Loans\LoanScheduleCalculator;
 use App\Models\Client;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
+use App\Models\Investor;
+use App\Models\InvestorCapitalMovement;
+use App\Models\InvestorWithdrawalRequest;
 use App\Models\Loan;
 use App\Models\Operator;
 use App\Models\User;
@@ -14,8 +18,10 @@ use App\Models\WeeklyCut;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -25,6 +31,8 @@ class OrvixDemoSeeder extends Seeder
 
     public function run(): void
     {
+        $this->resetDemoData();
+
         $admin = $this->user('Dueño Orvix', 'admin@orvix.test', 'administrador-general', '9991000001');
         $adriana = $this->user('Adriana Documental', 'adriana@orvix.test', 'responsable-documental', '9991000002');
 
@@ -60,26 +68,46 @@ class OrvixDemoSeeder extends Seeder
             'allows_shortfalls' => false,
         ]);
 
+        $investors = collect([
+            $this->investor('Alejandro', 'Patron', 'alejandro.inversionista@orvix.test', '9995000001', 650000, true),
+            $this->investor('Beatriz', 'Camara', 'beatriz.inversionista@orvix.test', '9995000002', 520000, true),
+            $this->investor('Carlos', 'Mendez', 'carlos.inversionista@orvix.test', '9995000003', 760000, false),
+            $this->investor('Daniela', 'Rosado', 'daniela.inversionista@orvix.test', '9995000004', 430000, false),
+            $this->investor('Fernando', 'Aguilar', 'fernando.inversionista@orvix.test', '9995000005', 580000, false),
+        ]);
+
         $loans = [
-            $this->loan($samuel, 'Alberto Canto Pech', '9991110101', 'Ignis', 'Blanco', 2019, 143000, 36, 10, '2026-02-10', 5),
-            $this->loan($samuel, 'Mayra Tuz Novelo', '9991110102', 'Vento', 'Gris', 2020, 100000, 24, 1, '2026-01-01', 6),
-            $this->loan($samuel, 'Aaron Expander Lopez', '9991110103', 'March', 'Rojo', 2021, 122000, 48, 24, '2025-10-24', 8),
-            $this->loan($dario, 'Luis Chan Uc', '9992220101', 'Jetta', 'Negro', 2018, 90000, 36, 24, '2026-03-24', 2),
-            $this->loan($dario, 'Natalia Canek Moo', '9992220102', 'Aveo', 'Azul', 2020, 78000, 24, 7, '2026-04-07', 1),
-            $this->loan($dario, 'Carlos Balam Pat', '9992220103', 'March', 'Plata', 2019, 68000, 24, 15, '2025-12-15', 7),
-            $this->loan($santiago, 'Rosa Itza Poot', '9993330101', 'Vento', 'Blanco', 2017, 55000, 24, 30, '2026-02-28', 4),
-            $this->loan($santiago, 'Jose Manuel Couoh', '9993330102', 'Versa', 'Arena', 2021, 112000, 36, 5, '2026-05-05', 1),
-            $this->loan($directo, 'Martha Cecilia Hau', '9994440101', 'Kicks', 'Naranja', 2022, 160000, 36, 12, '2026-01-12', 6),
+            $this->loan($samuel, 'Alberto Canto Pech', '9991110101', 'Ignis', 'Blanco', 2019, 143000, 36, 10, '2026-02-10', 6),
+            $this->loan($samuel, 'Mayra Tuz Novelo', '9991110102', 'Vento', 'Gris', 2020, 100000, 24, 1, '2026-03-01', 6),
+            $this->loan($samuel, 'Aaron Expander Lopez', '9991110103', 'March', 'Rojo', 2021, 122000, 48, 24, '2026-05-24', 3),
+            $this->loan($samuel, 'Paloma Medina Puc', '9991110104', 'Aveo', 'Azul', 2020, 20000, 27, 5, '2026-02-05', 6),
+            $this->loan($samuel, 'Mar Brito', '9991110105', 'Beat', 'Plata', 2019, 100000, 36, 15, '2026-05-15', 2),
+            $this->loan($dario, 'Luis Chan Uc', '9992220101', 'Jetta', 'Negro', 2018, 90000, 36, 24, '2026-03-24', 5),
+            $this->loan($dario, 'Natalia Canek Moo', '9992220102', 'Aveo', 'Azul', 2020, 78000, 24, 7, '2026-04-07', 4),
+            $this->loan($dario, 'Carlos Balam Pat', '9992220103', 'March', 'Plata', 2019, 68000, 24, 15, '2026-07-15', 0),
+            $this->loan($dario, 'Karen Huerta Solis', '9992220104', 'Sentra', 'Blanco', 2021, 150000, 48, 20, '2026-07-20', 0),
+            $this->loan($dario, 'Belen Tuz Chi', '9992220105', 'Spark', 'Rojo', 2018, 64000, 24, 3, '2026-03-03', 5),
+            $this->loan($santiago, 'Rosa Itza Poot', '9993330101', 'Vento', 'Blanco', 2017, 55000, 24, 30, '2026-06-30', 1),
+            $this->loan($santiago, 'Jose Manuel Couoh', '9993330102', 'Versa', 'Arena', 2021, 112000, 36, 5, '2026-08-05', 0),
+            $this->loan($santiago, 'Lucia Camara May', '9993330103', 'Kwid', 'Gris', 2022, 72000, 24, 18, '2026-04-18', 4),
+            $this->loan($santiago, 'Victor Pech Canul', '9993330104', 'Rio', 'Negro', 2020, 88000, 36, 25, '2026-07-25', 0),
+            $this->loan($santiago, 'Octavio Dzul Pool', '9993330105', 'Mazda 2', 'Rojo', 2021, 118000, 36, 11, '2026-06-11', 2),
+            $this->loan($directo, 'Martha Cecilia Hau', '9994440101', 'Kicks', 'Naranja', 2022, 160000, 36, 12, '2026-01-12', 7),
+            $this->loan($directo, 'Esteban Sabido', '9994440102', 'Civic', 'Azul', 2021, 250000, 48, 10, '2026-08-10', 0),
+            $this->loan($directo, 'Leonardo Martinez Dominguez', '9994440103', 'Jetta', 'Gris', 2019, 135000, 36, 30, '2026-06-30', 2),
         ];
 
         $loans[] = $this->loanForClient($samuel, $loans[0]->client, 'Versa', 'Gris', 2023, 95000, 18, 20, '2025-01-20', 18, 'settled', 'pronto_pago_cliente');
         $loans[] = $this->loanForClient($dario, $loans[4]->client, 'Spark', 'Rojo', 2018, 48000, 18, 7, '2025-05-07', 8, 'settled', 'dejo_de_pagar');
 
+        $this->assignInvestors($loans, $investors, $admin);
+        $this->seedInvestorReturns($investors, $admin);
+
         $this->reportedPayment($loans[0], $samuelUser, '2026-07-27', $loans[0]->installments()->where('number', 6)->value('contract_amount'), 300, 50, 'Pago semanal Samuel', installmentNumber: 6);
         $this->reportedPayment($loans[1], $samuelUser, '2026-07-28', $loans[1]->installments()->where('number', 7)->value('contract_amount'), 0, 50, 'Vento dia 1 reportado', installmentNumber: 7);
-        $this->reportedPayment($loans[3], $darioUser, '2026-07-25', $loans[3]->installments()->where('number', 3)->value('contract_amount'), 300, 0, 'Pendiente de semana anterior Dario', installmentNumber: 3);
-        $this->reportedPayment($loans[5], $darioUser, '2026-07-29', (string) (Money::cents($loans[5]->installments()->where('number', 24)->value('contract_amount')) / 100), 0, 0, 'Adelanto desde ultima letra', 'advance', 24);
-        $this->reportedPayment($loans[8], $admin, '2026-07-29', $loans[8]->installments()->where('number', 7)->value('contract_amount'), 0, 0, 'Pago oficina directo', installmentNumber: 7);
+        $this->reportedPayment($loans[5], $darioUser, '2026-07-25', $loans[5]->installments()->where('number', 6)->value('contract_amount'), 300, 0, 'Pendiente de semana anterior Dario', installmentNumber: 6);
+        $this->reportedPayment($loans[9], $darioUser, '2026-07-29', (string) (Money::cents($loans[9]->installments()->where('number', 24)->value('contract_amount')) / 100), 0, 0, 'Adelanto desde ultima letra', 'advance', 24);
+        $this->reportedPayment($loans[15], $admin, '2026-07-29', $loans[15]->installments()->where('number', 7)->value('contract_amount'), 0, 0, 'Pago oficina directo', installmentNumber: 7);
 
         $this->weeklyCut($samuel, $samuelUser, '2026-07-24', '2026-07-30', 'submitted');
         $this->weeklyCut($dario, $darioUser, '2026-07-24', '2026-07-30', 'submitted', receivedOverride: 10000);
@@ -115,6 +143,47 @@ class OrvixDemoSeeder extends Seeder
         return $user;
     }
 
+    private function resetDemoData(): void
+    {
+        Schema::disableForeignKeyConstraints();
+
+        foreach ([
+            'investor_withdrawal_requests',
+            'investor_capital_movements',
+            'investment_ledger_entries',
+            'investments',
+            'weekly_cut_items',
+            'weekly_cuts',
+            'operator_ledger_entries',
+            'payment_allocations',
+            'collection_movements',
+            'custody_events',
+            'promissory_notes',
+            'documents',
+            'document_requirements',
+            'settlements',
+            'settlement_quotes',
+            'installments',
+            'loan_terms_versions',
+            'loans',
+            'application_status_history',
+            'loan_applications',
+            'simulations',
+            'vehicles',
+            'client_references',
+            'clients',
+            'operators',
+            'investors',
+            'audit_events',
+        ] as $table) {
+            if (Schema::hasTable($table)) {
+                DB::table($table)->delete();
+            }
+        }
+
+        Schema::enableForeignKeyConstraints();
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */
@@ -136,6 +205,41 @@ class OrvixDemoSeeder extends Seeder
                 'status' => 'active',
             ], $overrides),
         );
+    }
+
+    private function investor(string $firstName, string $lastName, string $email, string $phone, int $initialCapital, bool $withUser): Investor
+    {
+        $user = $withUser
+            ? $this->user($firstName.' '.$lastName, $email, 'inversionista', $phone)
+            : null;
+
+        $investor = Investor::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'user_id' => $user?->id,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'name' => $firstName.' '.$lastName,
+            'email' => $email,
+            'phone' => $phone,
+            'initial_capital' => Money::decimal($initialCapital * 100),
+            'available_capital' => Money::decimal($initialCapital * 100),
+            'returned_capital_balance' => '0.00',
+            'generated_interest_balance' => '0.00',
+            'status' => 'active',
+        ]);
+
+        InvestorCapitalMovement::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'investor_id' => $investor->id,
+            'created_by' => $user?->id,
+            'type' => 'initial_capital',
+            'amount' => Money::decimal($initialCapital * 100),
+            'balance_before' => '0.00',
+            'balance_after' => Money::decimal($initialCapital * 100),
+            'notes' => 'Capital inicial demo',
+        ]);
+
+        return $investor;
     }
 
     private function loan(Operator $operator, string $clientName, string $phone, string $model, string $color, int $year, int $capital, int $months, int $paymentDay, string $startDate, int $paidInstallments): Loan
@@ -301,6 +405,92 @@ class OrvixDemoSeeder extends Seeder
         }
 
         return $loan->fresh(['installments', 'client', 'operator', 'vehicle']);
+    }
+
+    /**
+     * @param  list<Loan>  $loans
+     */
+    private function assignInvestors(array $loans, Collection $investors, User $admin): void
+    {
+        $allocator = app(InvestmentAllocationService::class);
+        $investors = $investors->values();
+
+        foreach ($loans as $index => $loan) {
+            $capital = Money::cents($loan->capital) / 100;
+            $primary = $investors[$index % $investors->count()];
+            $secondary = $investors[($index + 2) % $investors->count()];
+
+            $input = match ($index % 4) {
+                0 => [
+                    ['investor_id' => $primary->id, 'capital_amount' => number_format($capital * 0.70, 2, '.', ''), 'interest_share_percent' => 70],
+                    ['investor_id' => $secondary->id, 'capital_amount' => number_format($capital * 0.30, 2, '.', ''), 'interest_share_percent' => 30],
+                ],
+                1 => [
+                    ['investor_id' => $primary->id, 'capital_amount' => number_format($capital * 0.55, 2, '.', ''), 'interest_share_percent' => 50],
+                    ['investor_id' => $secondary->id, 'capital_amount' => number_format($capital * 0.45, 2, '.', ''), 'interest_share_percent' => 50],
+                ],
+                default => [
+                    ['investor_id' => $primary->id, 'capital_amount' => number_format($capital, 2, '.', ''), 'interest_share_percent' => 100],
+                ],
+            };
+
+            $assignedCents = collect($input)->sum(fn (array $row) => Money::cents($row['capital_amount']));
+            $differenceCents = Money::cents($loan->capital) - $assignedCents;
+
+            if ($differenceCents !== 0) {
+                $input[0]['capital_amount'] = Money::decimal(Money::cents($input[0]['capital_amount']) + $differenceCents);
+            }
+
+            $allocator->assignFromInput($loan, $input, $admin->id);
+        }
+    }
+
+    private function seedInvestorReturns(Collection $investors, User $admin): void
+    {
+        $demoReturns = [
+            ['returned' => 62000, 'interest' => 18450],
+            ['returned' => 38000, 'interest' => 12200],
+            ['returned' => 0, 'interest' => 9650],
+            ['returned' => 25000, 'interest' => 0],
+            ['returned' => 47000, 'interest' => 15800],
+        ];
+
+        foreach ($investors->values() as $index => $investor) {
+            $returnedCents = $demoReturns[$index]['returned'] * 100;
+            $interestCents = $demoReturns[$index]['interest'] * 100;
+            $totalCents = $returnedCents + $interestCents;
+
+            $investor->forceFill([
+                'returned_capital_balance' => Money::decimal($returnedCents),
+                'generated_interest_balance' => Money::decimal($interestCents),
+            ])->save();
+
+            if ($totalCents > 0) {
+                InvestorCapitalMovement::query()->create([
+                    'public_id' => (string) Str::ulid(),
+                    'investor_id' => $investor->id,
+                    'created_by' => $admin->id,
+                    'type' => 'returns_recorded',
+                    'amount' => Money::decimal($totalCents),
+                    'balance_before' => $investor->available_capital,
+                    'balance_after' => $investor->available_capital,
+                    'notes' => 'Retornos demo listos para reinvertir',
+                    'metadata' => [
+                        'returned_capital' => Money::decimal($returnedCents),
+                        'generated_interest' => Money::decimal($interestCents),
+                    ],
+                ]);
+            }
+        }
+
+        InvestorWithdrawalRequest::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'investor_id' => $investors[1]->id,
+            'requested_by' => $investors[1]->user_id,
+            'amount' => '15000.00',
+            'status' => 'submitted',
+            'notes' => 'Solicitud demo para probar aprobacion de retiro.',
+        ]);
     }
 
     private function reportedPayment(Loan $loan, User $registeredBy, string $date, string $amount, int $surcharge, int $external, string $notes, string $type = 'ordinary', ?int $installmentNumber = null): void

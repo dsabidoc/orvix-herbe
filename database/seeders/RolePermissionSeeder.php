@@ -26,6 +26,10 @@ class RolePermissionSeeder extends Seeder
             'weekly-cuts.confirm',
             'adjustments.approve',
             'settlements.authorize',
+            'investors.manage',
+            'investor-withdrawals.manage',
+            'portfolio.view',
+            'portfolio.export',
             'reports.view-all',
             'audit.view',
             'exports.run',
@@ -41,6 +45,7 @@ class RolePermissionSeeder extends Seeder
             'weekly-cuts.prepare',
             'weekly-cuts.submit',
             'operator-ledger.view-own',
+            'portfolio.view',
         ],
         'responsable-documental' => [
             'clients.view-all',
@@ -48,6 +53,11 @@ class RolePermissionSeeder extends Seeder
             'promissory-notes.manage',
             'settlements.prepare-documents',
             'payments.report-authorized',
+        ],
+        'inversionista' => [
+            'investments.view-own',
+            'investor-reports.view-own',
+            'investor-withdrawals.request',
         ],
     ];
 

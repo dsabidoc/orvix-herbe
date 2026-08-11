@@ -62,10 +62,6 @@
         page-break-inside: auto !important;
     }
 
-    .print-sheet > div {
-        break-inside: avoid;
-    }
-
     .print-sheet h3 {
         font-size: 12px !important;
     }

@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Investors\InvestmentAllocationService;
 use App\Domain\Loans\LoanFormalizer;
+use App\Domain\Loans\LoanScheduleCalculator;
 use App\Domain\Loans\RoundedLoanQuoteCalculator;
 use App\Models\AuditEvent;
 use App\Models\Client;
 use App\Models\Document;
+use App\Models\FundDisbursement;
 use App\Models\Investor;
 use App\Models\Loan;
 use App\Models\Operator;
+use App\Models\OperatorLedgerEntry;
+use App\Models\WeeklyCut;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,15 +29,21 @@ class LoanCreationController extends Controller
     public function create(Request $request): View
     {
         abort_unless($request->user()->can('loans.formalize'), 403);
+        $weeklyCut = $request->filled('weekly_cut_id')
+            ? WeeklyCut::query()->whereKey($request->integer('weekly_cut_id'))->first()
+            : null;
 
         return view('loans.create', [
             'clients' => Client::query()->orderBy('last_name')->orderBy('first_name')->get(),
             'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
+            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
             'terms' => $this->roundedTerms(),
+            'selectedOperatorId' => $request->integer('operator_id') ?: $weeklyCut?->operator_id,
+            'weeklyCut' => $weeklyCut,
         ]);
     }
 
-    public function store(Request $request, LoanFormalizer $formalizer): RedirectResponse
+    public function store(Request $request, LoanFormalizer $formalizer, InvestmentAllocationService $allocator): RedirectResponse
     {
         abort_unless($request->user()->can('loans.formalize'), 403);
 
@@ -50,6 +63,10 @@ class LoanCreationController extends Controller
                 'interest_calculation_method' => ['required', 'in:fixed_principal,outstanding_balance'],
                 'term_months' => ['required', 'integer', 'min:1'],
                 'start_date' => ['required', 'date'],
+                'first_payment_date' => ['required', 'date'],
+                'weekly_cut_id' => ['nullable', 'exists:weekly_cuts,id'],
+                'disbursement_delivered_on' => ['nullable', 'date'],
+                'disbursement_notes' => ['nullable', 'string', 'max:500'],
                 'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
                 'brand' => ['nullable', 'string', 'max:80'],
                 'model' => ['nullable', 'string', 'max:120'],
@@ -57,6 +74,10 @@ class LoanCreationController extends Controller
                 'plates' => ['nullable', 'string', 'max:40'],
                 'vin' => ['nullable', 'string', 'max:80'],
                 'documents.*' => ['nullable', 'file', 'max:10240'],
+                'investors' => ['required', 'array', 'min:1', 'max:8'],
+                'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
+                'investors.*.capital_amount' => ['nullable', 'numeric', 'min:0'],
+                'investors.*.interest_share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             ],
             [
                 'first_name.required_without' => 'Captura el nombre del cliente o selecciona un cliente existente.',
@@ -67,8 +88,13 @@ class LoanCreationController extends Controller
                 'term_months.required' => 'Captura el plazo en meses.',
                 'payment_day.required' => 'Captura el dia de pago.',
                 'start_date.required' => 'Captura la fecha de inicio.',
+                'first_payment_date.required' => 'Captura la fecha de cobranza.',
+                'disbursement_delivered_on.required' => 'Captura la fecha real de entrega del dinero.',
+                'investors.required' => 'Selecciona al menos un inversionista para crear el prestamo.',
             ],
         );
+
+        $allocator->participants($data['investors'], Money::cents($data['capital']));
 
         $client = ($data['client_id'] ?? null)
             ? Client::query()->findOrFail($data['client_id'])
@@ -96,8 +122,13 @@ class LoanCreationController extends Controller
             'interest_calculation_method' => $data['interest_calculation_method'],
             'term_months' => (int) $data['term_months'],
             'start_date' => $data['start_date'],
+            'first_payment_date' => $data['first_payment_date'],
             'payment_day' => (int) $data['payment_day'],
+            'investors' => $data['investors'],
+            'created_by' => $request->user()->id,
         ]);
+
+        $this->recordFundDisbursement($loan, $data, $request->user()->id);
 
         foreach ($request->file('documents', []) as $file) {
             $path = $file->store('expedientes/'.$loan->public_id, 'local');
@@ -118,20 +149,22 @@ class LoanCreationController extends Controller
         return redirect()->route('loans.show', $loan)->with('status', 'Prestamo creado con calendario y expediente.');
     }
 
-    public function quote(Request $request, RoundedLoanQuoteCalculator $calculator): View
+    public function quote(Request $request, RoundedLoanQuoteCalculator $roundedCalculator, LoanScheduleCalculator $regularCalculator): View
     {
         abort_unless($request->user()->can('loans.formalize'), 403);
 
         $data = $this->validatedRoundedData($request);
         $data['monthly_rate'] = number_format($this->monthlyRate((float) $data['rate_value'], $data['rate_type']), 6, '.', '');
         $data['first_payment_date'] = $data['first_payment_date'] ?? $data['start_date'];
-        $quote = $calculator->quote([
-            'capital' => $data['capital'],
-            'monthly_rate' => $data['monthly_rate'],
-            'collection_fee' => $data['administration_fee'] ?? '0.00',
-            'term_months' => (int) $data['term_months'],
-            'first_payment_date' => $data['first_payment_date'],
-        ]);
+        $quote = ($data['calculation_method'] ?? 'regular') === 'rounded'
+            ? $roundedCalculator->quote([
+                'capital' => $data['capital'],
+                'monthly_rate' => $data['monthly_rate'],
+                'collection_fee' => $data['administration_fee'] ?? '0.00',
+                'term_months' => (int) $data['term_months'],
+                'first_payment_date' => $data['first_payment_date'],
+            ])
+            : $this->regularQuote($data, $regularCalculator);
 
         AuditEvent::query()->create([
             'user_id' => $request->user()->id,
@@ -146,18 +179,55 @@ class LoanCreationController extends Controller
         return view('loans.quote-rounded', [
             'data' => $data,
             'quote' => $quote,
+            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
         ]);
     }
 
-    public function confirmRounded(Request $request, RoundedLoanQuoteCalculator $calculator): RedirectResponse
+    public function confirmRounded(Request $request, RoundedLoanQuoteCalculator $calculator, InvestmentAllocationService $allocator, LoanFormalizer $formalizer): RedirectResponse
     {
         abort_unless($request->user()->can('loans.formalize'), 403);
 
         $data = $this->validatedRoundedData($request) + $request->validate([
-            'selected_option' => ['required', 'in:tens,hundreds'],
+            'selected_option' => ['required', 'in:regular,tens,hundreds'],
+            'investors' => ['required', 'array', 'min:1', 'max:8'],
+            'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
+            'investors.*.capital_amount' => ['nullable', 'numeric', 'min:0'],
+            'investors.*.interest_share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
         $data['monthly_rate'] = number_format($this->monthlyRate((float) $data['rate_value'], $data['rate_type']), 6, '.', '');
         $data['first_payment_date'] = $data['first_payment_date'] ?? $data['start_date'];
+
+        if (($data['calculation_method'] ?? 'regular') === 'regular') {
+            $allocator->participants($data['investors'], Money::cents($data['capital']));
+
+            $loan = DB::transaction(function () use ($request, $data, $formalizer) {
+                $client = $this->clientFor($data);
+                $vehicle = $formalizer->vehicleFor($client, $data);
+
+                return $formalizer->create($client, [
+                    'operator_id' => $data['operator_id'] ?? $client->operator_id,
+                    'vehicle_id' => $vehicle?->id,
+                    'capital' => $data['capital'],
+                    'monthly_rate' => $data['monthly_rate'],
+                    'administration_fee' => number_format((float) ($data['administration_fee'] ?? 0), 2, '.', ''),
+                    'administration_fee_type' => 'monthly',
+                    'vat_enabled' => $request->boolean('vat_enabled', true),
+                    'interest_calculation_method' => $data['interest_calculation_method'],
+                    'term_months' => (int) $data['term_months'],
+                    'start_date' => $data['start_date'],
+                    'first_payment_date' => $data['first_payment_date'],
+                    'payment_day' => (int) $data['payment_day'],
+                    'investors' => $data['investors'],
+                    'created_by' => $request->user()->id,
+                    'status' => 'active',
+                ]);
+            });
+
+            $this->recordFundDisbursement($loan, $data, $request->user()->id);
+
+            return redirect()->route('loans.show', $loan)->with('status', 'Prestamo creado con calendario e inversionistas.');
+        }
+
         $quote = $calculator->quote([
             'capital' => $data['capital'],
             'monthly_rate' => $data['monthly_rate'],
@@ -167,7 +237,9 @@ class LoanCreationController extends Controller
         ]);
         $option = $quote['options'][$data['selected_option']];
 
-        $loan = DB::transaction(function () use ($request, $data, $quote, $option) {
+        $allocator->participants($data['investors'], $quote['input']['capital_cents']);
+
+        $loan = DB::transaction(function () use ($request, $data, $quote, $option, $allocator) {
             $client = $this->clientFor($data);
             $vehicle = app(LoanFormalizer::class)->vehicleFor($client, $data);
 
@@ -204,6 +276,7 @@ class LoanCreationController extends Controller
                 'term_months' => (int) $data['term_months'],
                 'contract_total' => Money::decimal($quote['input']['total_cents']),
                 'start_date' => $data['start_date'],
+                'first_payment_date' => $data['first_payment_date'],
                 'payment_day' => (int) $data['payment_day'],
                 'status' => 'active',
             ]);
@@ -223,21 +296,8 @@ class LoanCreationController extends Controller
                 ]);
             }
 
-            $primaryInvestor = Investor::query()->firstOrCreate(
-                ['name' => 'Herbe Rodriguez'],
-                ['public_id' => (string) Str::ulid(), 'status' => 'active'],
-            );
-            $loan->investments()->create([
-                'public_id' => (string) Str::ulid(),
-                'investor_id' => $primaryInvestor->id,
-                'vehicle_id' => $loan->vehicle_id,
-                'amount' => $loan->capital,
-                'investor_share_rate' => '1.000000',
-                'administrator_share_rate' => '0.000000',
-                'starts_on' => $loan->start_date,
-                'status' => 'active',
-                'agreement_snapshot' => ['role' => 'principal', 'capital_percent' => 100, 'interest_share_percent' => 100],
-            ]);
+            $allocator->assignFromInput($loan, $data['investors'], $request->user()->id);
+            $this->recordFundDisbursement($loan, $data, $request->user()->id);
 
             AuditEvent::query()->create([
                 'user_id' => $request->user()->id,
@@ -279,13 +339,77 @@ class LoanCreationController extends Controller
             'term_months' => ['required', 'integer', 'in:'.implode(',', $this->roundedTerms())],
             'start_date' => ['required', 'date'],
             'first_payment_date' => ['required', 'date'],
+            'weekly_cut_id' => ['nullable', 'exists:weekly_cuts,id'],
+            'disbursement_delivered_on' => ['nullable', 'date'],
+            'disbursement_notes' => ['nullable', 'string', 'max:500'],
             'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
             'brand' => ['nullable', 'string', 'max:80'],
             'model' => ['nullable', 'string', 'max:120'],
             'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
             'plates' => ['nullable', 'string', 'max:40'],
             'vin' => ['nullable', 'string', 'max:80'],
+            'calculation_method' => ['required', 'in:regular,rounded'],
+            'vat_enabled' => ['nullable', 'boolean'],
+            'interest_calculation_method' => ['required', 'in:fixed_principal,outstanding_balance'],
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{input:array<string, mixed>, options:array<string, array<string, mixed>>}
+     */
+    private function regularQuote(array $data, LoanScheduleCalculator $calculator): array
+    {
+        $schedule = $calculator->calculate([
+            'capital' => $data['capital'],
+            'monthly_rate' => $data['monthly_rate'],
+            'administration_fee' => $data['administration_fee'] ?? '0.00',
+            'vat_enabled' => $data['vat_enabled'] ?? true,
+            'interest_calculation_method' => $data['interest_calculation_method'] ?? 'fixed_principal',
+            'term_months' => (int) $data['term_months'],
+            'start_date' => $data['start_date'],
+            'first_payment_date' => $data['first_payment_date'],
+            'payment_day' => (int) $data['payment_day'],
+            'rounding_increment' => 10,
+            'rounding_adjustment' => 'first',
+        ]);
+
+        $collectionTotalCents = (int) collect($schedule->installments)->sum('administration_fee_cents');
+        $interestTotalCents = (int) collect($schedule->installments)->sum('interest_cents');
+        $interestVatTotalCents = (int) collect($schedule->installments)->sum('interest_vat_cents');
+
+        return [
+            'input' => [
+                'capital_cents' => $schedule->capitalCents,
+                'monthly_rate' => $data['monthly_rate'],
+                'term_months' => (int) $data['term_months'],
+                'collection_fee_cents' => Money::cents($data['administration_fee'] ?? 0),
+                'interest_monthly_cents' => (int) round($interestTotalCents / max(1, (int) $data['term_months'])),
+                'interest_total_cents' => $interestTotalCents + $interestVatTotalCents,
+                'collection_total_cents' => $collectionTotalCents,
+                'total_cents' => $schedule->contractTotalCents,
+                'first_payment_date' => $data['first_payment_date'],
+            ],
+            'options' => [
+                'regular' => [
+                    'key' => 'regular',
+                    'name' => 'Opcion regular',
+                    'description' => 'Calendario regular segun condiciones capturadas',
+                    'rounding_multiple' => null,
+                    'first_payment' => $schedule->installments[0]['amount'] ?? '0.00',
+                    'regular_payment' => $schedule->baseInstallment(),
+                    'remaining_payments' => max(0, ((int) $data['term_months']) - 1),
+                    'total' => $schedule->contractTotal(),
+                    'installments' => collect($schedule->installments)->map(function (array $installment, int $index) use ($schedule) {
+                        return $installment + [
+                            'previous_balance' => $index === 0
+                                ? Money::decimal($schedule->capitalCents)
+                                : ($schedule->installments[$index - 1]['balance'] ?? '0.00'),
+                        ];
+                    })->all(),
+                ],
+            ],
+        ];
     }
 
     /**
@@ -304,6 +428,93 @@ class LoanCreationController extends Controller
                 'email' => $data['email'] ?? null,
                 'status' => 'active',
             ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function recordFundDisbursement(Loan $loan, array $data, int $userId): void
+    {
+        $hasExplicitDeliveryDate = filled($data['disbursement_delivered_on'] ?? null);
+
+        if (! $hasExplicitDeliveryDate && empty($data['weekly_cut_id'])) {
+            return;
+        }
+
+        $weeklyCut = empty($data['weekly_cut_id'])
+            ? null
+            : WeeklyCut::query()->whereKey($data['weekly_cut_id'])->lockForUpdate()->firstOrFail();
+
+        if ($weeklyCut) {
+            abort_if($weeklyCut->operator_id !== $loan->operator_id, 422, 'El corte seleccionado no pertenece al operador del prestamo.');
+            abort_if($weeklyCut->status === 'closed', 422, 'No puedes registrar desembolsos en un corte cerrado.');
+        }
+
+        $deliveredOn = $hasExplicitDeliveryDate
+            ? CarbonImmutable::parse($data['disbursement_delivered_on'], WeeklyCutPeriodService::TIMEZONE)->toDateString()
+            : $loan->start_date->toDateString();
+        $amountCents = Money::cents($loan->capital);
+        $idempotencyKey = sha1('loan-disbursement|'.$loan->id.'|'.($weeklyCut?->id ?? 'outside').'|'.$amountCents);
+
+        $disbursement = FundDisbursement::query()->firstOrCreate(
+            ['idempotency_key' => $idempotencyKey],
+            [
+                'public_id' => (string) Str::ulid(),
+                'loan_id' => $loan->id,
+                'operator_id' => $loan->operator_id,
+                'weekly_cut_id' => $weeklyCut?->id,
+                'client_id' => $loan->client_id,
+                'vehicle_id' => $loan->vehicle_id,
+                'registered_by' => $userId,
+                'amount' => Money::decimal($amountCents),
+                'delivered_on' => $deliveredOn,
+                'registered_at' => now(WeeklyCutPeriodService::TIMEZONE),
+                'capital_source' => $loan->investments()->exists() ? 'inversionistas' : 'capital_operativo',
+                'notes' => $data['disbursement_notes'] ?? null,
+                'status' => 'registered',
+                'is_delivery_date_inferred' => ! $hasExplicitDeliveryDate,
+            ],
+        );
+
+        if ($disbursement->wasRecentlyCreated) {
+            $balanceBeforeCents = Money::cents(OperatorLedgerEntry::query()
+                ->where('operator_id', $loan->operator_id)
+                ->latest('id')
+                ->value('balance_after'));
+            $balanceAfterCents = $balanceBeforeCents - $amountCents;
+
+            OperatorLedgerEntry::query()->create([
+                'public_id' => (string) Str::ulid(),
+                'operator_id' => $loan->operator_id,
+                'weekly_cut_id' => $weeklyCut?->id,
+                'created_by' => $userId,
+                'type' => 'funds_delivered',
+                'amount' => Money::decimal($amountCents),
+                'balance_before' => Money::decimal($balanceBeforeCents),
+                'balance_after' => Money::decimal($balanceAfterCents),
+                'idempotency_key' => 'funds-delivered|'.$disbursement->id,
+                'reason' => 'Entrega de fondos para prestamo '.$loan->folio,
+            ]);
+
+            AuditEvent::query()->create([
+                'user_id' => $userId,
+                'action' => $weeklyCut ? 'fund_disbursement.created_from_cut' : 'fund_disbursement.created_outside_cut',
+                'auditable_type' => FundDisbursement::class,
+                'auditable_id' => $disbursement->id,
+                'after' => [
+                    'loan_id' => $loan->id,
+                    'operator_id' => $loan->operator_id,
+                    'weekly_cut_id' => $weeklyCut?->id,
+                    'amount' => Money::decimal($amountCents),
+                    'delivered_on' => $deliveredOn,
+                    'is_delivery_date_inferred' => ! $hasExplicitDeliveryDate,
+                ],
+            ]);
+        }
+
+        if ($weeklyCut) {
+            app(WeeklyCutPeriodService::class)->refreshTotals($weeklyCut);
+        }
     }
 
     /**

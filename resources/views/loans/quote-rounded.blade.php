@@ -1,13 +1,13 @@
 @php use App\Support\Money; @endphp
 
-<x-layouts.app title="Cotizacion con redondeo">
+<x-layouts.app title="Vista previa de prestamo">
     <div class="space-y-6">
         <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Prestamo con redondeo</p>
-                    <h3 class="mt-1 text-xl font-bold text-slate-950">Comparar opciones</h3>
-                    <p class="mt-1 text-sm text-slate-500">Ambas opciones cobran el mismo total. Solo cambia el primer pago y el importe uniforme de los pagos restantes.</p>
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Vista previa de prestamo</p>
+                    <h3 class="mt-1 text-xl font-bold text-slate-950">{{ ($data['calculation_method'] ?? 'regular') === 'rounded' ? 'Comparar opciones con redondeo' : 'Confirmar prestamo regular' }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">{{ ($data['calculation_method'] ?? 'regular') === 'rounded' ? 'Ambas opciones cobran el mismo total. Solo cambia el primer pago y el importe uniforme de los pagos restantes.' : 'Revisa el calendario y asigna inversionistas antes de crear el prestamo.' }}</p>
                 </div>
                 <a class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700" href="{{ route('loans.create') }}">Regresar</a>
             </div>
@@ -19,7 +19,7 @@
             </dl>
         </section>
 
-        <div class="grid gap-6 xl:grid-cols-2">
+        <div class="grid gap-6 {{ count($quote['options']) > 1 ? 'xl:grid-cols-2' : '' }}">
             @foreach ($quote['options'] as $key => $option)
                 <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 p-5">
@@ -37,6 +37,24 @@
                                 <input name="{{ $field }}" type="hidden" value="{{ $value }}">
                             @endforeach
                             <input name="selected_option" type="hidden" value="{{ $key }}">
+                            <div class="mb-4 rounded-md bg-slate-50 p-3">
+                                <h4 class="font-bold text-slate-950">Inversionistas</h4>
+                                <p class="mt-1 text-sm text-slate-500">Cubre {{ Money::mxn(Money::decimal($quote['input']['capital_cents'])) }} de capital y 100% de intereses.</p>
+                                <div class="mt-3 space-y-2">
+                                    @for ($index = 0; $index < 4; $index++)
+                                        <div class="grid gap-2 sm:grid-cols-[1fr_130px_120px]">
+                                            <select class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" name="investors[{{ $index }}][investor_id]">
+                                                <option value="">Seleccionar inversionista</option>
+                                                @foreach ($investors as $investor)
+                                                    <option value="{{ $investor->id }}">{{ $investor->name }} · {{ Money::mxn($investor->available_capital) }}</option>
+                                                @endforeach
+                                            </select>
+                                            <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][capital_amount]" type="number" step="0.01" min="0" placeholder="Capital">
+                                            <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][interest_share_percent]" type="number" step="0.0001" min="0" max="100" placeholder="% interes">
+                                        </div>
+                                    @endfor
+                                </div>
+                            </div>
                             <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Seleccionar {{ strtolower($option['name']) }} y crear prestamo</button>
                         </form>
                     </div>

@@ -41,6 +41,11 @@ class User extends Authenticatable
         return $this->hasOne(Operator::class);
     }
 
+    public function investorProfile(): HasOne
+    {
+        return $this->hasOne(Investor::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

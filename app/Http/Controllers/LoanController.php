@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\LoanScheduleCalculator;
+use App\Domain\Loans\LoanSettlementService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
+use App\Models\Investor;
 use App\Models\Loan;
 use App\Models\Operator;
 use App\Support\Money;
@@ -50,20 +53,27 @@ class LoanController extends Controller
         ]);
     }
 
-    public function show(Request $request, Loan $loan): View
+    public function show(Request $request, Loan $loan, LoanSettlementService $settlementService): View
     {
         $this->authorizeLoanAccess($request, $loan);
 
+        $loan = $loan->load([
+            'client',
+            'operator',
+            'vehicle',
+            'documents',
+            'investments.investor',
+            'fundDisbursements.weeklyCut',
+            'fundDisbursements.operator',
+            'fundDisbursements.registeredBy',
+            'installments' => fn ($query) => $query->with('reportedMovement')->orderBy('number'),
+            'movements' => fn ($query) => $query->with(['registeredBy', 'allocations.installment'])->latest(),
+        ]);
+
         return view('loans.show', [
-            'loan' => $loan->load([
-                'client',
-                'operator',
-                'vehicle',
-                'documents',
-                'investments.investor',
-                'installments' => fn ($query) => $query->with('reportedMovement')->orderBy('number'),
-                'movements' => fn ($query) => $query->with(['registeredBy', 'allocations.installment'])->latest(),
-            ]),
+            'loan' => $loan,
+            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
+            'settlementQuote' => $loan->status === 'active' ? $settlementService->quote($loan) : null,
         ]);
     }
 
@@ -104,6 +114,7 @@ class LoanController extends Controller
             'term_months' => ['required', 'integer', 'min:1'],
             'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
             'start_date' => ['required', 'date'],
+            'first_payment_date' => ['required', 'date'],
         ]);
 
         $newMonthlyRate = number_format($this->monthlyRate((float) $data['rate_value'], $data['rate_type']), 6, '.', '');
@@ -151,6 +162,7 @@ class LoanController extends Controller
                 'interest_calculation_method' => $data['interest_calculation_method'],
                 'term_months' => (int) $data['term_months'],
                 'start_date' => $data['start_date'],
+                'first_payment_date' => $data['first_payment_date'],
                 'payment_day' => (int) $data['payment_day'],
                 'rounding_increment' => 10,
                 'rounding_adjustment' => 'first',
@@ -168,6 +180,7 @@ class LoanController extends Controller
                 'term_months' => (int) $data['term_months'],
                 'contract_total' => $schedule->contractTotal(),
                 'start_date' => $data['start_date'],
+                'first_payment_date' => $data['first_payment_date'],
                 'payment_day' => (int) $data['payment_day'],
             ]);
 
@@ -186,9 +199,6 @@ class LoanController extends Controller
                 ]);
             }
 
-            if ($loan->investments()->count() === 1) {
-                $loan->investments()->update(['amount' => $schedule->capital()]);
-            }
         });
 
         return redirect()->route('loans.show', $loan)->with('status', 'Prestamo actualizado.');
@@ -216,7 +226,8 @@ class LoanController extends Controller
             || $loan->interest_calculation_method !== $data['interest_calculation_method']
             || (int) $loan->term_months !== (int) $data['term_months']
             || (int) $loan->payment_day !== (int) $data['payment_day']
-            || $loan->start_date->toDateString() !== CarbonImmutable::parse($data['start_date'])->toDateString();
+            || $loan->start_date->toDateString() !== CarbonImmutable::parse($data['start_date'])->toDateString()
+            || ($loan->first_payment_date ?? $loan->start_date)->toDateString() !== CarbonImmutable::parse($data['first_payment_date'])->toDateString();
     }
 
     private function monthlyRate(float $rateValue, string $rateType): float
@@ -233,8 +244,9 @@ class LoanController extends Controller
             ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
             ->pluck('id');
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
-        $weekStart = $today->startOfWeek();
-        $weekEnd = $today->endOfWeek();
+        $cutPeriod = app(WeeklyCutPeriodService::class)->periodFor($today);
+        $weekStart = $cutPeriod['start'];
+        $weekEnd = $cutPeriod['end'];
         $monthStart = $today->startOfMonth();
         $monthEnd = $today->endOfMonth();
         $remainingCents = Installment::query()->whereIn('loan_id', $loanIds)->sum('remaining_amount') * 100;
@@ -250,7 +262,7 @@ class LoanController extends Controller
         $pendingReportedCents = CollectionMovement::query()
             ->whereIn('loan_id', $loanIds)
             ->where('confirmation_status', 'reported')
-            ->whereBetween('operated_on', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$monthStart->startOfDay(), $monthEnd->endOfDay()])
             ->sum('contract_amount') * 100;
         $overdueCents = Installment::query()
             ->whereIn('loan_id', $loanIds)

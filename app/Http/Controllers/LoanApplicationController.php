@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Investors\InvestmentAllocationService;
 use App\Domain\Loans\LoanFormalizer;
 use App\Domain\Loans\LoanSchedule;
 use App\Domain\Loans\LoanScheduleCalculator;
 use App\Models\Client;
+use App\Models\Investor;
 use App\Models\LoanApplication;
 use App\Models\Operator;
 use App\Support\Money;
@@ -128,6 +130,7 @@ class LoanApplicationController extends Controller
             'openingFeeLabel' => $this->openingFeeLabel($conditions['opening_fee_type'], (float) $conditions['opening_fee_value']),
             'openingFeeAmount' => Money::decimal($openingFeeCents),
             'contractTotalWithFee' => Money::decimal($schedule->contractTotalCents + $openingFeeCents),
+            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
         ]);
     }
 
@@ -178,16 +181,22 @@ class LoanApplicationController extends Controller
         return redirect()->route('applications.show', $application)->with('status', 'Solicitud rechazada.');
     }
 
-    public function start(Request $request, LoanApplication $application, LoanFormalizer $formalizer): RedirectResponse
+    public function start(Request $request, LoanApplication $application, LoanFormalizer $formalizer, InvestmentAllocationService $allocator): RedirectResponse
     {
         $this->authorizeApplicationAccess($request, $application);
         abort_unless($application->status === 'approved', 422);
 
         $data = $request->validate([
             'start_date' => ['required', 'date'],
+            'investors' => ['required', 'array', 'min:1', 'max:8'],
+            'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
+            'investors.*.capital_amount' => ['nullable', 'numeric', 'min:0'],
+            'investors.*.interest_share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
         $conditions = $application->approved_conditions;
+        $allocator->participants($data['investors'], Money::cents($conditions['capital']));
+
         $loan = $formalizer->create($application->client, [
             'operator_id' => $application->operator_id,
             'loan_application_id' => $application->id,
@@ -200,6 +209,9 @@ class LoanApplicationController extends Controller
             'term_months' => (int) $conditions['term_months'],
             'payment_day' => (int) $conditions['payment_day'],
             'start_date' => $data['start_date'],
+            'first_payment_date' => $conditions['first_payment_date'] ?? $data['start_date'],
+            'investors' => $data['investors'],
+            'created_by' => $request->user()->id,
         ]);
 
         $application->update([
@@ -235,6 +247,7 @@ class LoanApplicationController extends Controller
             'opening_fee_value' => 0,
             'opening_fee_amount' => '0.00',
             'start_date' => now('America/Merida')->toDateString(),
+            'first_payment_date' => now('America/Merida')->toDateString(),
         ], $application->approved_conditions ?: []);
     }
 
@@ -252,6 +265,7 @@ class LoanApplicationController extends Controller
             'opening_fee_type' => ['required', 'in:none,percent,fixed'],
             'opening_fee_value' => ['required', 'numeric', 'min:0'],
             'start_date' => ['required', 'date'],
+            'first_payment_date' => ['nullable', 'date'],
         ]);
 
         $data['monthly_rate'] = number_format($this->monthlyRate((float) $data['rate_value'], $data['rate_type']), 6, '.', '');
@@ -259,6 +273,7 @@ class LoanApplicationController extends Controller
         $data['vat_enabled'] = $request->boolean('vat_enabled', true);
         $data['administration_fee'] = number_format((float) ($data['administration_fee'] ?? 0), 2, '.', '');
         $data['opening_fee_amount'] = Money::decimal($this->openingFeeCents((float) $data['capital'], $data['opening_fee_type'], (float) $data['opening_fee_value']));
+        $data['first_payment_date'] = $data['first_payment_date'] ?? $data['start_date'];
 
         return $data;
     }

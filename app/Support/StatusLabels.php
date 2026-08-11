@@ -10,6 +10,8 @@ final class StatusLabels
             'reported' => 'Por confirmar',
             'applied' => 'Aplicado',
             'voided' => 'Anulado',
+            'rejected' => 'En aclaracion',
+            'reversed' => 'Revertido',
         ][$status] ?? self::fallback($status);
     }
 
@@ -17,10 +19,16 @@ final class StatusLabels
     {
         return [
             'draft' => 'Borrador',
+            'forming' => 'En formacion',
             'submitted' => 'Enviado',
+            'pending_reconciliation' => 'Pendiente de conciliacion',
+            'partially_received' => 'Parcialmente recibido',
             'reviewing' => 'En revision',
             'confirmed' => 'Confirmado',
+            'balanced' => 'Cuadrado',
             'with_difference' => 'Con diferencia',
+            'closed' => 'Cerrado',
+            'reopened' => 'Reabierto',
             'returned' => 'Devuelto',
             'voided' => 'Anulado',
         ][$status] ?? self::fallback($status);
@@ -48,7 +56,19 @@ final class StatusLabels
             'shortfall' => 'Faltante',
             'overage' => 'Sobrante',
             'regularization' => 'Regularizacion',
+            'funds_delivered' => 'Fondos entregados',
+            'adjustment_in' => 'Ajuste de entrada',
+            'adjustment_out' => 'Ajuste de salida',
         ][$type] ?? self::fallback($type);
+    }
+
+    public static function disbursement(?string $status): string
+    {
+        return [
+            'registered' => 'Registrado',
+            'cancelled' => 'Cancelado',
+            'reversed' => 'Revertido',
+        ][$status] ?? self::fallback($status);
     }
 
     public static function loan(?string $status): string
