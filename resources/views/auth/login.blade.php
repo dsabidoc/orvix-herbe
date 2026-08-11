@@ -6,6 +6,10 @@
                 <p class="mt-3 text-sm font-semibold text-slate-500">Acceso operativo</p>
             </div>
 
+            @if (session('status'))
+                <div class="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{{ session('status') }}</div>
+            @endif
+
             <form class="mt-6 space-y-4" method="POST" action="{{ route('login.store') }}">
                 @csrf
                 <div>
@@ -23,6 +27,9 @@
                     <input class="rounded border-slate-300" name="remember" type="checkbox" value="1">
                     Mantener sesion
                 </label>
+                <div class="text-right">
+                    <a class="text-sm font-semibold text-[#0f766e] hover:text-[#0b5f59]" href="{{ route('password.request') }}">Olvide mi contraseña</a>
+                </div>
                 <button class="w-full rounded-md bg-[#0d9488] px-4 py-2.5 text-sm font-bold text-white" type="submit">Entrar</button>
             </form>
 

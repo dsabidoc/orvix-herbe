@@ -21,6 +21,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.store');
+    Route::get('/olvide-mi-contrasena', [AuthController::class, 'showForgotPassword'])->name('password.request');
+    Route::post('/olvide-mi-contrasena', [AuthController::class, 'sendResetLink'])->name('password.email');
+    Route::get('/restablecer-contrasena/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
+    Route::post('/restablecer-contrasena', [AuthController::class, 'resetPassword'])->name('password.update');
 });
 
 Route::middleware('auth')->group(function () {
