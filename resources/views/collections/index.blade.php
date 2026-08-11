@@ -59,8 +59,9 @@
                                 : ($movement ? 'bg-amber-50 text-amber-700' : ($isOverdue ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'));
                             $badge = $isCovered ? 'pagada' : ($movement ? 'por confirmar' : ($isOverdue ? 'atrasada' : 'pendiente'));
                             $graceLimit = $installment->due_date->copy()->addDays((int) ($installment->loan->delinquency_grace_days ?? 0))->toDateString();
+                            $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
                             $delinquencyCents = (! $isCovered && ! $movement && (float) ($installment->loan->delinquency_rate ?? 0) > 0 && $graceLimit < $today)
-                                ? (int) round(Money::cents($installment->contract_amount) * ((float) $installment->loan->delinquency_rate / 100))
+                                ? (int) round($operationalCents * ((float) $installment->loan->delinquency_rate / 100))
                                 : 0;
                         @endphp
                         <tr class="{{ $isOverdue ? 'bg-red-50/30' : '' }}">

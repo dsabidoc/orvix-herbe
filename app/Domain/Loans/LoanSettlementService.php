@@ -42,7 +42,7 @@ class LoanSettlementService
                 $interestCents = $components['interest_cents'];
                 $amountCents = min(
                     $components['remaining_cents'],
-                    $components['principal_cents'] + $components['interest_cents'] + $components['interest_vat_cents'] + $components['administration_fee_cents'],
+                    $components['principal_cents'] + $components['interest_cents'],
                 );
             }
 
@@ -141,7 +141,7 @@ class LoanSettlementService
      */
     private function remainingComponents($installment): array
     {
-        $contractCents = Money::cents($installment->contract_amount);
+        $contractCents = $this->operationalCents($installment);
         $remainingCents = Money::cents($installment->remaining_amount);
         $ratio = $contractCents > 0 ? min(1, $remainingCents / $contractCents) : 0;
 
@@ -161,5 +161,12 @@ class LoanSettlementService
         }
 
         return CarbonImmutable::parse($settledOn ?: now('America/Merida')->toDateString(), 'America/Merida')->startOfDay();
+    }
+
+    private function operationalCents($installment): int
+    {
+        $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+        return $operationalCents > 0 ? $operationalCents : Money::cents($installment->contract_amount);
     }
 }

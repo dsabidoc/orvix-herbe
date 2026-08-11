@@ -132,8 +132,9 @@
                                 <tr>
                                     @php
                                         $graceLimit = $installment->due_date->copy()->addDays((int) ($installment->loan->delinquency_grace_days ?? 0))->toDateString();
+                                        $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
                                         $delinquencyCents = ((float) ($installment->loan->delinquency_rate ?? 0) > 0 && $graceLimit < now('America/Merida')->toDateString())
-                                            ? (int) round(Money::cents($installment->contract_amount) * ((float) $installment->loan->delinquency_rate / 100))
+                                            ? (int) round($operationalCents * ((float) $installment->loan->delinquency_rate / 100))
                                             : 0;
                                     @endphp
                                     <td class="px-5 py-3">

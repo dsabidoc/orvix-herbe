@@ -344,6 +344,10 @@ class LoanController extends Controller
             ]);
 
             foreach ($schedule->installments as $installment) {
+                $operationalAmount = Money::decimal(
+                    Money::cents($installment['principal'] ?? 0) + Money::cents($installment['interest'] ?? 0),
+                );
+
                 $loan->installments()->create([
                     'number' => $installment['number'],
                     'due_date' => $installment['due_date'],
@@ -353,7 +357,7 @@ class LoanController extends Controller
                     'interest_amount' => $installment['interest'] ?? '0.00',
                     'interest_vat_amount' => $installment['interest_vat'] ?? '0.00',
                     'capital_balance' => $installment['balance'] ?? '0.00',
-                    'remaining_amount' => $installment['amount'],
+                    'remaining_amount' => $operationalAmount,
                     'status' => 'upcoming',
                 ]);
             }
@@ -428,7 +432,8 @@ class LoanController extends Controller
         $expectedPeriodCents = Installment::query()
             ->whereIn('loan_id', $loanIds)
             ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
-            ->sum('contract_amount') * 100;
+            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
+            ->value('subtotal') * 100;
         $pendingReportedCents = CollectionMovement::query()
             ->whereIn('loan_id', $loanIds)
             ->where('confirmation_status', 'reported')

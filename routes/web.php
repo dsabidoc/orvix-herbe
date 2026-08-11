@@ -64,6 +64,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/cobranza/letras/{installment}/pagado', [CollectionController::class, 'markPaid'])->name('collections.mark-paid');
     Route::post('/prestamos/{loan}/cobros', [PaymentController::class, 'store'])->name('payments.store');
     Route::post('/cobros/{movement}/confirmar', [PaymentController::class, 'confirm'])->name('payments.confirm');
+    Route::post('/cobros/{movement}/regresar-pendiente', [PaymentController::class, 'reverse'])->name('payments.reverse');
 
     Route::get('/cortes', [WeeklyCutController::class, 'index'])->name('cuts.index');
     Route::post('/cortes', [WeeklyCutController::class, 'store'])->name('cuts.store');

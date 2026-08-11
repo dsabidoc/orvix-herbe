@@ -80,6 +80,19 @@ class PaymentController extends Controller
         return back()->with('status', 'Pago aplicado al calendario contractual.');
     }
 
+    public function reverse(Request $request, CollectionMovement $movement, PaymentApplicationService $service): RedirectResponse
+    {
+        abort_unless($request->user()->can('payments.confirm') && ! $request->user()->hasRole('operador-cartera'), 403);
+
+        try {
+            $service->reverse($movement, $request->user()->id);
+        } catch (RuntimeException $exception) {
+            return back()->with('warning', $exception->getMessage());
+        }
+
+        return back()->with('status', 'La letra regreso a pendiente y el boton Pagado queda disponible de nuevo.');
+    }
+
     private function authorizeLoanAccess(Request $request, Loan $loan): void
     {
         if ($request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage')) {

@@ -312,6 +312,8 @@ class LoanCreationController extends Controller
             ]);
 
             foreach ($option['installments'] as $installment) {
+                $operationalAmount = $this->operationalAmount($installment);
+
                 $loan->installments()->create([
                     'number' => $installment['number'],
                     'due_date' => $installment['due_date'],
@@ -321,7 +323,7 @@ class LoanCreationController extends Controller
                     'interest_amount' => $installment['interest'],
                     'interest_vat_amount' => '0.00',
                     'capital_balance' => $installment['balance'],
-                    'remaining_amount' => $installment['amount'],
+                    'remaining_amount' => $operationalAmount,
                     'status' => 'upcoming',
                 ]);
             }
@@ -350,6 +352,17 @@ class LoanCreationController extends Controller
         $decimalRate = $rateValue / 100;
 
         return $rateType === 'annual' ? $decimalRate / 12 : $decimalRate;
+    }
+
+    /**
+     * @param  array<string, mixed>  $installment
+     */
+    private function operationalAmount(array $installment): string
+    {
+        $principal = (int) round(((float) ($installment['principal'] ?? 0)) * 100);
+        $interest = (int) round(((float) ($installment['interest'] ?? 0)) * 100);
+
+        return Money::decimal($principal + $interest);
     }
 
     /**

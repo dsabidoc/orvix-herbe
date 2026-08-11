@@ -53,7 +53,8 @@ class DashboardController extends Controller
         $expectedPeriodCents = Installment::query()
             ->whereIn('loan_id', $collectableLoanIds)
             ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-            ->sum('contract_amount') * 100;
+            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
+            ->value('subtotal') * 100;
 
         $pendingReportedCents = CollectionMovement::query()
             ->whereIn('loan_id', $loanIds)

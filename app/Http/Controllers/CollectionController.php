@@ -51,6 +51,9 @@ class CollectionController extends Controller
         $monthInstallments = Installment::query()
             ->whereHas('loan', $loanScope)
             ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()]);
+        $monthOperationalCents = (clone $monthInstallments)
+            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
+            ->value('subtotal') * 100;
         $reportedPendingCents = CollectionMovement::query()
             ->whereHas('loan', $loanScope)
             ->where('confirmation_status', 'reported')
@@ -78,7 +81,7 @@ class CollectionController extends Controller
             'kpis' => [
                 ['title' => 'Cartera del mes', 'value' => Money::mxn(Money::decimal((int) ((clone $monthInstallments)->sum('remaining_amount') * 100))), 'caption' => 'Saldo de letras del mes', 'color' => 'blue'],
                 ['title' => 'Esperado semanal', 'value' => Money::mxn(Money::decimal((int) $expectedWeekCents)), 'caption' => 'Letras del mes en esta semana', 'color' => 'orange'],
-                ['title' => 'Esperado del mes', 'value' => Money::mxn(Money::decimal((int) ((clone $monthInstallments)->sum('contract_amount') * 100))), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
+                ['title' => 'Esperado del mes', 'value' => Money::mxn(Money::decimal((int) $monthOperationalCents)), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
                 ['title' => 'Reportado pendiente', 'value' => Money::mxn(Money::decimal((int) $reportedPendingCents)), 'caption' => 'Cobros aun por confirmar', 'color' => 'green'],
                 ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas del mes', 'color' => 'red'],
             ],

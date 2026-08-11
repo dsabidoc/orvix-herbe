@@ -265,7 +265,7 @@ class PortfolioBalanceService
      */
     private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $upcomingEnd, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
     {
-        $contractCents = Money::cents($installment->contract_amount);
+        $contractCents = $this->operationalCents($installment);
         $hasAllocations = ($allocationCounts[$installment->id] ?? 0) > 0;
         $appliedCents = $hasAllocations
             ? (int) ($allocationAmounts[$installment->id] ?? 0)
@@ -562,6 +562,13 @@ class PortfolioBalanceService
             'cancelled', 'canceled' => 'Cancelado',
             default => ucfirst(str_replace('_', ' ', $status)),
         };
+    }
+
+    private function operationalCents($installment): int
+    {
+        $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+        return $operationalCents > 0 ? $operationalCents : Money::cents($installment->contract_amount);
     }
 
     private function cutoffDate(mixed $date): CarbonImmutable

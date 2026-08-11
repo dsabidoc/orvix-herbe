@@ -315,6 +315,7 @@ class OrvixDemoSeeder extends Seeder
 
         foreach ($schedule->installments as $installment) {
             $covered = $installment['number'] <= $paidInstallments;
+            $operationalAmount = $this->operationalAmount($installment);
             Installment::query()->create([
                 'loan_id' => $loan->id,
                 'term_version_id' => $termVersionId,
@@ -325,8 +326,8 @@ class OrvixDemoSeeder extends Seeder
                 'interest_amount' => $installment['interest'] ?? '0.00',
                 'interest_vat_amount' => $installment['interest_vat'] ?? '0.00',
                 'capital_balance' => $installment['balance'] ?? '0.00',
-                'applied_amount' => $covered ? $installment['amount'] : '0.00',
-                'remaining_amount' => $covered ? '0.00' : $installment['amount'],
+                'applied_amount' => $covered ? $operationalAmount : '0.00',
+                'remaining_amount' => $covered ? '0.00' : $operationalAmount,
                 'status' => $covered ? 'confirmed' : 'upcoming',
             ]);
 
@@ -389,6 +390,7 @@ class OrvixDemoSeeder extends Seeder
 
         foreach ($schedule->installments as $installment) {
             $covered = $status === 'settled' || $installment['number'] <= $paidInstallments;
+            $operationalAmount = $this->operationalAmount($installment);
             Installment::query()->create([
                 'loan_id' => $loan->id,
                 'number' => $installment['number'],
@@ -398,8 +400,8 @@ class OrvixDemoSeeder extends Seeder
                 'interest_amount' => $installment['interest'] ?? '0.00',
                 'interest_vat_amount' => $installment['interest_vat'] ?? '0.00',
                 'capital_balance' => $installment['balance'] ?? '0.00',
-                'applied_amount' => $covered ? $installment['amount'] : '0.00',
-                'remaining_amount' => $covered ? '0.00' : $installment['amount'],
+                'applied_amount' => $covered ? $operationalAmount : '0.00',
+                'remaining_amount' => $covered ? '0.00' : $operationalAmount,
                 'status' => $covered ? 'confirmed' : 'upcoming',
             ]);
         }
@@ -608,5 +610,16 @@ class OrvixDemoSeeder extends Seeder
             }
         }
 
+    }
+
+    /**
+     * @param  array<string, mixed>  $installment
+     */
+    private function operationalAmount(array $installment): string
+    {
+        $principal = Money::cents($installment['principal'] ?? 0);
+        $interest = Money::cents($installment['interest'] ?? 0);
+
+        return Money::decimal($principal + $interest);
     }
 }

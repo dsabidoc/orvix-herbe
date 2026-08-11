@@ -38,6 +38,8 @@ class Installment extends Model
 
     public function reportedMovement(): HasOne
     {
-        return $this->hasOne(CollectionMovement::class, 'target_installment_id')->latestOfMany();
+        return $this->hasOne(CollectionMovement::class, 'target_installment_id')
+            ->whereIn('confirmation_status', ['reported', 'applied'])
+            ->latestOfMany();
     }
 }

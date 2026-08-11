@@ -78,6 +78,63 @@ class OrvixWorkflowTest extends TestCase
         $this->assertGreaterThanOrEqual($interestBefore, Money::cents($investment->investor->fresh()->generated_interest_balance));
     }
 
+    public function test_admin_can_return_paid_installment_to_pending(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $movement = CollectionMovement::query()
+            ->where('confirmation_status', 'reported')
+            ->where('type', 'ordinary')
+            ->whereNotNull('target_installment_id')
+            ->firstOrFail();
+        $installment = $movement->targetInstallment()->firstOrFail();
+        $originalRemaining = $installment->remaining_amount;
+
+        $this->actingAs($admin)
+            ->post(route('payments.confirm', $movement))
+            ->assertSessionHas('status');
+
+        $this->assertSame('applied', $movement->fresh()->confirmation_status);
+        $this->assertDatabaseHas('payment_allocations', [
+            'collection_movement_id' => $movement->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('payments.reverse', $movement))
+            ->assertSessionHas('status');
+
+        $installment->refresh();
+        $movement->refresh();
+
+        $this->assertSame('reversed', $movement->confirmation_status);
+        $this->assertSame($originalRemaining, $installment->remaining_amount);
+        $this->assertSame(0, Money::cents($installment->applied_amount));
+        $this->assertSame('upcoming', $installment->status);
+        $this->assertDatabaseMissing('payment_allocations', [
+            'collection_movement_id' => $movement->id,
+        ]);
+        $this->assertNull($installment->reportedMovement()->first());
+    }
+
+    public function test_installment_operational_balance_excludes_vat_and_administration_fee(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $installment = Installment::query()
+            ->where(function ($query) {
+                $query->where('administration_fee_amount', '>', 0)
+                    ->orWhere('interest_vat_amount', '>', 0);
+            })
+            ->where('remaining_amount', '>', 0)
+            ->firstOrFail();
+
+        $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+        $this->assertSame($operationalCents, Money::cents($installment->remaining_amount));
+        $this->assertGreaterThan($operationalCents, Money::cents($installment->contract_amount));
+    }
+
     public function test_advance_payment_must_cover_full_trailing_installments(): void
     {
         $this->seed(DatabaseSeeder::class);

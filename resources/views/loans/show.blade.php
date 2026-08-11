@@ -12,11 +12,13 @@
     $loanUser = auth()->user();
     $isInvestorReadOnly = $loanUser->can('investments.view-own') && ! $loanUser->can('investors.manage');
     $canOperateLoan = ! $isInvestorReadOnly;
+    $canReverseInstallmentPayment = $loanUser->can('payments.confirm') && ! $loanUser->hasRole('operador-cartera');
     $nextDelinquencyCents = 0;
     if ($next && (float) ($loan->delinquency_rate ?? 0) > 0) {
         $graceLimit = $next->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
         if ($graceLimit < $today) {
-            $nextDelinquencyCents = (int) round(Money::cents($next->contract_amount) * ((float) $loan->delinquency_rate / 100));
+            $nextOperationalCents = Money::cents($next->principal_amount) + Money::cents($next->interest_amount);
+            $nextDelinquencyCents = (int) round($nextOperationalCents * ((float) $loan->delinquency_rate / 100));
         }
     }
 @endphp
@@ -236,17 +238,18 @@
                 <p class="mt-1 text-sm text-slate-500">El saldo solo baja cuando un cobro se confirma/aplica.</p>
             </div>
             <div class="max-h-[560px] overflow-x-auto overflow-y-auto">
-                <table class="w-full min-w-[1180px] text-left text-sm">
+                <table class="w-full min-w-[1260px] text-left text-sm">
                     <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
-                            <th class="px-4 py-3">Letras</th>
+                            <th class="px-4 py-3">Letra</th>
                             <th class="px-4 py-3">Vence</th>
-                            <th class="px-4 py-3 text-right">Mensualidad</th>
-                            <th class="px-4 py-3 text-right">Amortizacion</th>
-                            <th class="px-4 py-3 text-right">Gtos Admon</th>
-                            <th class="px-4 py-3 text-right">Intereses</th>
-                            <th class="px-4 py-3 text-right">Iva Intereses</th>
-                            <th class="px-4 py-3 text-right">Capital Vivo</th>
+                            <th class="px-4 py-3 text-right">Capital</th>
+                            <th class="px-4 py-3 text-right">Abono a Capital</th>
+                            <th class="px-4 py-3 text-right">Interes</th>
+                            <th class="px-4 py-3 text-right">IVA interes</th>
+                            <th class="px-4 py-3 text-right">Subtotal</th>
+                            <th class="px-4 py-3 text-right">Gasto Administrativo</th>
+                            <th class="px-4 py-3 text-right">Pagaré</th>
                             <th class="px-4 py-3">Estatus</th>
                             <th class="px-4 py-3 text-right">Pagado</th>
                         </tr>
@@ -263,19 +266,21 @@
                                     ? 'bg-amber-50 text-amber-700'
                                     : ($isOverdue ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700');
                                 $graceLimit = $installment->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
+                                $subtotalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
                                 $rowDelinquencyCents = (! $movement && Money::cents($installment->remaining_amount) > 0 && (float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < $today)
-                                    ? (int) round(Money::cents($installment->contract_amount) * ((float) $loan->delinquency_rate / 100))
+                                    ? (int) round($subtotalCents * ((float) $loan->delinquency_rate / 100))
                                     : 0;
                             @endphp
                             <tr class="{{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
                                 <td class="px-4 py-2 font-semibold">{{ $installment->number }}</td>
                                 <td class="px-4 py-2">{{ $installment->due_date->format('d/m/Y') }}</td>
-                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->contract_amount) }}</td>
+                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->capital_balance) }}</td>
                                 <td class="px-4 py-2 text-right">{{ Money::mxn($installment->principal_amount) }}</td>
-                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->administration_fee_amount ?? 0) }}</td>
                                 <td class="px-4 py-2 text-right">{{ Money::mxn($installment->interest_amount) }}</td>
                                 <td class="px-4 py-2 text-right">{{ Money::mxn($installment->interest_vat_amount) }}</td>
-                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->capital_balance) }}</td>
+                                <td class="px-4 py-2 text-right">{{ Money::mxn(Money::decimal($subtotalCents)) }}</td>
+                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->administration_fee_amount ?? 0) }}</td>
+                                <td class="px-4 py-2 text-right font-semibold">{{ Money::mxn($installment->contract_amount) }}</td>
                                 <td class="px-4 py-2">
                                     <span class="{{ $statusClass }} rounded px-2 py-1 text-xs font-bold">{{ $statusLabel }}</span>
                                 </td>
@@ -291,6 +296,11 @@
                                             <input name="additional_charge_amount" type="hidden" value="0">
                                             <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($rowDelinquencyCents) }}">
                                             <button class="rounded-md bg-[#0d9488] px-2 py-1 text-xs font-bold text-white" type="submit">Pagado</button>
+                                        </form>
+                                    @elseif ($movement && $canReverseInstallmentPayment)
+                                        <form method="POST" action="{{ route('payments.reverse', $movement) }}">
+                                            @csrf
+                                            <button class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700" type="submit">Regresar a no pagado</button>
                                         </form>
                                     @else
                                         <span class="text-xs font-semibold text-slate-400">-</span>
@@ -378,7 +388,7 @@
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operated_on" name="operated_on" type="date" value="{{ now('America/Merida')->toDateString() }}">
                     </div>
                     <div>
-                        <label class="text-sm font-semibold text-slate-700" for="contract_amount">Monto contractual</label>
+                        <label class="text-sm font-semibold text-slate-700" for="contract_amount">Subtotal operativo</label>
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="contract_amount" name="contract_amount" type="number" step="0.01" value="{{ $next?->remaining_amount ?? '0.00' }}">
                     </div>
                 </div>

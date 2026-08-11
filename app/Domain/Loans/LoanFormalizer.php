@@ -59,6 +59,8 @@ class LoanFormalizer
             ]);
 
             foreach ($schedule->installments as $installment) {
+                $operationalAmount = $this->operationalAmount($installment);
+
                 $loan->installments()->create([
                     'number' => $installment['number'],
                     'due_date' => $installment['due_date'],
@@ -68,7 +70,7 @@ class LoanFormalizer
                     'interest_amount' => $installment['interest'] ?? '0.00',
                     'interest_vat_amount' => $installment['interest_vat'] ?? '0.00',
                     'capital_balance' => $installment['balance'] ?? '0.00',
-                    'remaining_amount' => $installment['amount'],
+                    'remaining_amount' => $operationalAmount,
                     'status' => 'upcoming',
                 ]);
             }
@@ -95,5 +97,16 @@ class LoanFormalizer
             'price' => $data['price'] ?? null,
             'status' => 'financed',
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $installment
+     */
+    private function operationalAmount(array $installment): string
+    {
+        $principal = (int) round(((float) ($installment['principal'] ?? 0)) * 100);
+        $interest = (int) round(((float) ($installment['interest'] ?? 0)) * 100);
+
+        return number_format(($principal + $interest) / 100, 2, '.', '');
     }
 }
