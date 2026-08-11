@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Models\FundDisbursement;
 use App\Models\Installment;
 use App\Models\Investor;
+use App\Models\InvestorCapitalMovement;
 use App\Models\Loan;
 use App\Models\LoanApplication;
 use App\Models\Operator;
@@ -133,6 +134,42 @@ class OrvixWorkflowTest extends TestCase
 
         $this->assertSame($operationalCents, Money::cents($installment->remaining_amount));
         $this->assertGreaterThan($operationalCents, Money::cents($installment->contract_amount));
+    }
+
+    public function test_paid_without_investor_effects_applies_installment_without_recording_returns(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $loan = Loan::query()
+            ->whereHas('investments')
+            ->whereHas('installments', fn ($query) => $query->where('remaining_amount', '>', 0)->whereDoesntHave('reportedMovement'))
+            ->with(['installments' => fn ($query) => $query->where('remaining_amount', '>', 0)->whereDoesntHave('reportedMovement')->orderBy('number')])
+            ->firstOrFail();
+        $installment = $loan->installments->first();
+        $returnsBefore = InvestorCapitalMovement::query()->where('type', 'payment_returns_recorded')->count();
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'operated_on' => '2026-08-11',
+                'contract_amount' => $installment->remaining_amount,
+                'operator_surcharge_amount' => 0,
+                'external_concepts_amount' => 0,
+                'affects_investors' => 0,
+                'return_to' => 'loan',
+            ])
+            ->assertSessionHas('status');
+
+        $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+
+        $this->assertFalse($movement->affects_investors);
+
+        $this->actingAs($admin)
+            ->post(route('payments.confirm', $movement))
+            ->assertSessionHas('status');
+
+        $this->assertSame(0, Money::cents($installment->fresh()->remaining_amount));
+        $this->assertSame($returnsBefore, InvestorCapitalMovement::query()->where('type', 'payment_returns_recorded')->count());
     }
 
     public function test_advance_payment_must_cover_full_trailing_installments(): void

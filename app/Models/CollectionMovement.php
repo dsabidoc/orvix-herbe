@@ -28,6 +28,7 @@ class CollectionMovement extends Model
         'external_concepts_amount',
         'additional_charge_amount',
         'delinquency_amount',
+        'affects_investors',
         'type',
         'payment_method',
         'reference',
@@ -41,6 +42,7 @@ class CollectionMovement extends Model
             'operated_on' => 'date',
             'registered_at' => 'datetime',
             'confirmed_at' => 'datetime',
+            'affects_investors' => 'boolean',
         ];
     }
 

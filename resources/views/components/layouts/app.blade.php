@@ -253,8 +253,9 @@
                             <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-date" type="date" value="{{ now('America/Merida')->toDateString() }}">
                         </div>
                     </div>
-                    <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <div class="flex flex-col justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row">
                         <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" value="cancel">No</button>
+                        <button class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700" value="confirm-no-investors">Marcar pagado sin efectos</button>
                         <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" value="confirm">Sí, marcar pagado</button>
                     </div>
                 </form>

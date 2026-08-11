@@ -86,7 +86,9 @@ class PaymentApplicationService
                     'amount' => Money::decimal($applied),
                 ]);
 
-                $this->recordInvestorReturns($movement, $installment, $applied, $confirmedByUserId);
+                if ($movement->affects_investors) {
+                    $this->recordInvestorReturns($movement, $installment, $applied, $confirmedByUserId);
+                }
 
                 $remainingCents -= $applied;
             }

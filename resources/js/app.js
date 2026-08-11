@@ -103,13 +103,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (dialog instanceof HTMLDialogElement) {
         dialog.addEventListener('close', () => {
-            if (dialog.returnValue !== 'confirm' || !pendingPaidForm) {
+            if (!['confirm', 'confirm-no-investors'].includes(dialog.returnValue) || !pendingPaidForm) {
                 pendingPaidForm = null;
                 return;
             }
 
             const paymentDateInput = dialog.querySelector('#confirm-paid-date');
             let formPaymentDateInput = pendingPaidForm.querySelector('input[name="operated_on"]');
+            let affectsInvestorsInput = pendingPaidForm.querySelector('input[name="affects_investors"]');
 
             if (!(formPaymentDateInput instanceof HTMLInputElement)) {
                 formPaymentDateInput = document.createElement('input');
@@ -121,6 +122,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (paymentDateInput instanceof HTMLInputElement && paymentDateInput.value) {
                 formPaymentDateInput.value = paymentDateInput.value;
             }
+
+            if (!(affectsInvestorsInput instanceof HTMLInputElement)) {
+                affectsInvestorsInput = document.createElement('input');
+                affectsInvestorsInput.type = 'hidden';
+                affectsInvestorsInput.name = 'affects_investors';
+                pendingPaidForm.appendChild(affectsInvestorsInput);
+            }
+
+            affectsInvestorsInput.value = dialog.returnValue === 'confirm-no-investors' ? '0' : '1';
 
             pendingPaidForm.dataset.confirmed = 'true';
             pendingPaidForm.requestSubmit();

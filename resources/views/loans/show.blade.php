@@ -327,6 +327,9 @@
                             </div>
                             <span class="rounded px-2 py-1 text-xs font-bold {{ $movement->confirmation_status === 'applied' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">{{ StatusLabels::movement($movement->confirmation_status) }}</span>
                         </div>
+                        @if (! $movement->affects_investors)
+                            <p class="mt-2 inline-flex rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">Sin efectos en inversionistas</p>
+                        @endif
                         <dl class="mt-3 grid gap-2 text-sm md:grid-cols-3">
                             <div>
                                 <dt class="text-slate-500">Pagaré</dt>
