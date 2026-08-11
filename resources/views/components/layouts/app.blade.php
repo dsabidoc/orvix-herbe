@@ -25,10 +25,16 @@
                             ]
                             : [
                                 ['Dashboard', 'dashboard', 'chart'],
-                                ['Cartera y saldos', 'portfolio-balances.index', 'portfolio'],
-                                ['Cobranza', 'collections.index', 'cash'],
                                 ['Simulador', 'simulator.index', 'calculator'],
-                                ['Cartera', 'loans.index', 'wallet'],
+                                [
+                                    'Carteras',
+                                    null,
+                                    'wallet',
+                                    [
+                                        ['Todas', 'loans.index'],
+                                        ['Saldos', 'portfolio-balances.index'],
+                                    ],
+                                ],
                                 ['Cortes', 'cuts.index', 'receipt'],
                                 ['Solicitudes', 'applications.index', 'file'],
                                 ['Clientes', 'clients.index', 'users'],
@@ -39,7 +45,34 @@
                     @endphp
 
                     <nav class="mt-8 space-y-1 text-sm font-medium text-slate-600">
-                        @foreach ($mainNavItems as [$label, $route, $icon])
+                        @foreach ($mainNavItems as $item)
+                            @php
+                                [$label, $route, $icon] = [$item[0], $item[1], $item[2]];
+                                $children = $item[3] ?? [];
+                                $isOpen = collect($children)->contains(fn ($child) => request()->routeIs($child[1]));
+                            @endphp
+                            @if ($children)
+                                <details class="rounded-md" {{ $isOpen ? 'open' : '' }}>
+                                    <summary class="{{ $isOpen ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} cursor-pointer rounded-md px-3 py-2.5 font-semibold">
+                                        <span class="inline-flex items-center gap-2.5">
+                                            <span class="inline-grid size-5 place-items-center rounded bg-[#e6f7f4] text-[#0d9488]">
+                                                @switch($icon)
+                                                    @case('wallet')
+                                                        <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7H5a3 3 0 0 0 0 6h15v6H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h15z"/><path d="M16 13h.01"/></svg>
+                                                        @break
+                                                @endswitch
+                                            </span>
+                                            <span>{{ $label }}</span>
+                                        </span>
+                                    </summary>
+                                    <div class="mt-1 space-y-1 pl-3">
+                                        @foreach ($children as [$childLabel, $childRoute])
+                                            <a class="{{ request()->routeIs($childRoute) ? 'text-[#0f766e]' : 'text-slate-600' }} flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route($childRoute) }}"><span class="size-1.5 rounded-full bg-[#0d9488]"></span>{{ $childLabel }}</a>
+                                        @endforeach
+                                    </div>
+                                </details>
+                                @continue
+                            @endif
                             <a class="{{ request()->routeIs($route) ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} flex items-center justify-between rounded-md px-3 py-2.5" href="{{ route($route) }}">
                                 <span class="flex items-center gap-2.5">
                                     <span class="grid size-5 place-items-center rounded bg-[#e6f7f4] text-[#0d9488]">
@@ -121,7 +154,25 @@
                     </div>
 
                     <nav class="mt-6 flex-1 space-y-1 overflow-y-auto text-sm font-medium text-slate-600">
-                        @foreach (collect($mainNavItems)->map(fn ($item) => [$item[0], $item[1]]) as [$label, $route])
+                        @foreach ($mainNavItems as $item)
+                            @php
+                                [$label, $route] = [$item[0], $item[1]];
+                                $children = $item[3] ?? [];
+                                $isOpen = collect($children)->contains(fn ($child) => request()->routeIs($child[1]));
+                            @endphp
+                            @if ($children)
+                                <details class="rounded-md" {{ $isOpen ? 'open' : '' }}>
+                                    <summary class="{{ $isOpen ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} cursor-pointer rounded-md px-3 py-3 font-semibold">
+                                        <span class="inline-flex items-center gap-2.5"><span class="size-2 rounded-full bg-[#0d9488]"></span>{{ $label }}</span>
+                                    </summary>
+                                    <div class="mt-1 space-y-1 pl-5">
+                                        @foreach ($children as [$childLabel, $childRoute])
+                                            <a class="{{ request()->routeIs($childRoute) ? 'text-[#0f766e]' : 'text-slate-600' }} block rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route($childRoute) }}">{{ $childLabel }}</a>
+                                        @endforeach
+                                    </div>
+                                </details>
+                                @continue
+                            @endif
                             <a class="{{ request()->routeIs($route) ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} flex items-center justify-between rounded-md px-3 py-3" href="{{ route($route) }}">
                                 <span class="flex items-center gap-2.5"><span class="size-2 rounded-full bg-[#0d9488]"></span>{{ $label }}</span>
                                 @if (request()->routeIs($route))
