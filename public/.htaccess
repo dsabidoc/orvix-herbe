@@ -1,3 +1,7 @@
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-alt-php85___lsphp
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
