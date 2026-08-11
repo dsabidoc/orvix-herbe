@@ -110,7 +110,7 @@ class WeeklyCutPeriodService
                 ],
                 [
                     'expected_amount' => $movement->contract_amount,
-                    'reported_amount' => $movement->contract_amount,
+                    'reported_amount' => Money::decimal($this->movementTotalCents($movement)),
                     'received_amount' => '0.00',
                     'status' => 'included',
                 ],
@@ -164,7 +164,7 @@ class WeeklyCutPeriodService
                 ],
                 [
                     'expected_amount' => $movement->contract_amount,
-                    'reported_amount' => $movement->contract_amount,
+                    'reported_amount' => Money::decimal($this->movementTotalCents($movement)),
                     'received_amount' => '0.00',
                     'status' => 'included',
                 ],
@@ -228,8 +228,20 @@ class WeeklyCutPeriodService
         return (int) round(Installment::query()
             ->whereBetween('due_date', [$start->toDateString(), $end->toDateString()])
             ->where('remaining_amount', '>', 0)
-            ->whereHas('loan', fn ($query) => $query->where('operator_id', $operatorId)->where('status', 'active'))
+            ->whereHas('loan', fn ($query) => $query
+                ->where('operator_id', $operatorId)
+                ->where('status', 'active')
+                ->where('is_frozen', false))
             ->sum('remaining_amount') * 100);
+    }
+
+    private function movementTotalCents(CollectionMovement $movement): int
+    {
+        return Money::cents($movement->contract_amount)
+            + Money::cents($movement->operator_surcharge_amount)
+            + Money::cents($movement->external_concepts_amount)
+            + Money::cents($movement->additional_charge_amount ?? 0)
+            + Money::cents($movement->delinquency_amount ?? 0);
     }
 
     private function latestOperatorBalance(int $operatorId): int

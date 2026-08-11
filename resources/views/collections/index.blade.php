@@ -58,6 +58,10 @@
                                 ? 'bg-emerald-50 text-emerald-700'
                                 : ($movement ? 'bg-amber-50 text-amber-700' : ($isOverdue ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'));
                             $badge = $isCovered ? 'pagada' : ($movement ? 'por confirmar' : ($isOverdue ? 'atrasada' : 'pendiente'));
+                            $graceLimit = $installment->due_date->copy()->addDays((int) ($installment->loan->delinquency_grace_days ?? 0))->toDateString();
+                            $delinquencyCents = (! $isCovered && ! $movement && (float) ($installment->loan->delinquency_rate ?? 0) > 0 && $graceLimit < $today)
+                                ? (int) round(Money::cents($installment->contract_amount) * ((float) $installment->loan->delinquency_rate / 100))
+                                : 0;
                         @endphp
                         <tr class="{{ $isOverdue ? 'bg-red-50/30' : '' }}">
                             <td class="px-5 py-3 font-semibold">{{ $installment->due_date->format('d/m/Y') }}</td>
@@ -79,6 +83,8 @@
                                         <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
                                         <input name="operator_surcharge_amount" type="hidden" value="0">
                                         <input name="external_concepts_amount" type="hidden" value="0">
+                                        <input name="additional_charge_amount" type="hidden" value="0">
+                                        <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($delinquencyCents) }}">
                                         <button class="rounded-md bg-[#0d9488] px-3 py-2 text-xs font-bold text-white" type="submit">Pagado</button>
                                     </form>
                                 @else

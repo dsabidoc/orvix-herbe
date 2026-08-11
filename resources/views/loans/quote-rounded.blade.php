@@ -34,7 +34,9 @@
                         <form class="mt-4" method="POST" action="{{ route('loans.confirm-rounded') }}">
                             @csrf
                             @foreach ($data as $field => $value)
-                                <input name="{{ $field }}" type="hidden" value="{{ $value }}">
+                                @if (! is_array($value))
+                                    <input name="{{ $field }}" type="hidden" value="{{ $value }}">
+                                @endif
                             @endforeach
                             <input name="selected_option" type="hidden" value="{{ $key }}">
                             <div class="mb-4 rounded-md bg-slate-50 p-3">

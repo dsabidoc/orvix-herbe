@@ -34,6 +34,7 @@ class DashboardController extends Controller
         $periodStart = $periodType === 'year' ? $periodDate->startOfYear() : $periodDate->startOfMonth();
         $periodEnd = $periodType === 'year' ? $periodDate->endOfYear() : $periodDate->endOfMonth();
         $loanIds = $this->visibleLoanQuery($request)->pluck('id');
+        $collectableLoanIds = $this->visibleLoanQuery($request)->where('is_frozen', false)->pluck('id');
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
         $cutPeriod = app(WeeklyCutPeriodService::class)->periodFor($today);
         $weekStart = $cutPeriod['start'];
@@ -44,13 +45,13 @@ class DashboardController extends Controller
             ->sum('remaining_amount') * 100;
 
         $expectedWeekCents = Installment::query()
-            ->whereIn('loan_id', $loanIds)
+            ->whereIn('loan_id', $collectableLoanIds)
             ->whereBetween('due_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
             ->where('remaining_amount', '>', 0)
             ->sum('remaining_amount') * 100;
 
         $expectedPeriodCents = Installment::query()
-            ->whereIn('loan_id', $loanIds)
+            ->whereIn('loan_id', $collectableLoanIds)
             ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
             ->sum('contract_amount') * 100;
 
@@ -61,7 +62,7 @@ class DashboardController extends Controller
             ->sum('contract_amount') * 100;
 
         $overdueCents = Installment::query()
-            ->whereIn('loan_id', $loanIds)
+            ->whereIn('loan_id', $collectableLoanIds)
             ->whereDate('due_date', '<', $today->toDateString())
             ->where('remaining_amount', '>', 0)
             ->sum('remaining_amount') * 100;
@@ -96,6 +97,7 @@ class DashboardController extends Controller
             ->whereHas('installments', fn ($query) => $query
                 ->where('remaining_amount', '>', 0)
                 ->whereDoesntHave('reportedMovement'))
+            ->where('is_frozen', false)
             ->orderBy('folio')
             ->get();
 

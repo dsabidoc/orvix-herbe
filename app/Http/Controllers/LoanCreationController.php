@@ -13,6 +13,7 @@ use App\Models\Document;
 use App\Models\FundDisbursement;
 use App\Models\Investor;
 use App\Models\Loan;
+use App\Models\LoanInvoiceMovement;
 use App\Models\Operator;
 use App\Models\OperatorLedgerEntry;
 use App\Models\WeeklyCut;
@@ -21,6 +22,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -68,11 +70,18 @@ class LoanCreationController extends Controller
                 'disbursement_delivered_on' => ['nullable', 'date'],
                 'disbursement_notes' => ['nullable', 'string', 'max:500'],
                 'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
+                'guarantor_name' => ['nullable', 'string', 'max:180'],
+                'guarantor_address' => ['nullable', 'string', 'max:1000'],
+                'guarantor_phone' => ['nullable', 'string', 'max:40'],
+                'delinquency_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+                'delinquency_grace_days' => ['nullable', 'integer', 'min:0', 'max:365'],
                 'brand' => ['nullable', 'string', 'max:80'],
                 'model' => ['nullable', 'string', 'max:120'],
                 'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
                 'plates' => ['nullable', 'string', 'max:40'],
                 'vin' => ['nullable', 'string', 'max:80'],
+                'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
+                'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador'],
                 'documents.*' => ['nullable', 'file', 'max:10240'],
                 'investors' => ['required', 'array', 'min:1', 'max:8'],
                 'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
@@ -124,6 +133,11 @@ class LoanCreationController extends Controller
             'start_date' => $data['start_date'],
             'first_payment_date' => $data['first_payment_date'],
             'payment_day' => (int) $data['payment_day'],
+            'guarantor_name' => $data['guarantor_name'] ?? null,
+            'guarantor_address' => $data['guarantor_address'] ?? null,
+            'guarantor_phone' => $data['guarantor_phone'] ?? null,
+            'delinquency_rate' => number_format((float) ($data['delinquency_rate'] ?? 0), 4, '.', ''),
+            'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
             'investors' => $data['investors'],
             'created_by' => $request->user()->id,
         ]);
@@ -146,6 +160,10 @@ class LoanCreationController extends Controller
             ]);
         }
 
+        if ($request->hasFile('invoice_file')) {
+            $this->attachUploadedInvoice($loan, $request, $data['invoice_holder'] ?? 'Recepcion');
+        }
+
         return redirect()->route('loans.show', $loan)->with('status', 'Prestamo creado con calendario y expediente.');
     }
 
@@ -154,6 +172,7 @@ class LoanCreationController extends Controller
         abort_unless($request->user()->can('loans.formalize'), 403);
 
         $data = $this->validatedRoundedData($request);
+        $this->captureTempInvoice($request, $data);
         $data['monthly_rate'] = number_format($this->monthlyRate((float) $data['rate_value'], $data['rate_type']), 6, '.', '');
         $data['first_payment_date'] = $data['first_payment_date'] ?? $data['start_date'];
         $quote = ($data['calculation_method'] ?? 'regular') === 'rounded'
@@ -217,6 +236,11 @@ class LoanCreationController extends Controller
                     'start_date' => $data['start_date'],
                     'first_payment_date' => $data['first_payment_date'],
                     'payment_day' => (int) $data['payment_day'],
+                    'guarantor_name' => $data['guarantor_name'] ?? null,
+                    'guarantor_address' => $data['guarantor_address'] ?? null,
+                    'guarantor_phone' => $data['guarantor_phone'] ?? null,
+                    'delinquency_rate' => number_format((float) ($data['delinquency_rate'] ?? 0), 4, '.', ''),
+                    'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
                     'investors' => $data['investors'],
                     'created_by' => $request->user()->id,
                     'status' => 'active',
@@ -224,6 +248,7 @@ class LoanCreationController extends Controller
             });
 
             $this->recordFundDisbursement($loan, $data, $request->user()->id);
+            $this->attachTempInvoice($loan, $data, $request->user()->id);
 
             return redirect()->route('loans.show', $loan)->with('status', 'Prestamo creado con calendario e inversionistas.');
         }
@@ -278,6 +303,11 @@ class LoanCreationController extends Controller
                 'start_date' => $data['start_date'],
                 'first_payment_date' => $data['first_payment_date'],
                 'payment_day' => (int) $data['payment_day'],
+                'guarantor_name' => $data['guarantor_name'] ?? null,
+                'guarantor_address' => $data['guarantor_address'] ?? null,
+                'guarantor_phone' => $data['guarantor_phone'] ?? null,
+                'delinquency_rate' => number_format((float) ($data['delinquency_rate'] ?? 0), 4, '.', ''),
+                'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
                 'status' => 'active',
             ]);
 
@@ -310,6 +340,8 @@ class LoanCreationController extends Controller
             return $loan;
         });
 
+        $this->attachTempInvoice($loan, $data, $request->user()->id);
+
         return redirect()->route('loans.show', $loan)->with('status', 'Prestamo con redondeo creado con la opcion seleccionada.');
     }
 
@@ -318,6 +350,106 @@ class LoanCreationController extends Controller
         $decimalRate = $rateValue / 100;
 
         return $rateType === 'annual' ? $decimalRate / 12 : $decimalRate;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function captureTempInvoice(Request $request, array &$data): void
+    {
+        if (! $request->hasFile('invoice_file')) {
+            return;
+        }
+
+        $file = $request->file('invoice_file');
+        $path = $file->store('tmp/loan-invoices', 'local');
+
+        $data['invoice_temp_path'] = $path;
+        $data['invoice_original_name'] = $file->getClientOriginalName();
+        $data['invoice_mime_type'] = $file->getMimeType() ?? 'application/pdf';
+        $data['invoice_size'] = $file->getSize();
+        $data['invoice_holder'] = $data['invoice_holder'] ?? 'Recepcion';
+        unset($data['invoice_file']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function attachTempInvoice(Loan $loan, array $data, int $userId): void
+    {
+        $tempPath = (string) ($data['invoice_temp_path'] ?? '');
+
+        if ($tempPath === '' || ! str_starts_with($tempPath, 'tmp/loan-invoices/') || ! Storage::disk('local')->exists($tempPath)) {
+            return;
+        }
+
+        $destination = 'expedientes/'.$loan->public_id.'/'.(string) Str::ulid().'.pdf';
+        Storage::disk('local')->move($tempPath, $destination);
+
+        $document = Document::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'loan_id' => $loan->id,
+            'client_id' => $loan->client_id,
+            'uploaded_by' => $userId,
+            'original_name' => $data['invoice_original_name'] ?? 'Factura del vehiculo.pdf',
+            'disk' => 'local',
+            'path' => $destination,
+            'mime_type' => $data['invoice_mime_type'] ?? 'application/pdf',
+            'size' => (int) ($data['invoice_size'] ?? 0),
+            'status' => 'delivered',
+            'notes' => '[Factura]',
+        ]);
+
+        $holder = $data['invoice_holder'] ?? 'Recepcion';
+        $loan->update([
+            'invoice_document_id' => $document->id,
+            'invoice_holder' => $holder,
+        ]);
+
+        LoanInvoiceMovement::query()->create([
+            'loan_id' => $loan->id,
+            'document_id' => $document->id,
+            'from_holder' => null,
+            'to_holder' => $holder,
+            'moved_by' => $userId,
+            'moved_at' => now('America/Merida'),
+            'notes' => 'Factura cargada al crear prestamo',
+        ]);
+    }
+
+    private function attachUploadedInvoice(Loan $loan, Request $request, string $holder): void
+    {
+        $file = $request->file('invoice_file');
+        $path = $file->store('expedientes/'.$loan->public_id, 'local');
+
+        $document = Document::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'loan_id' => $loan->id,
+            'client_id' => $loan->client_id,
+            'uploaded_by' => $request->user()->id,
+            'original_name' => $file->getClientOriginalName(),
+            'disk' => 'local',
+            'path' => $path,
+            'mime_type' => $file->getMimeType() ?? 'application/pdf',
+            'size' => $file->getSize(),
+            'status' => 'delivered',
+            'notes' => '[Factura]',
+        ]);
+
+        $loan->update([
+            'invoice_document_id' => $document->id,
+            'invoice_holder' => $holder,
+        ]);
+
+        LoanInvoiceMovement::query()->create([
+            'loan_id' => $loan->id,
+            'document_id' => $document->id,
+            'from_holder' => null,
+            'to_holder' => $holder,
+            'moved_by' => $request->user()->id,
+            'moved_at' => now('America/Merida'),
+            'notes' => 'Factura cargada al crear prestamo',
+        ]);
     }
 
     /**
@@ -343,6 +475,11 @@ class LoanCreationController extends Controller
             'disbursement_delivered_on' => ['nullable', 'date'],
             'disbursement_notes' => ['nullable', 'string', 'max:500'],
             'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
+            'guarantor_name' => ['nullable', 'string', 'max:180'],
+            'guarantor_address' => ['nullable', 'string', 'max:1000'],
+            'guarantor_phone' => ['nullable', 'string', 'max:40'],
+            'delinquency_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'delinquency_grace_days' => ['nullable', 'integer', 'min:0', 'max:365'],
             'brand' => ['nullable', 'string', 'max:80'],
             'model' => ['nullable', 'string', 'max:120'],
             'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
@@ -351,6 +488,12 @@ class LoanCreationController extends Controller
             'calculation_method' => ['required', 'in:regular,rounded'],
             'vat_enabled' => ['nullable', 'boolean'],
             'interest_calculation_method' => ['required', 'in:fixed_principal,outstanding_balance'],
+            'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
+            'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador'],
+            'invoice_temp_path' => ['nullable', 'string', 'max:500'],
+            'invoice_original_name' => ['nullable', 'string', 'max:255'],
+            'invoice_mime_type' => ['nullable', 'string', 'max:120'],
+            'invoice_size' => ['nullable', 'integer', 'min:0'],
         ]);
     }
 

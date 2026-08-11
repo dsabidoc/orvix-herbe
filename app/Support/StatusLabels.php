@@ -18,17 +18,17 @@ final class StatusLabels
     public static function cut(?string $status): string
     {
         return [
-            'draft' => 'Borrador',
-            'forming' => 'En formacion',
-            'submitted' => 'Enviado',
-            'pending_reconciliation' => 'Pendiente de conciliacion',
-            'partially_received' => 'Parcialmente recibido',
-            'reviewing' => 'En revision',
-            'confirmed' => 'Confirmado',
-            'balanced' => 'Cuadrado',
-            'with_difference' => 'Con diferencia',
+            'draft' => 'Pendiente',
+            'forming' => 'Pendiente',
+            'submitted' => 'Pendiente',
+            'pending_reconciliation' => 'Pendiente',
+            'partially_received' => 'En validacion',
+            'reviewing' => 'En validacion',
+            'confirmed' => 'En validacion',
+            'balanced' => 'En validacion',
+            'with_difference' => 'En validacion',
             'closed' => 'Cerrado',
-            'reopened' => 'Reabierto',
+            'reopened' => 'Pendiente',
             'returned' => 'Devuelto',
             'voided' => 'Anulado',
         ][$status] ?? self::fallback($status);
@@ -76,6 +76,7 @@ final class StatusLabels
         return [
             'formalizing' => 'En formalizacion',
             'active' => 'Activo',
+            'frozen' => 'Congelado',
             'settled' => 'Liquidado',
             'closed' => 'Finalizado',
             'defaulted' => 'Incobrable',

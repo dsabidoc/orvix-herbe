@@ -753,7 +753,7 @@ class OrvixWorkflowTest extends TestCase
         $this->assertTrue($role->hasPermissionTo($permission->name));
     }
 
-    public function test_thursday_and_friday_payments_are_assigned_to_official_cut_periods(): void
+    public function test_payments_are_assigned_to_official_cut_periods_when_cut_is_generated(): void
     {
         $this->seed(DatabaseSeeder::class);
 
@@ -775,6 +775,10 @@ class OrvixWorkflowTest extends TestCase
         ]);
 
         $thursdayMovement = CollectionMovement::query()->where('target_installment_id', $installments[0]->id)->firstOrFail();
+        $this->assertNull($thursdayMovement->weekly_cut_id);
+
+        $this->actingAs($samuel)->post(route('cuts.store'), ['cut_date' => '2026-08-13']);
+        $thursdayMovement->refresh();
         $this->assertSame('2026-08-07', $thursdayMovement->weeklyCut->period_starts_on->toDateString());
         $this->assertSame('2026-08-13', $thursdayMovement->weeklyCut->period_ends_on->toDateString());
         $this->assertSame('2026-08-14', $thursdayMovement->weeklyCut->settlement_on->toDateString());
@@ -789,6 +793,10 @@ class OrvixWorkflowTest extends TestCase
         ]);
 
         $fridayMovement = CollectionMovement::query()->where('target_installment_id', $installments[1]->id)->firstOrFail();
+        $this->assertNull($fridayMovement->weekly_cut_id);
+
+        $this->actingAs($samuel)->post(route('cuts.store'), ['cut_date' => '2026-08-14']);
+        $fridayMovement->refresh();
         $this->assertSame('2026-08-14', $fridayMovement->weeklyCut->period_starts_on->toDateString());
         $this->assertSame('2026-08-20', $fridayMovement->weeklyCut->period_ends_on->toDateString());
         $this->assertSame('2026-08-21', $fridayMovement->weeklyCut->settlement_on->toDateString());
@@ -820,7 +828,15 @@ class OrvixWorkflowTest extends TestCase
         ]);
 
         $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+        $this->assertNull($movement->weekly_cut_id);
+
+        $this->actingAs($admin)->post(route('cuts.store'), [
+            'operator_id' => $samuel->operatorProfile->id,
+            'cut_date' => '2026-08-10',
+        ]);
+        $movement->refresh();
         $cutId = $movement->weekly_cut_id;
+        $this->assertNotNull($cutId);
 
         $movement->update(['operated_on' => '2026-06-01']);
         $this->assertSame($cutId, $movement->fresh()->weekly_cut_id);

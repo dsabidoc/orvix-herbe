@@ -52,7 +52,11 @@
                                 @endphp
                                 <tr>
                                     <td class="px-5 py-3">
-                                        <p class="font-bold text-[#0f766e]">{{ $loan?->folio }}</p>
+                                        @if ($loan)
+                                            <a class="font-bold text-[#0f766e]" href="{{ route('loans.show', $loan) }}">{{ $loan->folio }}</a>
+                                        @else
+                                            <p class="font-bold text-[#0f766e]">Sin prestamo</p>
+                                        @endif
                                         <p class="mt-1 text-xs text-slate-500">{{ $loan?->client?->first_name }} {{ $loan?->client?->last_name }}</p>
                                     </td>
                                     <td class="px-5 py-3 text-slate-600">{{ $loan?->vehicle?->brand }} {{ $loan?->vehicle?->model }} {{ $loan?->vehicle?->year }}</td>

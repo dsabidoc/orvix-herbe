@@ -9,6 +9,16 @@
     $overdueCount = $loan->installments->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0 && $installment->due_date->toDateString() < $today)->count();
     $interestMethodLabel = $loan->interest_calculation_method === 'outstanding_balance' ? 'saldo insoluto' : 'capital fijo';
     $totalInterest = $loan->installments->sum(fn ($installment) => Money::cents($installment->interest_amount));
+    $loanUser = auth()->user();
+    $isInvestorReadOnly = $loanUser->can('investments.view-own') && ! $loanUser->can('investors.manage');
+    $canOperateLoan = ! $isInvestorReadOnly;
+    $nextDelinquencyCents = 0;
+    if ($next && (float) ($loan->delinquency_rate ?? 0) > 0) {
+        $graceLimit = $next->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
+        if ($graceLimit < $today) {
+            $nextDelinquencyCents = (int) round(Money::cents($next->contract_amount) * ((float) $loan->delinquency_rate / 100));
+        }
+    }
 @endphp
 
 <x-layouts.app title="{{ $loan->folio }} · {{ $loan->client->first_name }} {{ $loan->client->last_name }}">
@@ -35,19 +45,23 @@
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    @can('loans.formalize')
-                        <a class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" href="{{ route('loans.edit', $loan) }}">Editar</a>
-                    @endcan
-                    <button class="inline-flex items-center gap-2 rounded-md bg-[#0d9488] px-3 py-2 text-sm font-bold text-white" type="button" data-open-modal="register-payment-modal">
-                        <span class="grid size-5 place-items-center rounded bg-white/15 text-xs">$</span>
-                        Registrar cobro
-                    </button>
-                    <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-documents-modal">Expediente</button>
-                    @if ($loan->status === 'active')
-                        <button class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700" type="button" data-open-modal="settle-loan-modal">Liquidar</button>
+                    @if ($canOperateLoan)
+                        @can('loans.formalize')
+                            <a class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" href="{{ route('loans.edit', $loan) }}">Editar</a>
+                        @endcan
+                        <button class="inline-flex items-center gap-2 rounded-md bg-[#0d9488] px-3 py-2 text-sm font-bold text-white" type="button" data-open-modal="register-payment-modal">
+                            <span class="grid size-5 place-items-center rounded bg-white/15 text-xs">$</span>
+                            Registrar cobro
+                        </button>
+                        <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-documents-modal">Expediente</button>
+                        <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-invoice-modal">Factura</button>
+                        <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-notes-modal">Notas</button>
+                        @if ($loan->status === 'active')
+                            <button class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700" type="button" data-open-modal="settle-loan-modal">Liquidar</button>
+                        @endif
+                        <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-investors-modal">Inversionistas</button>
+                        <a class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" href="https://wa.me/52{{ preg_replace('/\D+/', '', $loan->client->phone) }}" target="_blank" rel="noreferrer">WhatsApp</a>
                     @endif
-                    <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-investors-modal">Inversionistas</button>
-                    <a class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" href="https://wa.me/52{{ preg_replace('/\D+/', '', $loan->client->phone) }}" target="_blank" rel="noreferrer">WhatsApp</a>
                 </div>
             </div>
 
@@ -74,11 +88,54 @@
                     {{ $overdueCount }} letra(s) vencida(s) pendiente(s) de pago.
                 </div>
             @endif
+            @if ($loan->is_frozen)
+                <div class="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                    <span class="font-bold">Prestamo congelado:</span> {{ $loan->frozen_reason }} · no se suma a cobranza esperada.
+                </div>
+            @endif
             @if ($loan->status !== 'active' && $loan->settlement_reason)
                 <div class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     <span class="font-bold">Credito liquidado:</span> {{ StatusLabels::settlementReason($loan->settlement_reason) }} · {{ $loan->settled_at?->format('d/m/Y H:i') }}
                 </div>
             @endif
+        </section>
+
+        <section class="grid gap-4 lg:grid-cols-3">
+            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 class="font-bold text-slate-950">Control operativo</h3>
+                <dl class="mt-3 space-y-2 text-sm">
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Estado cobranza</dt><dd class="font-bold {{ $loan->is_frozen ? 'text-blue-700' : 'text-emerald-700' }}">{{ $loan->is_frozen ? 'Congelado' : 'Activo' }}</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Morosidad</dt><dd class="font-bold">{{ number_format((float) ($loan->delinquency_rate ?? 0), 2) }}% despues de {{ (int) ($loan->delinquency_grace_days ?? 0) }} dias</dd></div>
+                </dl>
+                @if ($canOperateLoan)
+                    @if ($loan->is_frozen)
+                        <form class="mt-4" method="POST" action="{{ route('loans.unfreeze', $loan) }}">
+                            @csrf
+                            <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Reactivar prestamo</button>
+                        </form>
+                    @else
+                        <button class="mt-4 w-full rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700" type="button" data-open-modal="freeze-loan-modal">Congelar prestamo</button>
+                    @endif
+                @endif
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 class="font-bold text-slate-950">Aval</h3>
+                <dl class="mt-3 space-y-2 text-sm">
+                    <div><dt class="text-slate-500">Nombre</dt><dd class="font-semibold">{{ $loan->guarantor_name ?: '-' }}</dd></div>
+                    <div><dt class="text-slate-500">Celular</dt><dd class="font-semibold">{{ $loan->guarantor_phone ?: '-' }}</dd></div>
+                    <div><dt class="text-slate-500">Direccion</dt><dd class="font-semibold">{{ $loan->guarantor_address ?: '-' }}</dd></div>
+                </dl>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 class="font-bold text-slate-950">Factura fisica</h3>
+                <dl class="mt-3 space-y-2 text-sm">
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Ubicacion</dt><dd class="font-bold">{{ $loan->invoice_holder ?: 'Sin registrar' }}</dd></div>
+                    <div><dt class="text-slate-500">Archivo</dt><dd class="font-semibold">{{ $loan->invoiceDocument?->original_name ?: 'Sin factura PDF' }}</dd></div>
+                </dl>
+                @if ($canOperateLoan)
+                    <button class="mt-4 w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700" type="button" data-open-modal="loan-invoice-modal">Gestionar factura</button>
+                @endif
+            </div>
         </section>
 
         <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -135,7 +192,9 @@
                     <h3 class="font-bold text-slate-950">Inversionistas del prestamo</h3>
                     <p class="mt-1 text-sm text-slate-500">Capital aportado y porcentaje pactado sobre intereses del credito.</p>
                 </div>
-                <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" data-open-modal="loan-investors-modal">Editar inversionistas</button>
+                @if ($canOperateLoan)
+                    <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" data-open-modal="loan-investors-modal">Editar inversionistas</button>
+                @endif
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[760px] text-left text-sm">
@@ -203,6 +262,10 @@
                                 $statusClass = $movement && $movement->confirmation_status === 'reported'
                                     ? 'bg-amber-50 text-amber-700'
                                     : ($isOverdue ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700');
+                                $graceLimit = $installment->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
+                                $rowDelinquencyCents = (! $movement && Money::cents($installment->remaining_amount) > 0 && (float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < $today)
+                                    ? (int) round(Money::cents($installment->contract_amount) * ((float) $loan->delinquency_rate / 100))
+                                    : 0;
                             @endphp
                             <tr class="{{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
                                 <td class="px-4 py-2 font-semibold">{{ $installment->number }}</td>
@@ -225,6 +288,8 @@
                                             <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
                                             <input name="operator_surcharge_amount" type="hidden" value="0">
                                             <input name="external_concepts_amount" type="hidden" value="0">
+                                            <input name="additional_charge_amount" type="hidden" value="0">
+                                            <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($rowDelinquencyCents) }}">
                                             <button class="rounded-md bg-[#0d9488] px-2 py-1 text-xs font-bold text-white" type="submit">Pagado</button>
                                         </form>
                                     @else
@@ -265,6 +330,14 @@
                                 <dt class="text-slate-500">GPS</dt>
                                 <dd class="font-bold">{{ Money::mxn($movement->external_concepts_amount) }}</dd>
                             </div>
+                            <div>
+                                <dt class="text-slate-500">Cargo adicional</dt>
+                                <dd class="font-bold">{{ Money::mxn($movement->additional_charge_amount ?? 0) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-slate-500">Morosidad</dt>
+                                <dd class="font-bold">{{ Money::mxn($movement->delinquency_amount ?? 0) }}</dd>
+                            </div>
                         </dl>
                         @can('payments.confirm')
                             @if ($movement->confirmation_status === 'reported')
@@ -282,6 +355,7 @@
         </section>
     </div>
 
+    @if ($canOperateLoan)
     <dialog id="register-payment-modal" class="w-[min(92vw,520px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
         <form method="POST" action="{{ route('payments.store', $loan) }}">
             @csrf
@@ -318,6 +392,16 @@
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="external_concepts_amount" name="external_concepts_amount" type="number" step="0.01" value="0">
                     </div>
                 </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="text-sm font-semibold text-slate-700" for="additional_charge_amount">Cobro adicional</label>
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="additional_charge_amount" name="additional_charge_amount" type="number" step="0.01" value="0">
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-slate-700" for="delinquency_amount">Morosidad</label>
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="delinquency_amount" name="delinquency_amount" type="number" step="0.01" value="{{ Money::decimal($nextDelinquencyCents) }}">
+                    </div>
+                </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700" for="notes">Notas</label>
                     <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="notes" name="notes" rows="3"></textarea>
@@ -329,7 +413,115 @@
             </div>
         </form>
     </dialog>
+    @endif
 
+    @if ($canOperateLoan)
+        <dialog id="freeze-loan-modal" class="w-[min(92vw,520px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <form method="POST" action="{{ route('loans.freeze', $loan) }}">
+                @csrf
+                <div class="border-b border-slate-200 px-5 py-4">
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-blue-700">Congelar prestamo</p>
+                    <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $loan->folio }}</h3>
+                </div>
+                <div class="px-5 py-4">
+                    <label class="text-sm font-semibold text-slate-700" for="frozen_reason">Motivo</label>
+                    <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="frozen_reason" name="frozen_reason" rows="4" placeholder="Ej. En proceso legal con abogado" required></textarea>
+                    <p class="mt-2 text-xs text-slate-500">Mientras este congelado no se suma a cobranza mensual ni esperado de cortes.</p>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>
+                    <button class="rounded-md bg-blue-700 px-4 py-2 text-sm font-bold text-white" type="submit">Congelar</button>
+                </div>
+            </form>
+        </dialog>
+
+        <dialog id="loan-invoice-modal" class="w-[min(94vw,760px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <div class="border-b border-slate-200 px-5 py-4">
+                <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Factura</p>
+                <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $loan->folio }}</h3>
+            </div>
+            <div class="grid max-h-[74vh] gap-5 overflow-y-auto px-5 py-4 lg:grid-cols-[1fr_300px]">
+                <div class="space-y-3 text-sm">
+                    <div class="rounded-md bg-slate-50 p-4">
+                        <p class="text-slate-500">Ubicacion fisica actual</p>
+                        <p class="mt-1 text-lg font-bold text-slate-950">{{ $loan->invoice_holder ?: 'Sin registrar' }}</p>
+                        @if ($loan->invoiceDocument)
+                            <a class="mt-2 inline-flex rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" href="{{ route('documents.download', $loan->invoiceDocument) }}">Descargar factura PDF</a>
+                        @endif
+                    </div>
+                    <h4 class="font-bold text-slate-950">Historial</h4>
+                    @forelse ($loan->invoiceMovements->sortByDesc('moved_at') as $movement)
+                        <div class="rounded-md border border-slate-100 p-3">
+                            <p class="font-semibold text-slate-950">{{ $movement->from_holder ?: 'Inicio' }} → {{ $movement->to_holder }}</p>
+                            <p class="mt-1 text-xs text-slate-500">{{ $movement->moved_at->format('d/m/Y H:i') }} · {{ $movement->movedBy?->name ?? 'Sistema' }}</p>
+                            @if ($movement->notes)
+                                <p class="mt-2 text-xs text-slate-600">{{ $movement->notes }}</p>
+                            @endif
+                        </div>
+                    @empty
+                        <p class="rounded-md bg-slate-50 p-4 text-slate-500">Sin movimientos de factura.</p>
+                    @endforelse
+                </div>
+                <div class="space-y-4">
+                    <form class="space-y-3 rounded-md bg-slate-50 p-4" method="POST" action="{{ route('loans.invoice.store', $loan) }}" enctype="multipart/form-data">
+                        @csrf
+                        <h4 class="font-bold text-slate-950">Subir factura PDF</h4>
+                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#e6f7f4] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-[#0f766e]" name="file" type="file" accept="application/pdf" required>
+                        <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="holder" required>
+                            <option value="Recepcion">Recepcion</option>
+                            <option value="Caja">Caja</option>
+                            <option value="Operador">Operador</option>
+                        </select>
+                        <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="notes" rows="2" placeholder="Nota opcional"></textarea>
+                        <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Guardar factura</button>
+                    </form>
+                    <form class="space-y-3 rounded-md bg-slate-50 p-4" method="POST" action="{{ route('loans.invoice.move', $loan) }}">
+                        @csrf
+                        <h4 class="font-bold text-slate-950">Mover factura fisica</h4>
+                        <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="to_holder" required>
+                            <option value="Caja">Caja</option>
+                            <option value="Recepcion">Recepcion</option>
+                            <option value="Operador">Operador</option>
+                        </select>
+                        <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="notes" rows="2" placeholder="Motivo o tramite"></textarea>
+                        <button class="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">Actualizar ubicacion</button>
+                    </form>
+                </div>
+            </div>
+            <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4">
+                <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cerrar</button>
+            </div>
+        </dialog>
+
+        <dialog id="loan-notes-modal" class="w-[min(92vw,620px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <div class="border-b border-slate-200 px-5 py-4">
+                <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Notas</p>
+                <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $loan->folio }}</h3>
+            </div>
+            <div class="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
+                <form class="space-y-3 rounded-md bg-slate-50 p-4" method="POST" action="{{ route('loans.notes.store', $loan) }}">
+                    @csrf
+                    <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="note" rows="3" placeholder="Escribe una nota del prestamo" required></textarea>
+                    <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Agregar nota</button>
+                </form>
+                <div class="space-y-2">
+                    @forelse ($loan->notes->sortByDesc('created_at') as $note)
+                        <div class="rounded-md border border-slate-100 p-3 text-sm">
+                            <p class="text-slate-700">{{ $note->note }}</p>
+                            <p class="mt-2 text-xs text-slate-500">{{ $note->created_at->format('d/m/Y H:i') }} · {{ $note->user?->name ?? 'Sistema' }}</p>
+                        </div>
+                    @empty
+                        <p class="rounded-md bg-slate-50 p-4 text-sm text-slate-500">Sin notas registradas.</p>
+                    @endforelse
+                </div>
+            </div>
+            <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4">
+                <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cerrar</button>
+            </div>
+        </dialog>
+    @endif
+
+    @if ($canOperateLoan)
     <dialog id="loan-investors-modal" class="w-[min(96vw,880px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
         <form method="POST" action="{{ route('loans.investments.store', $loan) }}">
             @csrf
@@ -390,7 +582,9 @@
             </div>
         </form>
     </dialog>
+    @endif
 
+    @if ($canOperateLoan)
     <dialog id="loan-documents-modal" class="w-[min(94vw,760px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
         <div class="border-b border-slate-200 px-5 py-4">
             <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Expediente</p>
@@ -449,8 +643,9 @@
             <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cerrar</button>
         </div>
     </dialog>
+    @endif
 
-    @if ($loan->status === 'active')
+    @if ($canOperateLoan && $loan->status === 'active')
         <dialog id="settle-loan-modal" class="w-[min(92vw,460px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
             <form method="POST" action="{{ route('loans.settle', $loan) }}">
                 @csrf

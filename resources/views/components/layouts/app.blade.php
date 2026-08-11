@@ -33,6 +33,7 @@
                                     [
                                         ['Todas', 'loans.index'],
                                         ['Saldos', 'portfolio-balances.index'],
+                                        ['Cobranza', 'collections.index'],
                                     ],
                                 ],
                                 ['Cortes', 'cuts.index', 'receipt'],

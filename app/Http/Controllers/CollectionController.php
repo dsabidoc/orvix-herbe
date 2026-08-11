@@ -24,7 +24,7 @@ class CollectionController extends Controller
         $monthEnd = $selectedMonth->endOfMonth();
         $operatorId = $this->selectedOperatorId($request);
         $loanScope = function ($query) use ($request, $operatorId) {
-            $query->where('status', 'active');
+            $query->where('status', 'active')->where('is_frozen', false);
 
             if ($request->user()->hasRole('operador-cartera')) {
                 $query->where('operator_id', $request->user()->operatorProfile?->id);
@@ -113,6 +113,8 @@ class CollectionController extends Controller
             'contract_amount' => ['required', 'numeric', 'min:1'],
             'operator_surcharge_amount' => ['nullable', 'numeric', 'min:0'],
             'external_concepts_amount' => ['nullable', 'numeric', 'min:0'],
+            'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'delinquency_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:500'],
             'return_to' => ['nullable', 'string', 'max:20'],
             'cut_id' => ['nullable', 'exists:weekly_cuts,id'],
@@ -141,6 +143,9 @@ class CollectionController extends Controller
             'contract_amount' => Money::decimal(Money::cents($data['contract_amount'])),
             'operator_surcharge_amount' => Money::decimal(Money::cents($data['operator_surcharge_amount'] ?? 0)),
             'external_concepts_amount' => Money::decimal(Money::cents($data['external_concepts_amount'] ?? 0)),
+            'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
+            'delinquency_amount' => Money::decimal(Money::cents($data['delinquency_amount'] ?? 0)),
+            'origin_weekly_cut_id' => $selectedCut?->id,
             'type' => 'ordinary',
             'payment_method' => 'cash',
             'notes' => $data['notes'] ?? 'Marcado pagado desde cobranza',
@@ -153,8 +158,6 @@ class CollectionController extends Controller
                 $selectedCut,
                 $request->user()->id,
             );
-        } else {
-            $cutPeriodService->attachMovement($movement, $request->user()->id);
         }
 
         $route = match ($data['return_to'] ?? '') {
@@ -164,7 +167,7 @@ class CollectionController extends Controller
             default => route('collections.index', ['month' => $installment->due_date->format('Y-m'), 'operator_id' => $installment->loan->operator_id]),
         };
 
-        return redirect($route)->with('status', 'Letra marcada como pagada; aparecera en el corte semanal.');
+        return redirect($route)->with('status', ($data['return_to'] ?? null) === 'cut' ? 'Letra marcada como pagada y agregada a este corte.' : 'Letra marcada como pagada; aparecera cuando se genere el corte de esa fecha.');
     }
 
     private function selectedOperatorId(Request $request): ?int

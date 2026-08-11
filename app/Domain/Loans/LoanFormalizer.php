@@ -50,6 +50,11 @@ class LoanFormalizer
                 'start_date' => $data['start_date'],
                 'first_payment_date' => $data['first_payment_date'] ?? $data['start_date'],
                 'payment_day' => (int) $data['payment_day'],
+                'guarantor_name' => $data['guarantor_name'] ?? null,
+                'guarantor_address' => $data['guarantor_address'] ?? null,
+                'guarantor_phone' => $data['guarantor_phone'] ?? null,
+                'delinquency_rate' => $data['delinquency_rate'] ?? '0.0000',
+                'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
                 'status' => $data['status'] ?? 'active',
             ]);
 

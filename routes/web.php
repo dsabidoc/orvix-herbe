@@ -41,6 +41,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/prestamos/{loan}/editar', [LoanController::class, 'edit'])->name('loans.edit');
     Route::put('/prestamos/{loan}', [LoanController::class, 'update'])->name('loans.update');
     Route::get('/prestamos/{loan}', [LoanController::class, 'show'])->name('loans.show');
+    Route::post('/prestamos/{loan}/notas', [LoanController::class, 'storeNote'])->name('loans.notes.store');
+    Route::post('/prestamos/{loan}/congelar', [LoanController::class, 'freeze'])->name('loans.freeze');
+    Route::post('/prestamos/{loan}/reactivar', [LoanController::class, 'unfreeze'])->name('loans.unfreeze');
+    Route::post('/prestamos/{loan}/factura', [LoanController::class, 'storeInvoice'])->name('loans.invoice.store');
+    Route::post('/prestamos/{loan}/factura/mover', [LoanController::class, 'moveInvoice'])->name('loans.invoice.move');
     Route::post('/prestamos/{loan}/inversionistas', [LoanInvestmentController::class, 'store'])->name('loans.investments.store');
     Route::post('/prestamos/{loan}/liquidar', [LoanSettlementController::class, 'store'])->name('loans.settle');
     Route::post('/prestamos/{loan}/expediente', [DocumentController::class, 'store'])->name('documents.store');

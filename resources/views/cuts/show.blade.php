@@ -87,11 +87,11 @@
                                 </td>
                                 <td class="px-5 py-4 text-right align-top">
                                     <p class="text-xs text-slate-500">Pagaré</p>
-                                    <p class="font-semibold">{{ Money::mxn($item->reported_amount) }}</p>
+                                    <p class="font-semibold">{{ Money::mxn($item->movement->contract_amount) }}</p>
                                     <p class="mt-2 text-xs text-slate-500">Recargos/otros</p>
-                                    <p>{{ Money::mxn(Money::decimal(Money::cents($item->movement->operator_surcharge_amount) + Money::cents($item->movement->external_concepts_amount))) }}</p>
+                                    <p>{{ Money::mxn(Money::decimal(Money::cents($item->movement->operator_surcharge_amount) + Money::cents($item->movement->external_concepts_amount) + Money::cents($item->movement->additional_charge_amount ?? 0) + Money::cents($item->movement->delinquency_amount ?? 0))) }}</p>
                                     <p class="mt-2 text-xs text-slate-500">Total</p>
-                                    <p class="font-bold text-slate-950">{{ Money::mxn(Money::decimal(Money::cents($item->reported_amount) + Money::cents($item->movement->operator_surcharge_amount) + Money::cents($item->movement->external_concepts_amount))) }}</p>
+                                    <p class="font-bold text-slate-950">{{ Money::mxn($item->reported_amount) }}</p>
                                 </td>
                                 <td class="px-5 py-4 align-top">
                                     <span class="inline-flex rounded bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{{ StatusLabels::movement($item->movement->confirmation_status) }}</span>
@@ -130,6 +130,12 @@
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($overdueInstallments as $installment)
                                 <tr>
+                                    @php
+                                        $graceLimit = $installment->due_date->copy()->addDays((int) ($installment->loan->delinquency_grace_days ?? 0))->toDateString();
+                                        $delinquencyCents = ((float) ($installment->loan->delinquency_rate ?? 0) > 0 && $graceLimit < now('America/Merida')->toDateString())
+                                            ? (int) round(Money::cents($installment->contract_amount) * ((float) $installment->loan->delinquency_rate / 100))
+                                            : 0;
+                                    @endphp
                                     <td class="px-5 py-3">
                                         <a class="break-words font-semibold text-[#0f766e]" href="{{ route('loans.show', $installment->loan) }}">{{ $installment->loan->client->first_name }} {{ $installment->loan->client->last_name }}</a>
                                         <p class="break-all text-xs text-slate-500">{{ $installment->loan->folio }}</p>
@@ -148,6 +154,8 @@
                                                 <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
                                                 <input name="operator_surcharge_amount" type="hidden" value="0">
                                                 <input name="external_concepts_amount" type="hidden" value="0">
+                                                <input name="additional_charge_amount" type="hidden" value="0">
+                                                <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($delinquencyCents) }}">
                                                 <input name="notes" type="hidden" value="Marcado pagado desde atrasados del corte">
                                                 <button class="rounded-md bg-[#0d9488] px-3 py-1.5 text-xs font-bold text-white" type="submit">Pagado</button>
                                             </form>

@@ -24,6 +24,8 @@ class PaymentController extends Controller
             'contract_amount' => ['required', 'numeric', 'min:1'],
             'operator_surcharge_amount' => ['nullable', 'numeric', 'min:0'],
             'external_concepts_amount' => ['nullable', 'numeric', 'min:0'],
+            'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'delinquency_amount' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['nullable', 'in:cash,transfer,card'],
             'reference' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:500'],
@@ -50,6 +52,8 @@ class PaymentController extends Controller
                 'contract_amount' => Money::decimal(Money::cents($data['contract_amount'])),
                 'operator_surcharge_amount' => Money::decimal(Money::cents($data['operator_surcharge_amount'] ?? 0)),
                 'external_concepts_amount' => Money::decimal(Money::cents($data['external_concepts_amount'] ?? 0)),
+                'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
+                'delinquency_amount' => Money::decimal(Money::cents($data['delinquency_amount'] ?? 0)),
                 'type' => $data['type'],
                 'payment_method' => $data['payment_method'] ?? 'cash',
                 'reference' => $data['reference'] ?? null,
@@ -58,13 +62,9 @@ class PaymentController extends Controller
             ],
         );
 
-        if ($movement->wasRecentlyCreated) {
-            $cutPeriodService->attachMovement($movement, $request->user()->id);
-        }
-
         return redirect()
             ->route('loans.show', $loan)
-            ->with($movement->wasRecentlyCreated ? 'status' : 'warning', $movement->wasRecentlyCreated ? 'Cobro registrado por confirmar.' : 'Ese cobro ya estaba registrado; no se duplico.');
+            ->with($movement->wasRecentlyCreated ? 'status' : 'warning', $movement->wasRecentlyCreated ? 'Cobro registrado por confirmar. Se agregara al corte cuando se genere por fecha.' : 'Ese cobro ya estaba registrado; no se duplico.');
     }
 
     public function confirm(Request $request, CollectionMovement $movement, PaymentApplicationService $service): RedirectResponse
@@ -82,6 +82,10 @@ class PaymentController extends Controller
 
     private function authorizeLoanAccess(Request $request, Loan $loan): void
     {
+        if ($request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage')) {
+            abort(403);
+        }
+
         if ($request->user()->hasRole('operador-cartera') && $loan->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }

@@ -29,7 +29,7 @@
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div>
-                <label class="text-sm font-semibold text-slate-700" for="cutoff_date">Fecha de corte</label>
+                <label class="text-sm font-semibold text-slate-700" for="cutoff_date">Fecha de corte / simulacion</label>
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cutoff_date" name="cutoff_date" type="date" value="{{ $filters['cutoff_date'] }}">
             </div>
             <div>

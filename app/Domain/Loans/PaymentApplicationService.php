@@ -8,6 +8,7 @@ use App\Models\AuditEvent;
 use App\Models\CollectionMovement;
 use App\Models\PaymentAllocation;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -48,7 +49,8 @@ class PaymentApplicationService
                 ->get();
 
             if ($movement->type === 'advance') {
-                $this->assertAdvanceCoversFullTrailingInstallments($remainingCents, $installments);
+                $advanceAllowed = $this->advanceAllowedAmounts($movement, $installments);
+                $this->assertAdvanceCoversAllowedAmounts($remainingCents, $advanceAllowed);
             }
 
             foreach ($installments as $installment) {
@@ -56,15 +58,23 @@ class PaymentApplicationService
                     break;
                 }
 
-                $installmentRemaining = Money::cents($installment->remaining_amount);
+                $installmentRemaining = $movement->type === 'advance'
+                    ? min(Money::cents($installment->remaining_amount), $advanceAllowed[$installment->id] ?? 0)
+                    : Money::cents($installment->remaining_amount);
+
+                if ($installmentRemaining <= 0) {
+                    continue;
+                }
+
                 $applied = min($remainingCents, $installmentRemaining);
                 $newRemaining = $installmentRemaining - $applied;
+                $totalRemainingAfter = Money::cents($installment->remaining_amount) - $applied;
                 $newApplied = Money::cents($installment->applied_amount) + $applied;
 
                 $installment->update([
                     'applied_amount' => Money::decimal($newApplied),
-                    'remaining_amount' => Money::decimal($newRemaining),
-                    'status' => $newRemaining === 0 ? $this->statusForCoveredInstallment($movement->type) : 'partial',
+                    'remaining_amount' => Money::decimal($totalRemainingAfter),
+                    'status' => $totalRemainingAfter === 0 ? $this->statusForCoveredInstallment($movement->type) : 'partial',
                 ]);
 
                 PaymentAllocation::query()->create([
@@ -115,12 +125,38 @@ class PaymentApplicationService
         return $movementType === 'advance' ? 'advanced' : 'confirmed';
     }
 
-    private function assertAdvanceCoversFullTrailingInstallments(int $amountCents, $installments): void
+    /**
+     * @return array<int, int>
+     */
+    private function advanceAllowedAmounts(CollectionMovement $movement, $installments): array
+    {
+        $operatedOn = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->startOfDay();
+        $currentMonthEnd = $operatedOn->endOfMonth();
+        $allowed = [];
+
+        foreach ($installments as $installment) {
+            $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
+            $remainingCents = Money::cents($installment->remaining_amount);
+            $contractCents = Money::cents($installment->contract_amount);
+            $ratio = $contractCents > 0 ? min(1, $remainingCents / $contractCents) : 0;
+
+            $allowed[$installment->id] = $dueDate->greaterThan($currentMonthEnd)
+                ? min($remainingCents, (int) round(Money::cents($installment->principal_amount) * $ratio))
+                : $remainingCents;
+        }
+
+        return array_filter($allowed, fn (int $amount) => $amount > 0);
+    }
+
+    /**
+     * @param  array<int, int>  $allowedAmounts
+     */
+    private function assertAdvanceCoversAllowedAmounts(int $amountCents, array $allowedAmounts): void
     {
         $runningCents = 0;
 
-        foreach ($installments as $installment) {
-            $runningCents += Money::cents($installment->remaining_amount);
+        foreach ($allowedAmounts as $allowedCents) {
+            $runningCents += $allowedCents;
 
             if ($runningCents === $amountCents) {
                 return;
@@ -139,6 +175,15 @@ class PaymentApplicationService
         $contractCents = Money::cents($installment->contract_amount);
 
         if ($appliedCents <= 0 || $contractCents <= 0) {
+            return;
+        }
+
+        if ($movement->type === 'advance') {
+            $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
+            $currentMonthEnd = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->endOfMonth();
+            $interestCents = $dueDate->greaterThan($currentMonthEnd) ? 0 : (int) round(Money::cents($installment->interest_amount) * min(1, $appliedCents / $contractCents));
+            $this->investorReturnRecorder->record($movement->loan, $installment, $appliedCents, $interestCents, $movement, $userId);
+
             return;
         }
 

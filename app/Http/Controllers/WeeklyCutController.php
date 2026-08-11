@@ -60,13 +60,16 @@ class WeeklyCutController extends Controller
     public function store(Request $request, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
     {
         if (! $request->user()->hasRole('operador-cartera')) {
-            $data = $request->validate(['operator_id' => ['nullable', 'exists:operators,id']]);
+            $data = $request->validate([
+                'operator_id' => ['nullable', 'exists:operators,id'],
+                'cut_date' => ['required', 'date'],
+            ]);
 
             if (empty($data['operator_id'])) {
                 $createdCuts = Operator::query()
                     ->where('status', 'active')
                     ->get()
-                    ->map(fn (Operator $operator) => $this->createWeeklyCutForOperator($operator, $request, $cutPeriodService))
+                    ->map(fn (Operator $operator) => $this->createWeeklyCutForOperator($operator, $request, $cutPeriodService, $data['cut_date']))
                     ->filter();
 
                 if ($createdCuts->isEmpty()) {
@@ -83,7 +86,8 @@ class WeeklyCutController extends Controller
 
         abort_unless($operator, 403);
 
-        $cut = $this->createWeeklyCutForOperator($operator, $request, $cutPeriodService);
+        $cutDate = $request->input('cut_date', now('America/Merida')->toDateString());
+        $cut = $this->createWeeklyCutForOperator($operator, $request, $cutPeriodService, $cutDate);
 
         if (! $cut) {
             return back()->with('warning', 'No se pudo abrir el corte semanal.');
@@ -92,16 +96,17 @@ class WeeklyCutController extends Controller
         return redirect()->route('cuts.show', $cut)->with('status', 'Corte semanal enviado.');
     }
 
-    private function createWeeklyCutForOperator(Operator $operator, Request $request, WeeklyCutPeriodService $cutPeriodService): ?WeeklyCut
+    private function createWeeklyCutForOperator(Operator $operator, Request $request, WeeklyCutPeriodService $cutPeriodService, ?string $cutDate = null): ?WeeklyCut
     {
-        $cut = $cutPeriodService->openCutForOperator($operator, $request->user()->id);
-        $periodStart = $cut->period_starts_on->startOfDay();
-        $periodEnd = $cut->period_ends_on->endOfDay();
+        $date = CarbonImmutable::parse($cutDate ?: now('America/Merida')->toDateString(), 'America/Merida');
+        $cut = $cutPeriodService->openCutForOperator($operator, $request->user()->id, $date);
+        $dayStart = $date->startOfDay();
+        $dayEnd = $date->endOfDay();
 
         CollectionMovement::query()
             ->where('operator_id', $operator->id)
             ->whereNull('weekly_cut_id')
-            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$periodStart, $periodEnd])
+            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$dayStart, $dayEnd])
             ->get()
             ->each(fn (CollectionMovement $movement) => $cutPeriodService->attachMovement($movement, $request->user()->id));
 

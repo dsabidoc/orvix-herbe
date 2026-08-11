@@ -249,7 +249,8 @@ class PortfolioBalanceService
             'max_late_days' => $maxLateDays,
             'last_payment_date' => $lastPaymentDate,
             'loan_status' => $loan->status,
-            'loan_status_label' => $this->loanStatusLabel((string) $loan->status),
+            'loan_status_label' => $loan->is_frozen ? 'Congelado' : $this->loanStatusLabel((string) $loan->status),
+            'is_frozen' => (bool) $loan->is_frozen,
             'collection_state' => $state,
             'installments' => $installmentRows,
             'inconsistencies' => array_values(array_unique($inconsistencies)),
@@ -340,13 +341,15 @@ class PortfolioBalanceService
                         'payment_cents' => $installment['pending_cents'],
                         'due_date' => $installment['due_date'],
                         'due_date_sort' => $installment['due_date_sort'],
+                        'due_day' => (int) CarbonImmutable::parse($installment['due_date_sort'])->format('d'),
                         'late_days' => $installment['late_days'],
                         'overdue_installments_count' => $loanRow['overdue_installments_count'],
                         'overdue_cents' => $loanRow['overdue_cents'],
                     ]);
             })
-            ->sort(fn (array $a, array $b) => strcmp($a['due_date_sort'], $b['due_date_sort'])
-                ?: strnatcasecmp($a['client_name'], $b['client_name'])
+            ->sort(fn (array $a, array $b) => ($a['due_day'] <=> $b['due_day'])
+                ?: strnatcasecmp($a['vehicle_name'], $b['vehicle_name'])
+                ?: strcmp($a['due_date_sort'], $b['due_date_sort'])
                 ?: ($a['installment_number'] <=> $b['installment_number']))
             ->values();
     }
@@ -554,6 +557,7 @@ class PortfolioBalanceService
         return match ($status) {
             'active' => 'Activo',
             'settled' => 'Liquidado',
+            'frozen' => 'Congelado',
             'formalizing' => 'Formalizando',
             'cancelled', 'canceled' => 'Cancelado',
             default => ucfirst(str_replace('_', ' ', $status)),

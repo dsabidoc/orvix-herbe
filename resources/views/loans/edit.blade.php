@@ -18,6 +18,14 @@
                 </div>
                 <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Celular opcional" value="{{ old('phone', $loan->client->phone) }}">
                 <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" placeholder="Correo opcional" type="email" value="{{ old('email', $loan->client->email) }}">
+                <div class="border-t border-slate-100 pt-4">
+                    <h4 class="font-bold text-slate-950">Aval</h4>
+                    <div class="mt-3 space-y-3">
+                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_name" placeholder="Nombre completo aval" value="{{ old('guarantor_name', $loan->guarantor_name) }}">
+                        <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_address" rows="2" placeholder="Direccion aval">{{ old('guarantor_address', $loan->guarantor_address) }}</textarea>
+                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_phone" placeholder="Celular aval" value="{{ old('guarantor_phone', $loan->guarantor_phone) }}">
+                    </div>
+                </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Operador</label>
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="operator_id" required>
@@ -65,6 +73,14 @@
                 <div>
                     <label class="block text-sm font-semibold text-slate-700">Gtos Admon fijo por pago
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="administration_fee" placeholder="0.00" type="number" step="0.01" value="{{ $administrationFeeDisplay }}" @disabled(! $canEditConditions)>
+                    </label>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="block text-sm font-semibold text-slate-700">Morosidad %
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_rate" placeholder="Ej. 6" type="number" step="0.0001" min="0" max="100" value="{{ old('delinquency_rate', $loan->delinquency_rate ?? '0') }}">
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">Dias gracia
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_grace_days" placeholder="Ej. 5" type="number" min="0" max="365" value="{{ old('delinquency_grace_days', $loan->delinquency_grace_days ?? 0) }}">
                     </label>
                 </div>
                 <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="vat_enabled" @disabled(! $canEditConditions) required>

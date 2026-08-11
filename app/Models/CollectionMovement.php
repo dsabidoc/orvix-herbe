@@ -16,6 +16,7 @@ class CollectionMovement extends Model
         'target_installment_id',
         'operator_id',
         'weekly_cut_id',
+        'origin_weekly_cut_id',
         'registered_by',
         'confirmed_by',
         'reversed_movement_id',
@@ -25,6 +26,8 @@ class CollectionMovement extends Model
         'contract_amount',
         'operator_surcharge_amount',
         'external_concepts_amount',
+        'additional_charge_amount',
+        'delinquency_amount',
         'type',
         'payment_method',
         'reference',
@@ -64,6 +67,11 @@ class CollectionMovement extends Model
     public function weeklyCut(): BelongsTo
     {
         return $this->belongsTo(WeeklyCut::class);
+    }
+
+    public function originWeeklyCut(): BelongsTo
+    {
+        return $this->belongsTo(WeeklyCut::class, 'origin_weekly_cut_id');
     }
 
     public function registeredBy(): BelongsTo
