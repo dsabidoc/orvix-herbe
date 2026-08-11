@@ -14,14 +14,14 @@
                 @csrf
                 <div>
                     <label class="text-sm font-semibold text-slate-700" for="email">Correo</label>
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="email" name="email" type="email" value="{{ old('email', 'admin@orvix.test') }}" required autofocus>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="email" name="email" type="email" value="{{ old('email', app()->environment('local') ? 'admin@orvix.test' : '') }}" required autofocus>
                     @error('email')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700" for="password">Contrasena</label>
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="password" name="password" type="password" value="orvix-demo" required>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="password" name="password" type="password" value="{{ app()->environment('local') ? 'orvix-demo' : '' }}" required>
                 </div>
                 <label class="flex items-center gap-2 text-sm text-slate-600">
                     <input class="rounded border-slate-300" name="remember" type="checkbox" value="1">
@@ -33,9 +33,11 @@
                 <button class="w-full rounded-md bg-[#0d9488] px-4 py-2.5 text-sm font-bold text-white" type="submit">Entrar</button>
             </form>
 
-            <div class="mt-5 rounded-md bg-slate-50 p-3 text-sm text-slate-600">
-                Demo: `admin@orvix.test`, `samuel@orvix.test`, `dario@orvix.test`, `adriana@orvix.test`. Contrasena: `orvix-demo`.
-            </div>
+            @if (app()->environment('local'))
+                <div class="mt-5 rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+                    Demo: `admin@orvix.test`, `samuel@orvix.test`, `dario@orvix.test`, `adriana@orvix.test`. Contrasena: `orvix-demo`.
+                </div>
+            @endif
         </div>
     </div>
 </x-layouts.app>
