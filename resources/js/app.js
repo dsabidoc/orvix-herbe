@@ -1,6 +1,39 @@
 let pendingPaidForm = null;
 let pendingDocumentDeleteForm = null;
 
+const applyTheme = (theme) => {
+    const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+
+    document.documentElement.dataset.theme = normalizedTheme;
+    localStorage.setItem('orvix-theme', normalizedTheme);
+
+    document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+        const label = button.querySelector('[data-theme-toggle-label]');
+        const value = button.querySelector('[data-theme-toggle-value]');
+        const sun = button.querySelector('.theme-toggle-sun');
+        const moon = button.querySelector('.theme-toggle-moon');
+        const isDark = normalizedTheme === 'dark';
+
+        button.setAttribute('aria-pressed', String(isDark));
+
+        if (label instanceof HTMLElement) {
+            label.textContent = isDark ? 'Modo oscuro' : 'Modo claro';
+        }
+
+        if (value instanceof HTMLElement) {
+            value.textContent = isDark ? 'Dark' : 'Light';
+        }
+
+        if (sun instanceof SVGElement) {
+            sun.classList.toggle('hidden', isDark);
+        }
+
+        if (moon instanceof SVGElement) {
+            moon.classList.toggle('hidden', !isDark);
+        }
+    });
+};
+
 document.addEventListener('submit', (event) => {
     const form = event.target;
 
@@ -54,6 +87,14 @@ document.addEventListener('submit', (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+    applyTheme(document.documentElement.dataset.theme || localStorage.getItem('orvix-theme') || 'light');
+
+    document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+        button.addEventListener('click', () => {
+            applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+        });
+    });
+
     const mobileMenu = document.querySelector('[data-mobile-menu]');
     const mobileMenuOverlay = document.querySelector('[data-mobile-menu-overlay]');
     const openMobileMenu = () => {

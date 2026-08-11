@@ -27,7 +27,7 @@
                 <p class="text-sm font-bold">{{ $kpi['title'] }}</p>
                 <span class="size-2.5 rounded-full" style="background-color: {{ $kpiDots[$color] ?? $kpiDots['slate'] }}"></span>
             </div>
-            <p class="mt-3 text-2xl font-bold text-slate-950">{{ $kpi['value'] }}</p>
+            <p class="mt-3 break-words text-[clamp(1.35rem,1.7vw,1.5rem)] font-bold leading-tight text-slate-950">{{ $kpi['value'] }}</p>
             <p class="mt-1 text-sm text-slate-600">{{ $kpi['caption'] }}</p>
         </article>
     @endforeach

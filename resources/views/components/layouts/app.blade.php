@@ -5,6 +5,13 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{{ config('app.name') }}</title>
         <link rel="icon" type="image/svg+xml" href="{{ asset('assets/favicon-orvix.svg') }}">
+        <script>
+            (() => {
+                const storedTheme = localStorage.getItem('orvix-theme');
+                const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+                document.documentElement.dataset.theme = storedTheme || (prefersDark ? 'dark' : 'light');
+            })();
+        </script>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
     </head>
@@ -12,7 +19,7 @@
         @auth
             <div class="min-h-screen overflow-x-hidden lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
                 <aside class="hidden border-r border-slate-200 bg-white px-5 py-6 lg:block">
-                    <a class="flex items-center gap-3" href="{{ route('dashboard') }}">
+                    <a class="brand-logo-shell flex items-center gap-3 rounded-md" href="{{ route('dashboard') }}">
                         <img class="h-12 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
                     </a>
 
@@ -133,6 +140,17 @@
                         @endcan
                     </nav>
 
+                    <button class="theme-toggle mt-6 flex w-full items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700" type="button" data-theme-toggle aria-label="Cambiar tema">
+                        <span class="flex items-center gap-2.5">
+                            <span class="grid size-5 place-items-center rounded bg-[#e6f7f4] text-[#0d9488]">
+                                <svg class="theme-toggle-sun size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                                <svg class="theme-toggle-moon hidden size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.98 12.52A8.5 8.5 0 1 1 11.48 3.02 6.8 6.8 0 0 0 20.98 12.52Z"/></svg>
+                            </span>
+                            <span data-theme-toggle-label>Modo claro</span>
+                        </span>
+                        <span class="text-xs font-bold text-slate-500" data-theme-toggle-value>Light</span>
+                    </button>
+
                     <div class="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
                         <p class="font-semibold text-slate-950">{{ auth()->user()->name }}</p>
                         <p class="mt-1 text-slate-500">{{ auth()->user()->roles->pluck('name')->join(', ') }}</p>
@@ -146,7 +164,7 @@
                 <div class="fixed inset-0 z-40 hidden bg-slate-950/40 lg:hidden" data-mobile-menu-overlay></div>
                 <aside class="fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-5 shadow-xl transition-transform duration-200 lg:hidden" data-mobile-menu>
                     <div class="flex items-center justify-between gap-3">
-                        <a class="flex items-center gap-3" href="{{ route('dashboard') }}">
+                        <a class="brand-logo-shell flex items-center gap-3 rounded-md" href="{{ route('dashboard') }}">
                             <img class="h-10 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
                         </a>
                         <button class="grid size-9 place-items-center rounded-md border border-slate-200 text-slate-700" type="button" data-close-mobile-menu aria-label="Cerrar menu">
@@ -194,6 +212,17 @@
                             </details>
                         @endcan
                     </nav>
+
+                    <button class="theme-toggle mt-5 flex w-full items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700" type="button" data-theme-toggle aria-label="Cambiar tema">
+                        <span class="flex items-center gap-2.5">
+                            <span class="grid size-5 place-items-center rounded bg-[#e6f7f4] text-[#0d9488]">
+                                <svg class="theme-toggle-sun size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                                <svg class="theme-toggle-moon hidden size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.98 12.52A8.5 8.5 0 1 1 11.48 3.02 6.8 6.8 0 0 0 20.98 12.52Z"/></svg>
+                            </span>
+                            <span data-theme-toggle-label>Modo claro</span>
+                        </span>
+                        <span class="text-xs font-bold text-slate-500" data-theme-toggle-value>Light</span>
+                    </button>
 
                     <div class="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
                         <p class="font-semibold text-slate-950">{{ auth()->user()->name }}</p>
