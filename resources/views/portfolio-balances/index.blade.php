@@ -140,47 +140,103 @@
             <h3 class="font-bold text-slate-950">Resumen por operador</h3>
             <p class="mt-1 text-sm text-slate-500">Totales calculados con los filtros activos.</p>
         </div>
-        <div class="w-full overflow-x-auto">
-            <table class="w-full min-w-[1320px] text-left text-sm">
+        <div class="divide-y divide-slate-100 md:hidden">
+            @forelse ($report['operator_rows'] as $operatorRow)
+                <article class="p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="font-semibold text-[#0f766e]">{{ $operatorRow['operator_name'] }}</p>
+                            <p class="mt-1 text-xs text-slate-500">{{ $operatorRow['clients_count'] }} clientes · {{ $operatorRow['loans_count'] }} prestamos</p>
+                        </div>
+                        <span class="{{ $operatorRow['collection_state']['class'] }} shrink-0 rounded px-2 py-1 text-xs font-bold">{{ $operatorRow['collection_state']['label'] }}</span>
+                    </div>
+                    <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <dt class="text-slate-500">Pagares</dt>
+                            <dd class="font-semibold">{{ $operatorRow['pending_installments_count'] }} pendientes · {{ $operatorRow['overdue_installments_count'] }} vencidos</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Vehiculos atraso</dt>
+                            <dd class="font-semibold">{{ $operatorRow['vehicles_with_overdue_count'] }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Saldo vencido</dt>
+                            <dd class="font-semibold text-red-700">{{ $money($operatorRow['overdue_cents']) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Saldo total</dt>
+                            <dd class="font-semibold">{{ $money($operatorRow['pending_cents']) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Max atraso</dt>
+                            <dd class="font-semibold">{{ $operatorRow['max_late_days'] }} dias</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Proximo</dt>
+                            <dd class="font-semibold">{{ $operatorRow['next_due_date'] ? CarbonImmutable::parse($operatorRow['next_due_date'])->format('d/m/Y') : '-' }}</dd>
+                        </div>
+                    </dl>
+                    <a class="mt-4 inline-flex rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" href="{{ route('portfolio-balances.index', array_merge($filterQuery, ['operator_id' => $operatorRow['operator_id'] ?? 'none'])) }}">Ver detalle</a>
+                </article>
+            @empty
+                <p class="p-5 text-center text-sm text-slate-500">No se encontraron registros para la fecha de corte y filtros seleccionados.</p>
+            @endforelse
+        </div>
+        <div class="hidden w-full overflow-x-auto md:block">
+            <table class="w-full table-fixed text-left text-xs xl:text-sm">
+                <colgroup>
+                    <col class="w-[16%]">
+                    <col class="w-[10%]">
+                    <col class="w-[12%]">
+                    <col class="w-[15%]">
+                    <col class="w-[14%]">
+                    <col class="w-[12%]">
+                    <col class="w-[10%]">
+                    <col class="w-[11%]">
+                </colgroup>
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
-                        <th class="px-5 py-3">Operador</th>
-                        <th class="px-5 py-3 text-right">Clientes</th>
-                        <th class="px-5 py-3 text-right">Prestamos</th>
-                        <th class="px-5 py-3 text-right">Pagares pendientes</th>
-                        <th class="px-5 py-3 text-right">Pagares vencidos</th>
-                        <th class="px-5 py-3 text-right">Vehiculos con atraso</th>
-                        <th class="px-5 py-3 text-right">Saldo vencido</th>
-                        <th class="px-5 py-3 text-right">Saldo total</th>
-                        <th class="px-5 py-3 text-right">Max atraso</th>
-                        <th class="px-5 py-3">Proximo</th>
-                        <th class="w-36 px-5 py-3">Estado</th>
-                        <th class="w-32 px-5 py-3"></th>
+                        <th class="px-3 py-3">Operador</th>
+                        <th class="px-3 py-3 text-right">Clientes / prestamos</th>
+                        <th class="px-3 py-3 text-right">Pagares</th>
+                        <th class="px-3 py-3 text-right">Saldos</th>
+                        <th class="px-3 py-3 text-right">Atraso</th>
+                        <th class="px-3 py-3">Proximo</th>
+                        <th class="px-3 py-3">Estado</th>
+                        <th class="px-3 py-3"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($report['operator_rows'] as $operatorRow)
                         <tr class="hover:bg-slate-50">
-                            <td class="px-5 py-3 font-semibold text-[#0f766e]">{{ $operatorRow['operator_name'] }}</td>
-                            <td class="px-5 py-3 text-right">{{ $operatorRow['clients_count'] }}</td>
-                            <td class="px-5 py-3 text-right">{{ $operatorRow['loans_count'] }}</td>
-                            <td class="px-5 py-3 text-right">{{ $operatorRow['pending_installments_count'] }}</td>
-                            <td class="px-5 py-3 text-right">{{ $operatorRow['overdue_installments_count'] }}</td>
-                            <td class="px-5 py-3 text-right">{{ $operatorRow['vehicles_with_overdue_count'] }}</td>
-                            <td class="px-5 py-3 text-right font-semibold">{{ $money($operatorRow['overdue_cents']) }}</td>
-                            <td class="px-5 py-3 text-right font-semibold">{{ $money($operatorRow['pending_cents']) }}</td>
-                            <td class="px-5 py-3 text-right">{{ $operatorRow['max_late_days'] }} dias</td>
-                            <td class="px-5 py-3">{{ $operatorRow['next_due_date'] ? CarbonImmutable::parse($operatorRow['next_due_date'])->format('d/m/Y') : '-' }}</td>
-                            <td class="px-5 py-3">
-                                <span class="{{ $operatorRow['collection_state']['class'] }} inline-flex whitespace-nowrap rounded px-2 py-1 text-xs font-bold">{{ $operatorRow['collection_state']['label'] }}</span>
+                            <td class="px-3 py-3 font-semibold text-[#0f766e]">{{ $operatorRow['operator_name'] }}</td>
+                            <td class="px-3 py-3 text-right">
+                                <p class="font-semibold">{{ $operatorRow['clients_count'] }} clientes</p>
+                                <p class="text-xs text-slate-500">{{ $operatorRow['loans_count'] }} prestamos</p>
                             </td>
-                            <td class="px-5 py-3 text-right">
-                                <a class="inline-flex whitespace-nowrap rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700" href="{{ route('portfolio-balances.index', array_merge($filterQuery, ['operator_id' => $operatorRow['operator_id'] ?? 'none'])) }}">Ver detalle</a>
+                            <td class="px-3 py-3 text-right">
+                                <p class="font-semibold">{{ $operatorRow['pending_installments_count'] }} pendientes</p>
+                                <p class="text-xs text-red-600">{{ $operatorRow['overdue_installments_count'] }} vencidos</p>
+                            </td>
+                            <td class="px-3 py-3 text-right">
+                                <p class="font-semibold text-red-700">{{ $money($operatorRow['overdue_cents']) }}</p>
+                                <p class="text-xs text-slate-500">{{ $money($operatorRow['pending_cents']) }} total</p>
+                            </td>
+                            <td class="px-3 py-3 text-right">
+                                <p class="font-semibold">{{ $operatorRow['max_late_days'] }} dias</p>
+                                <p class="text-xs text-slate-500">{{ $operatorRow['vehicles_with_overdue_count'] }} vehiculos</p>
+                            </td>
+                            <td class="px-3 py-3">{{ $operatorRow['next_due_date'] ? CarbonImmutable::parse($operatorRow['next_due_date'])->format('d/m/Y') : '-' }}</td>
+                            <td class="px-3 py-3">
+                                <span class="{{ $operatorRow['collection_state']['class'] }} inline-flex rounded px-2 py-1 text-xs font-bold">{{ $operatorRow['collection_state']['label'] }}</span>
+                            </td>
+                            <td class="px-3 py-3 text-right">
+                                <a class="inline-flex rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700" href="{{ route('portfolio-balances.index', array_merge($filterQuery, ['operator_id' => $operatorRow['operator_id'] ?? 'none'])) }}">Detalle</a>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td class="px-5 py-8 text-center text-slate-500" colspan="12">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
+                            <td class="px-5 py-8 text-center text-slate-500" colspan="8">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -193,34 +249,85 @@
             <h3 class="font-bold text-slate-950">Detalle de cartera</h3>
             <p class="mt-1 text-sm text-slate-500">Vista por pagare pendiente o vencido; si un prestamo debe varios meses, aparece una fila por cada mensualidad.</p>
         </div>
-        <div class="w-full overflow-x-auto">
-            <table class="w-full min-w-[980px] text-left text-sm">
+        <div class="divide-y divide-slate-100 md:hidden">
+            @forelse ($loanRows as $row)
+                <article class="p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="font-semibold text-slate-950">{{ $row['vehicle_name'] }}</p>
+                            <p class="mt-1 text-xs text-slate-500">{{ $row['vehicle_identifier'] ?: '-' }}</p>
+                        </div>
+                        <p class="shrink-0 text-right font-bold text-red-700">{{ $money($row['overdue_cents']) }}</p>
+                    </div>
+                    <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <dt class="text-slate-500">Numero de pagos</dt>
+                            <dd class="font-semibold">{{ $row['payment_progress'] }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Pago</dt>
+                            <dd class="font-semibold">{{ $money($row['payment_cents']) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Fecha pagare</dt>
+                            <dd class="font-semibold">{{ $row['due_date'] ?? '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Dias de atraso</dt>
+                            <dd class="font-semibold">{{ $row['late_days'] }} dias</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Mens vencida</dt>
+                            <dd class="font-semibold">{{ $row['overdue_installments_count'] }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Cliente</dt>
+                            <dd class="font-semibold text-[#0f766e]">{{ $row['client_name'] }}</dd>
+                        </div>
+                    </dl>
+                </article>
+            @empty
+                <p class="p-5 text-center text-sm text-slate-500">No se encontraron registros para la fecha de corte y filtros seleccionados.</p>
+            @endforelse
+        </div>
+        <div class="hidden w-full overflow-x-auto md:block">
+            <table class="w-full table-fixed text-left text-xs xl:text-sm">
+                <colgroup>
+                    <col class="w-[22%]">
+                    <col class="w-[11%]">
+                    <col class="w-[12%]">
+                    <col class="w-[12%]">
+                    <col class="w-[11%]">
+                    <col class="w-[10%]">
+                    <col class="w-[12%]">
+                    <col class="w-[10%]">
+                </colgroup>
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
-                        <th class="px-5 py-3">Auto</th>
-                        <th class="px-5 py-3">Numero de pagos</th>
-                        <th class="px-5 py-3 text-right">Pago</th>
-                        <th class="px-5 py-3">Fecha pagare</th>
-                        <th class="px-5 py-3 text-right">Dias de atraso</th>
-                        <th class="px-5 py-3 text-right">Mens vencida</th>
-                        <th class="px-5 py-3 text-right">Suma vencidas</th>
-                        <th class="px-5 py-3">Cliente</th>
+                        <th class="px-3 py-3">Auto</th>
+                        <th class="px-3 py-3">Num. pagos</th>
+                        <th class="px-3 py-3 text-right">Pago</th>
+                        <th class="px-3 py-3">Fecha pagare</th>
+                        <th class="px-3 py-3 text-right">Dias atraso</th>
+                        <th class="px-3 py-3 text-right">Mens vencida</th>
+                        <th class="px-3 py-3 text-right">Suma vencidas</th>
+                        <th class="px-3 py-3">Cliente</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($loanRows as $row)
                         <tr class="hover:bg-slate-50">
-                            <td class="px-5 py-3">
+                            <td class="px-3 py-3">
                                 {{ $row['vehicle_name'] }}
                                 <p class="text-xs text-slate-500">{{ $row['vehicle_identifier'] ?: '-' }}</p>
                             </td>
-                            <td class="px-5 py-3 font-semibold">{{ $row['payment_progress'] }}</td>
-                            <td class="px-5 py-3 text-right font-semibold">{{ $money($row['payment_cents']) }}</td>
-                            <td class="px-5 py-3">{{ $row['due_date'] ?? '-' }}</td>
-                            <td class="px-5 py-3 text-right">{{ $row['late_days'] }} dias</td>
-                            <td class="px-5 py-3 text-right">{{ $row['overdue_installments_count'] }}</td>
-                            <td class="px-5 py-3 text-right font-semibold text-red-700">{{ $money($row['overdue_cents']) }}</td>
-                            <td class="px-5 py-3 font-semibold text-[#0f766e]">{{ $row['client_name'] }}</td>
+                            <td class="px-3 py-3 font-semibold">{{ $row['payment_progress'] }}</td>
+                            <td class="px-3 py-3 text-right font-semibold">{{ $money($row['payment_cents']) }}</td>
+                            <td class="px-3 py-3">{{ $row['due_date'] ?? '-' }}</td>
+                            <td class="px-3 py-3 text-right">{{ $row['late_days'] }} dias</td>
+                            <td class="px-3 py-3 text-right">{{ $row['overdue_installments_count'] }}</td>
+                            <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($row['overdue_cents']) }}</td>
+                            <td class="px-3 py-3 font-semibold text-[#0f766e]">{{ $row['client_name'] }}</td>
                         </tr>
                     @empty
                         <tr>
@@ -336,39 +443,87 @@
                 <p class="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Detalle de pagares</p>
                 <h3 class="mt-1 font-bold text-slate-950">{{ $selectedLoan['folio'] }} · {{ $selectedLoan['client_name'] }}</h3>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[1080px] text-left text-sm">
+            <div class="divide-y divide-slate-100 md:hidden">
+                @foreach ($selectedLoan['installments'] as $installment)
+                    <article class="{{ $installment['is_overdue'] ? 'bg-red-50/30' : '' }} p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="font-semibold text-slate-950">Pagare {{ $installment['number'] }} · {{ $installment['progress'] }}</p>
+                                <p class="mt-1 text-xs text-slate-500">Vence {{ $installment['due_date'] }}</p>
+                            </div>
+                            <span class="{{ $installment['status']['class'] }} shrink-0 rounded px-2 py-1 text-xs font-bold">{{ $installment['status']['label'] }}</span>
+                        </div>
+                        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <dt class="text-slate-500">Contractual</dt>
+                                <dd class="font-semibold">{{ $money($installment['contract_cents']) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-slate-500">Pagado</dt>
+                                <dd class="font-semibold">{{ $money($installment['paid_cents']) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-slate-500">Pendiente</dt>
+                                <dd class="font-semibold">{{ $money($installment['pending_cents']) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-slate-500">Saldo vencido</dt>
+                                <dd class="font-semibold text-red-700">{{ $money($installment['overdue_cents']) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-slate-500">Dias atraso</dt>
+                                <dd class="font-semibold">{{ $installment['late_days'] }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-slate-500">Ultimo pago</dt>
+                                <dd class="font-semibold">{{ $installment['last_payment_date'] ?: '-' }}</dd>
+                            </div>
+                        </dl>
+                        <a class="mt-4 inline-flex rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" href="{{ route('loans.show', $selectedLoan['loan_public_id']) }}">Abrir prestamo</a>
+                    </article>
+                @endforeach
+            </div>
+            <div class="hidden overflow-x-auto md:block">
+                <table class="w-full table-fixed text-left text-xs xl:text-sm">
+                    <colgroup>
+                        <col class="w-[8%]">
+                        <col class="w-[9%]">
+                        <col class="w-[10%]">
+                        <col class="w-[12%]">
+                        <col class="w-[10%]">
+                        <col class="w-[11%]">
+                        <col class="w-[9%]">
+                        <col class="w-[11%]">
+                        <col class="w-[10%]">
+                        <col class="w-[10%]">
+                    </colgroup>
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
-                            <th class="px-5 py-3">Pagare</th>
-                            <th class="px-5 py-3">Plazo</th>
-                            <th class="px-5 py-3">Vence</th>
-                            <th class="px-5 py-3 text-right">Contractual</th>
-                            <th class="px-5 py-3 text-right">Pagado</th>
-                            <th class="px-5 py-3 text-right">Pendiente</th>
-                            <th class="px-5 py-3 text-right">Dias atraso</th>
-                            <th class="px-5 py-3 text-right">Saldo vencido</th>
-                            <th class="px-5 py-3">Estado</th>
-                            <th class="px-5 py-3">Ultimo pago</th>
-                            <th class="px-5 py-3"></th>
+                            <th class="px-3 py-3">Pagare</th>
+                            <th class="px-3 py-3">Plazo</th>
+                            <th class="px-3 py-3">Vence</th>
+                            <th class="px-3 py-3 text-right">Contractual</th>
+                            <th class="px-3 py-3 text-right">Pagado</th>
+                            <th class="px-3 py-3 text-right">Pendiente</th>
+                            <th class="px-3 py-3 text-right">Dias atraso</th>
+                            <th class="px-3 py-3 text-right">Saldo vencido</th>
+                            <th class="px-3 py-3">Estado</th>
+                            <th class="px-3 py-3">Ultimo pago</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach ($selectedLoan['installments'] as $installment)
                             <tr class="{{ $installment['is_overdue'] ? 'bg-red-50/30' : '' }}">
-                                <td class="px-5 py-3 font-semibold">{{ $installment['number'] }}</td>
-                                <td class="px-5 py-3">{{ $installment['progress'] }}</td>
-                                <td class="px-5 py-3">{{ $installment['due_date'] }}</td>
-                                <td class="px-5 py-3 text-right font-semibold">{{ $money($installment['contract_cents']) }}</td>
-                                <td class="px-5 py-3 text-right">{{ $money($installment['paid_cents']) }}</td>
-                                <td class="px-5 py-3 text-right font-semibold">{{ $money($installment['pending_cents']) }}</td>
-                                <td class="px-5 py-3 text-right">{{ $installment['late_days'] }}</td>
-                                <td class="px-5 py-3 text-right font-semibold text-red-700">{{ $money($installment['overdue_cents']) }}</td>
-                                <td class="px-5 py-3"><span class="{{ $installment['status']['class'] }} rounded px-2 py-1 text-xs font-bold">{{ $installment['status']['label'] }}</span></td>
-                                <td class="px-5 py-3">{{ $installment['last_payment_date'] ?: '-' }}</td>
-                                <td class="px-5 py-3 text-right">
-                                    <a class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700" href="{{ route('loans.show', $selectedLoan['loan_public_id']) }}">Abrir prestamo</a>
-                                </td>
+                                <td class="px-3 py-3 font-semibold">{{ $installment['number'] }}</td>
+                                <td class="px-3 py-3">{{ $installment['progress'] }}</td>
+                                <td class="px-3 py-3">{{ $installment['due_date'] }}</td>
+                                <td class="px-3 py-3 text-right font-semibold">{{ $money($installment['contract_cents']) }}</td>
+                                <td class="px-3 py-3 text-right">{{ $money($installment['paid_cents']) }}</td>
+                                <td class="px-3 py-3 text-right font-semibold">{{ $money($installment['pending_cents']) }}</td>
+                                <td class="px-3 py-3 text-right">{{ $installment['late_days'] }}</td>
+                                <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($installment['overdue_cents']) }}</td>
+                                <td class="px-3 py-3"><span class="{{ $installment['status']['class'] }} rounded px-2 py-1 text-xs font-bold">{{ $installment['status']['label'] }}</span></td>
+                                <td class="px-3 py-3">{{ $installment['last_payment_date'] ?: '-' }}</td>
                             </tr>
                         @endforeach
                     </tbody>

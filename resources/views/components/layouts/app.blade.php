@@ -10,7 +10,7 @@
     </head>
     <body class="min-h-screen bg-[#f4f7fb] text-[#172033] antialiased">
         @auth
-            <div class="min-h-screen lg:grid lg:grid-cols-[280px_1fr]">
+            <div class="min-h-screen overflow-x-hidden lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
                 <aside class="hidden border-r border-slate-200 bg-white px-5 py-6 lg:block">
                     <a class="flex items-center gap-3" href="{{ route('dashboard') }}">
                         <img class="h-12 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
@@ -153,7 +153,7 @@
                     </div>
                 </aside>
 
-                <main>
+                <main class="min-w-0">
                     <header class="border-b border-slate-200 bg-white px-4 py-4 sm:px-6 lg:px-8">
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -166,7 +166,7 @@
                         </div>
                     </header>
 
-                    <section class="px-4 py-6 sm:px-6 lg:px-8">
+                    <section class="min-w-0 max-w-full overflow-x-hidden px-4 py-6 sm:px-6 lg:px-8">
                         @if (session('status'))
                             <div class="no-print mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{{ session('status') }}</div>
                         @endif
