@@ -6,6 +6,7 @@ use App\Domain\Investors\InvestmentAllocationService;
 use App\Models\Client;
 use App\Models\Loan;
 use App\Models\Vehicle;
+use App\Support\LoanFolios;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -34,7 +35,7 @@ class LoanFormalizer
 
             $loan = Loan::query()->create([
                 'public_id' => (string) Str::ulid(),
-                'folio' => 'ORV-'.now('America/Merida')->format('ymd').'-'.str_pad((string) (Loan::query()->count() + 1), 4, '0', STR_PAD_LEFT),
+                'folio' => LoanFolios::next($data['operator_id'] ?? $client->operator_id),
                 'client_id' => $client->id,
                 'operator_id' => $data['operator_id'] ?? $client->operator_id,
                 'vehicle_id' => $data['vehicle_id'] ?? null,

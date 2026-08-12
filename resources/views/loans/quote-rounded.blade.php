@@ -9,7 +9,15 @@
                     <h3 class="mt-1 text-xl font-bold text-slate-950">{{ ($data['calculation_method'] ?? 'regular') === 'rounded' ? 'Comparar opciones con redondeo' : 'Confirmar prestamo regular' }}</h3>
                     <p class="mt-1 text-sm text-slate-500">{{ ($data['calculation_method'] ?? 'regular') === 'rounded' ? 'Ambas opciones cobran el mismo total. Solo cambia el primer pago y el importe uniforme de los pagos restantes.' : 'Revisa el calendario y asigna inversionistas antes de crear el prestamo.' }}</p>
                 </div>
-                <a class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700" href="{{ route('loans.create') }}">Regresar</a>
+                <form method="POST" action="{{ route('loans.create.restore') }}">
+                    @csrf
+                    @foreach ($data as $field => $value)
+                        @if (! is_array($value))
+                            <input name="{{ $field }}" type="hidden" value="{{ $value }}">
+                        @endif
+                    @endforeach
+                    <button class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700" type="submit">Regresar a editar</button>
+                </form>
             </div>
             <dl class="mt-5 grid gap-3 md:grid-cols-4">
                 <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Capital</dt><dd class="font-bold">{{ Money::mxn(Money::decimal($quote['input']['capital_cents'])) }}</dd></div>

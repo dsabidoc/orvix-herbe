@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
 use App\Models\Operator;
@@ -13,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Illuminate\View\View;
 
 class CollectionController extends Controller
@@ -93,7 +95,7 @@ class CollectionController extends Controller
         ]);
     }
 
-    public function markPaid(Request $request, Installment $installment, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
+    public function markPaid(Request $request, Installment $installment, WeeklyCutPeriodService $cutPeriodService, PaymentApplicationService $paymentApplicationService): RedirectResponse
     {
         $installment->load('loan.operator');
         $this->authorizeInstallmentAccess($request, $installment);
@@ -165,6 +167,14 @@ class CollectionController extends Controller
             );
         }
 
+        if ($this->shouldApplyImmediately($request)) {
+            try {
+                $paymentApplicationService->confirm($movement, $request->user()->id);
+            } catch (RuntimeException $exception) {
+                return back()->with('warning', $exception->getMessage());
+            }
+        }
+
         $route = match ($data['return_to'] ?? '') {
             'loan' => route('loans.show', $installment->loan),
             'dashboard' => route('dashboard'),
@@ -172,7 +182,85 @@ class CollectionController extends Controller
             default => route('collections.index', ['month' => $installment->due_date->format('Y-m'), 'operator_id' => $installment->loan->operator_id]),
         };
 
-        return redirect($route)->with('status', ($data['return_to'] ?? null) === 'cut' ? 'Letra marcada como pagada y agregada a este corte.' : 'Letra marcada como pagada; aparecera cuando se genere el corte de esa fecha.');
+        return redirect($route)->with('status', $this->shouldApplyImmediately($request) ? 'Letra marcada como pagada y aplicada al calendario.' : (($data['return_to'] ?? null) === 'cut' ? 'Letra marcada como pagada y agregada a este corte.' : 'Letra marcada como pagada; aparecera cuando se genere el corte de esa fecha.'));
+    }
+
+    public function markPaidBulk(Request $request, WeeklyCutPeriodService $cutPeriodService, PaymentApplicationService $paymentApplicationService): RedirectResponse
+    {
+        $data = $request->validate([
+            'installment_ids' => ['required', 'array', 'min:1', 'max:80'],
+            'installment_ids.*' => ['integer', 'exists:installments,id'],
+            'loan_id' => ['required', 'exists:loans,id'],
+            'operated_on' => ['required', 'date'],
+            'affects_investors' => ['nullable', 'boolean'],
+            'return_to' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $installments = Installment::query()
+            ->with('loan.operator')
+            ->whereIn('id', $data['installment_ids'])
+            ->where('loan_id', $data['loan_id'])
+            ->orderBy('number')
+            ->get();
+
+        abort_if($installments->isEmpty(), 422, 'Selecciona al menos una letra valida.');
+
+        $created = 0;
+        foreach ($installments as $installment) {
+            $this->authorizeInstallmentAccess($request, $installment);
+
+            if (Money::cents($installment->remaining_amount) <= 0) {
+                continue;
+            }
+
+            $existing = CollectionMovement::query()
+                ->where('target_installment_id', $installment->id)
+                ->whereIn('confirmation_status', ['reported', 'applied'])
+                ->exists();
+
+            if ($existing) {
+                continue;
+            }
+
+            $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
+            $movement = CollectionMovement::query()->create([
+                'public_id' => (string) Str::ulid(),
+                'folio' => 'MOV-'.$registeredAt->format('ymd').'-'.str_pad((string) (CollectionMovement::query()->count() + 1), 4, '0', STR_PAD_LEFT),
+                'idempotency_key' => sha1('bulk-installment|'.$installment->id.'|'.$data['operated_on'].'|'.Money::decimal(Money::cents($installment->remaining_amount))),
+                'loan_id' => $installment->loan_id,
+                'target_installment_id' => $installment->id,
+                'operator_id' => $installment->loan->operator_id,
+                'registered_by' => $request->user()->id,
+                'operated_on' => $data['operated_on'],
+                'registered_at' => $registeredAt,
+                'contract_amount' => Money::decimal(Money::cents($installment->remaining_amount)),
+                'operator_surcharge_amount' => '0.00',
+                'external_concepts_amount' => '0.00',
+                'additional_charge_amount' => '0.00',
+                'delinquency_amount' => '0.00',
+                'affects_investors' => (bool) ($data['affects_investors'] ?? true),
+                'type' => 'ordinary',
+                'payment_method' => 'cash',
+                'notes' => 'Marcado pagado en bloque desde calendario contractual',
+                'confirmation_status' => 'reported',
+            ]);
+
+            if ($this->shouldApplyImmediately($request)) {
+                try {
+                    $paymentApplicationService->confirm($movement, $request->user()->id);
+                } catch (RuntimeException $exception) {
+                    return back()->with('warning', $exception->getMessage());
+                }
+            }
+
+            $created++;
+        }
+
+        $loan = $installments->first()->loan;
+
+        return redirect()
+            ->route('loans.show', $loan)
+            ->with('status', $this->shouldApplyImmediately($request) ? $created.' letra(s) marcadas como pagadas y aplicadas.' : $created.' letra(s) marcadas como pagadas; apareceran al generar corte.');
     }
 
     private function selectedOperatorId(Request $request): ?int
@@ -189,5 +277,10 @@ class CollectionController extends Controller
         if ($request->user()->hasRole('operador-cartera') && $installment->loan->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
+    }
+
+    private function shouldApplyImmediately(Request $request): bool
+    {
+        return $request->user()->can('payments.confirm') && ! $request->user()->hasRole('operador-cartera');
     }
 }

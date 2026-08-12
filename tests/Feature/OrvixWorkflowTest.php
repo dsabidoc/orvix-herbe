@@ -378,10 +378,7 @@ class OrvixWorkflowTest extends TestCase
         $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
 
         $this->assertFalse($movement->affects_investors);
-
-        $this->actingAs($admin)
-            ->post(route('payments.confirm', $movement))
-            ->assertSessionHas('status');
+        $this->assertSame('applied', $movement->confirmation_status);
 
         $this->assertSame(0, Money::cents($installment->fresh()->remaining_amount));
         $this->assertSame($returnsBefore, InvestorCapitalMovement::query()->where('type', 'payment_returns_recorded')->count());
@@ -821,6 +818,7 @@ class OrvixWorkflowTest extends TestCase
             ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Minimo'))
             ->firstOrFail();
 
+        $this->assertMatchesRegularExpression('/^[A-Z]\d{6}\d{2}$/', $loan->folio);
         $this->assertSame('outstanding_balance', $loan->interest_calculation_method);
         $this->assertSame(0.02, (float) $loan->monthly_rate);
         $this->assertSame('Sin marca', $loan->vehicle->brand);
@@ -861,6 +859,107 @@ class OrvixWorkflowTest extends TestCase
 
         $this->assertSame(0, $loan->investments()->count());
         $this->assertSame(80000.0, (float) $loan->capital);
+    }
+
+    public function test_loan_creation_rejects_invalid_vin_length(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->from(route('loans.create'))
+            ->post(route('loans.store'), [
+                'first_name' => 'Cliente VIN',
+                'operator_id' => $operator->id,
+                'capital' => '80000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'payment_day' => 10,
+                'start_date' => '2026-08-05',
+                'first_payment_date' => '2026-08-10',
+                'vin' => '123',
+            ])
+            ->assertRedirect(route('loans.create'))
+            ->assertSessionHasErrors('vin');
+    }
+
+    public function test_quote_preview_can_restore_create_form_input(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('loans.create.restore'), [
+                'first_name' => 'Cliente Regreso',
+                'operator_id' => $operator->id,
+                'capital' => '123000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'payment_day' => 15,
+                'start_date' => '2026-08-15',
+                'first_payment_date' => '2026-09-15',
+                'calculation_method' => 'rounded',
+            ])
+            ->assertRedirect(route('loans.create'))
+            ->assertSessionHasInput('first_name', 'Cliente Regreso')
+            ->assertSessionHasInput('capital', '123000');
+    }
+
+    public function test_admin_bulk_paid_applies_selected_installments_immediately(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('loans.store'), [
+                'first_name' => 'Cliente Pago Masivo',
+                'operator_id' => $operator->id,
+                'capital' => '80000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'payment_day' => 10,
+                'start_date' => '2026-08-05',
+                'first_payment_date' => '2026-08-10',
+            ])
+            ->assertRedirect();
+
+        $loan = Loan::query()
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Pago Masivo'))
+            ->with(['installments' => fn ($query) => $query->orderBy('number')])
+            ->firstOrFail();
+
+        $selected = $loan->installments->take(2);
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid.bulk'), [
+                'loan_id' => $loan->id,
+                'installment_ids' => $selected->pluck('id')->all(),
+                'operated_on' => '2026-08-12',
+                'affects_investors' => 0,
+                'return_to' => 'loan',
+            ])
+            ->assertRedirect(route('loans.show', $loan));
+
+        foreach ($selected as $installment) {
+            $installment->refresh();
+            $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+
+            $this->assertSame('applied', $movement->confirmation_status);
+            $this->assertSame(0, Money::cents($installment->remaining_amount));
+            $this->assertFalse($movement->affects_investors);
+        }
     }
 
     public function test_assigning_investors_after_confirmed_payment_replays_returns(): void
@@ -907,10 +1006,7 @@ class OrvixWorkflowTest extends TestCase
 
         $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
 
-        $this->actingAs($admin)
-            ->post(route('payments.confirm', $movement))
-            ->assertSessionHas('status');
-
+        $this->assertSame('applied', $movement->fresh()->confirmation_status);
         $this->assertSame(0, InvestorCapitalMovement::query()->where('loan_id', $loan->id)->where('type', 'payment_returns_recorded')->count());
 
         $this->actingAs($admin)
@@ -1001,7 +1097,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertSee('name="rate_value"', false)
             ->assertSee('value="2"', false)
             ->assertSee('name="delinquency_rate"', false)
-            ->assertSee('value="10"', false)
+            ->assertSee('value="0"', false)
             ->assertSee('value="0" selected', false);
     }
 

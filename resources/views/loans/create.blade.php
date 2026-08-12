@@ -1,3 +1,8 @@
+@php
+    $defaultStartDate = old('start_date', now('America/Merida')->toDateString());
+    $defaultPaymentDay = old('payment_day', \Carbon\CarbonImmutable::parse($defaultStartDate)->day);
+@endphp
+
 <x-layouts.app title="Crear prestamo">
     <form class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" method="POST" action="{{ route('loans.quote-rounded') }}" enctype="multipart/form-data">
         @csrf
@@ -45,10 +50,10 @@
                     <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="brand" placeholder="Marca opcional" value="{{ old('brand') }}">
                     <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="model" placeholder="Modelo opcional" value="{{ old('model') }}">
                     <div class="grid grid-cols-2 gap-3">
-                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="year" placeholder="Año" type="number" value="{{ old('year') }}">
+                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="year" placeholder="Año" type="number" inputmode="numeric" value="{{ old('year') }}">
                         <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="plates" placeholder="Placas" value="{{ old('plates') }}">
                     </div>
-                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="vin" placeholder="VIN" value="{{ old('vin') }}">
+                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm uppercase" name="vin" placeholder="VIN de 17 caracteres" minlength="17" maxlength="17" value="{{ old('vin') }}">
                 </section>
 
                 <section class="space-y-4">
@@ -60,6 +65,13 @@
 
                 <section class="space-y-4">
                     <h3 class="font-bold text-slate-950">Factura</h3>
+                    @if (old('invoice_temp_path'))
+                        <input name="invoice_temp_path" type="hidden" value="{{ old('invoice_temp_path') }}">
+                        <input name="invoice_original_name" type="hidden" value="{{ old('invoice_original_name') }}">
+                        <input name="invoice_mime_type" type="hidden" value="{{ old('invoice_mime_type') }}">
+                        <input name="invoice_size" type="hidden" value="{{ old('invoice_size') }}">
+                        <p class="rounded-md bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">Factura cargada en vista previa: {{ old('invoice_original_name', 'Factura PDF') }}</p>
+                    @endif
                     <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#e6f7f4] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-[#0f766e]" name="invoice_file" type="file" accept="application/pdf">
                     <label class="block text-sm font-semibold text-slate-700">Ubicacion fisica inicial
                         <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="invoice_holder">
@@ -100,14 +112,14 @@
                 </label>
                 <div class="grid grid-cols-2 gap-3">
                     <label class="block text-sm font-semibold text-slate-700">Morosidad %
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_rate" placeholder="Ej. 10" type="number" step="0.0001" min="0" max="100" value="{{ old('delinquency_rate', '10') }}">
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_rate" placeholder="Ej. 10" type="number" step="0.0001" min="0" max="100" value="{{ old('delinquency_rate', '0') }}">
                     </label>
                     <label class="block text-sm font-semibold text-slate-700">Dias gracia
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_grace_days" placeholder="Ej. 5" type="number" min="0" max="365" value="{{ old('delinquency_grace_days', '0') }}">
                     </label>
                 </div>
                 <label class="block text-sm font-semibold text-slate-700">Fecha de inicio
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ old('start_date', now('America/Merida')->toDateString()) }}" required>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $defaultStartDate }}" data-sync-payment-day-source required>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Fecha de cobranza
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_payment_date" type="date" value="{{ old('first_payment_date', now('America/Merida')->toDateString()) }}" required>
@@ -140,7 +152,7 @@
                         </select>
                     </label>
                     <label class="col-span-2 block text-sm font-semibold text-slate-700">Dia de pago
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ old('payment_day') }}" required>
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ $defaultPaymentDay }}" data-sync-payment-day-target required>
                     </label>
                 </div>
             </section>

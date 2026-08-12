@@ -253,7 +253,7 @@ class LoanController extends Controller
             'model' => ['nullable', 'string', 'max:120'],
             'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
             'plates' => ['nullable', 'string', 'max:40'],
-            'vin' => ['nullable', 'string', 'max:80'],
+            'vin' => ['nullable', 'string', 'size:17'],
             'capital' => ['required', 'numeric', 'min:1'],
             'rate_type' => ['required', 'in:monthly,annual'],
             'rate_value' => ['required', 'numeric', 'min:0'],

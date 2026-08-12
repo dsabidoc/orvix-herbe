@@ -107,6 +107,66 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    document.querySelectorAll('[data-sync-payment-day-source]').forEach((input) => {
+        input.addEventListener('change', () => {
+            if (!(input instanceof HTMLInputElement) || !input.value) {
+                return;
+            }
+
+            const form = input.closest('form');
+            const target = form?.querySelector('[data-sync-payment-day-target]');
+            const [, , day] = input.value.split('-');
+
+            if (target instanceof HTMLInputElement && day) {
+                target.value = String(Number(day));
+            }
+        });
+    });
+
+    const bulkPaymentForm = document.querySelector('[data-bulk-payment-form]');
+    const bulkPaymentToggle = document.querySelector('[data-bulk-payment-toggle]');
+    const bulkPaymentCheckboxes = Array.from(document.querySelectorAll('[data-bulk-payment-checkbox]'));
+    const refreshBulkPaymentForm = () => {
+        if (!(bulkPaymentForm instanceof HTMLFormElement)) {
+            return;
+        }
+
+        bulkPaymentForm.querySelectorAll('[data-bulk-payment-hidden]').forEach((input) => input.remove());
+        const selected = bulkPaymentCheckboxes.filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked);
+
+        selected.forEach((checkbox) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'installment_ids[]';
+            input.value = checkbox.value;
+            input.dataset.bulkPaymentHidden = 'true';
+            bulkPaymentForm.appendChild(input);
+        });
+
+        bulkPaymentForm.classList.toggle('hidden', selected.length === 0);
+    };
+
+    if (bulkPaymentToggle instanceof HTMLInputElement) {
+        bulkPaymentToggle.addEventListener('change', () => {
+            bulkPaymentCheckboxes.forEach((checkbox) => {
+                if (checkbox instanceof HTMLInputElement) {
+                    checkbox.checked = bulkPaymentToggle.checked;
+                }
+            });
+            refreshBulkPaymentForm();
+        });
+    }
+
+    bulkPaymentCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+            if (bulkPaymentToggle instanceof HTMLInputElement) {
+                bulkPaymentToggle.checked = bulkPaymentCheckboxes.length > 0
+                    && bulkPaymentCheckboxes.every((item) => item instanceof HTMLInputElement && item.checked);
+            }
+            refreshBulkPaymentForm();
+        });
+    });
+
     const mobileMenu = document.querySelector('[data-mobile-menu]');
     const mobileMenuOverlay = document.querySelector('[data-mobile-menu-overlay]');
     const openMobileMenu = () => {

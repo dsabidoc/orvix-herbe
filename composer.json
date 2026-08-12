@@ -71,7 +71,11 @@
     },
     "extra": {
         "laravel": {
-            "dont-discover": []
+            "dont-discover": [
+                "laravel/pail",
+                "laravel/pao",
+                "livewire/livewire"
+            ]
         }
     },
     "config": {

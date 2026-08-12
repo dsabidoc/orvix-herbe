@@ -366,3 +366,14 @@ html[data-theme='dark'] .bg-blue-700 {
 html[data-theme='dark'] .bg-slate-950\/40 {
     background-color: rgba(2, 6, 23, 0.72) !important;
 }
+
+input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}

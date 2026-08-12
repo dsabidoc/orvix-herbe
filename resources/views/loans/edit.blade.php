@@ -44,7 +44,7 @@
                     <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="year" placeholder="Año" type="number" value="{{ old('year', $loan->vehicle?->year) }}">
                     <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="plates" placeholder="Placas" value="{{ old('plates', $loan->vehicle?->plates) }}">
                 </div>
-                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="vin" placeholder="VIN" value="{{ old('vin', $loan->vehicle?->vin) }}">
+                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm uppercase" name="vin" placeholder="VIN de 17 caracteres" minlength="17" maxlength="17" value="{{ old('vin', $loan->vehicle?->vin) }}">
             </section>
 
             <section class="space-y-4">
@@ -96,10 +96,10 @@
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="term_months" placeholder="Meses" type="number" value="{{ old('term_months', $loan->term_months) }}" @disabled(! $canEditConditions) required>
                     </label>
                     <label class="block text-sm font-semibold text-slate-700">Dia de pago
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ old('payment_day', $loan->payment_day) }}" @disabled(! $canEditConditions) required>
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ old('payment_day', $loan->payment_day) }}" data-sync-payment-day-target @disabled(! $canEditConditions) required>
                     </label>
                     <label class="block text-sm font-semibold text-slate-700">Fecha inicio
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="start_date" type="date" value="{{ old('start_date', $loan->start_date->toDateString()) }}" @disabled(! $canEditConditions) required>
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="start_date" type="date" value="{{ old('start_date', $loan->start_date->toDateString()) }}" data-sync-payment-day-source @disabled(! $canEditConditions) required>
                     </label>
                 </div>
                 <label class="block text-sm font-semibold text-slate-700">Fecha cobranza

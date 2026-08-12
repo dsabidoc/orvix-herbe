@@ -35,6 +35,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/cartera-y-saldos', [PortfolioBalanceController::class, 'index'])->name('portfolio-balances.index');
     Route::get('/cartera-y-saldos/exportar', [PortfolioBalanceController::class, 'export'])->name('portfolio-balances.export');
     Route::get('/prestamos/nuevo/crear', [LoanCreationController::class, 'create'])->name('loans.create');
+    Route::post('/prestamos/nuevo/restaurar', [LoanCreationController::class, 'restoreCreate'])->name('loans.create.restore');
     Route::post('/prestamos/nuevo/cotizar-redondeo', [LoanCreationController::class, 'quote'])->name('loans.quote-rounded');
     Route::post('/prestamos/nuevo/confirmar-redondeo', [LoanCreationController::class, 'confirmRounded'])->name('loans.confirm-rounded');
     Route::post('/prestamos/nuevo/crear', [LoanCreationController::class, 'store'])->name('loans.store');
@@ -64,6 +65,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/inversionistas/{investor}/retiro-directo', [InvestorController::class, 'directWithdrawal'])->name('investors.withdrawals.direct');
     Route::get('/cobranza', [CollectionController::class, 'index'])->name('collections.index');
     Route::post('/cobranza/letras/{installment}/pagado', [CollectionController::class, 'markPaid'])->name('collections.mark-paid');
+    Route::post('/cobranza/letras/pagado-masivo', [CollectionController::class, 'markPaidBulk'])->name('collections.mark-paid.bulk');
     Route::post('/prestamos/{loan}/cobros', [PaymentController::class, 'store'])->name('payments.store');
     Route::post('/cobros/{movement}/confirmar', [PaymentController::class, 'confirm'])->name('payments.confirm');
     Route::post('/cobros/{movement}/regresar-pendiente', [PaymentController::class, 'reverse'])->name('payments.reverse');

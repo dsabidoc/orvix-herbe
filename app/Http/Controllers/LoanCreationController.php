@@ -17,6 +17,7 @@ use App\Models\LoanInvoiceMovement;
 use App\Models\Operator;
 use App\Models\OperatorLedgerEntry;
 use App\Models\WeeklyCut;
+use App\Support\LoanFolios;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -43,6 +44,13 @@ class LoanCreationController extends Controller
             'selectedOperatorId' => $request->integer('operator_id') ?: $weeklyCut?->operator_id,
             'weeklyCut' => $weeklyCut,
         ]);
+    }
+
+    public function restoreCreate(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->can('loans.formalize'), 403);
+
+        return redirect()->route('loans.create')->withInput($request->except('_token'));
     }
 
     public function store(Request $request, LoanFormalizer $formalizer, InvestmentAllocationService $allocator): RedirectResponse
@@ -79,7 +87,7 @@ class LoanCreationController extends Controller
                 'model' => ['nullable', 'string', 'max:120'],
                 'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
                 'plates' => ['nullable', 'string', 'max:40'],
-                'vin' => ['nullable', 'string', 'max:80'],
+                'vin' => ['nullable', 'string', 'size:17'],
                 'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
                 'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador'],
                 'documents.*' => ['nullable', 'file', 'max:10240'],
@@ -276,7 +284,7 @@ class LoanCreationController extends Controller
 
             $loan = Loan::query()->create([
                 'public_id' => (string) Str::ulid(),
-                'folio' => 'ORV-'.now('America/Merida')->format('ymd').'-'.str_pad((string) (Loan::query()->count() + 1), 4, '0', STR_PAD_LEFT),
+                'folio' => LoanFolios::next($data['operator_id'] ?? $client->operator_id),
                 'client_id' => $client->id,
                 'operator_id' => $data['operator_id'] ?? $client->operator_id,
                 'vehicle_id' => $vehicle?->id,
@@ -505,7 +513,7 @@ class LoanCreationController extends Controller
             'model' => ['nullable', 'string', 'max:120'],
             'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
             'plates' => ['nullable', 'string', 'max:40'],
-            'vin' => ['nullable', 'string', 'max:80'],
+            'vin' => ['nullable', 'string', 'size:17'],
             'calculation_method' => ['required', 'in:regular,rounded'],
             'vat_enabled' => ['nullable', 'boolean'],
             'interest_calculation_method' => ['required', 'in:fixed_principal,outstanding_balance'],
