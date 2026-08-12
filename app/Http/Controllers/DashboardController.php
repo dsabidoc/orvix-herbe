@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Domain\Cuts\WeeklyCutPeriodService;
-use App\Models\CollectionMovement;
+use App\Domain\Loans\LoanSettlementService;
 use App\Models\Installment;
 use App\Models\Investor;
 use App\Models\Loan;
@@ -13,12 +12,11 @@ use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): View|RedirectResponse
+    public function __invoke(Request $request, LoanSettlementService $settlementService): View|RedirectResponse
     {
         $user = $request->user();
 
@@ -36,37 +34,24 @@ class DashboardController extends Controller
         $loanIds = $this->visibleLoanQuery($request)->pluck('id');
         $collectableLoanIds = $this->visibleLoanQuery($request)->where('is_frozen', false)->pluck('id');
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
-        $cutPeriod = app(WeeklyCutPeriodService::class)->periodFor($today);
-        $weekStart = $cutPeriod['start'];
-        $weekEnd = $cutPeriod['end'];
+        $settleTodayCents = Loan::query()
+            ->whereIn('id', $loanIds)
+            ->get()
+            ->sum(fn (Loan $loan) => (int) $settlementService->quote($loan, $today)['total_cents']);
 
-        $remainingCents = Installment::query()
-            ->whereIn('loan_id', $loanIds)
-            ->sum('remaining_amount') * 100;
+        $expectedPeriodCents = $this->operationalPendingCents(
+            Installment::query()
+                ->whereIn('loan_id', $collectableLoanIds)
+                ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                ->where('remaining_amount', '>', 0)
+        );
 
-        $expectedWeekCents = Installment::query()
-            ->whereIn('loan_id', $collectableLoanIds)
-            ->whereBetween('due_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->where('remaining_amount', '>', 0)
-            ->sum('remaining_amount') * 100;
-
-        $expectedPeriodCents = Installment::query()
-            ->whereIn('loan_id', $collectableLoanIds)
-            ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
-            ->value('subtotal') * 100;
-
-        $pendingReportedCents = CollectionMovement::query()
-            ->whereIn('loan_id', $loanIds)
-            ->where('confirmation_status', 'reported')
-            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$periodStart->startOfDay(), $periodEnd->endOfDay()])
-            ->sum('contract_amount') * 100;
-
-        $overdueCents = Installment::query()
-            ->whereIn('loan_id', $collectableLoanIds)
-            ->whereDate('due_date', '<', $today->toDateString())
-            ->where('remaining_amount', '>', 0)
-            ->sum('remaining_amount') * 100;
+        $overdueCents = $this->operationalPendingCents(
+            Installment::query()
+                ->whereIn('loan_id', $collectableLoanIds)
+                ->whereDate('due_date', '<', $today->toDateString())
+                ->where('remaining_amount', '>', 0)
+        );
 
         $loans = $this->visibleLoanQuery($request)
             ->with(['client', 'operator', 'vehicle', 'installments' => fn ($query) => $query->orderBy('number')])
@@ -104,11 +89,9 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'kpis' => [
-                ['title' => 'Cartera activa', 'value' => Money::mxn(Money::decimal((int) $remainingCents)), 'caption' => 'Saldo contractual pendiente', 'cents' => (int) $remainingCents, 'color' => 'blue'],
-                ['title' => 'Esperado semanal', 'value' => Money::mxn(Money::decimal((int) $expectedWeekCents)), 'caption' => 'Letras vencen esta semana', 'cents' => (int) $expectedWeekCents, 'color' => 'orange'],
-                ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => $periodType === 'year' ? 'Calendario anual' : 'Calendario mensual', 'cents' => (int) $expectedPeriodCents, 'color' => 'yellow'],
-                ['title' => 'Reportado pendiente', 'value' => Money::mxn(Money::decimal((int) $pendingReportedCents)), 'caption' => 'Cobros aun por confirmar', 'cents' => (int) $pendingReportedCents, 'color' => 'green'],
-                ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas no aplicadas', 'cents' => (int) $overdueCents, 'color' => 'red'],
+                ['title' => 'Total a liquidar hoy', 'value' => Money::mxn(Money::decimal((int) $settleTodayCents)), 'caption' => 'Capital futuro e intereses vigentes', 'cents' => (int) $settleTodayCents, 'color' => 'blue'],
+                ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => $periodType === 'year' ? 'Abono e interes anual' : 'Abono e interes mensual', 'cents' => (int) $expectedPeriodCents, 'color' => 'yellow'],
+                ['title' => 'Total vencidos', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Abono e interes vencido', 'cents' => (int) $overdueCents, 'color' => 'red'],
             ],
             'loans' => $loans,
             'cuts' => $cuts,
@@ -146,5 +129,29 @@ class DashboardController extends Controller
         }
 
         return $query;
+    }
+
+    private function operationalPendingCents($query): int
+    {
+        return (int) $query
+            ->get(['principal_amount', 'interest_amount', 'contract_amount', 'remaining_amount'])
+            ->sum(fn (Installment $installment) => $this->installmentOperationalPendingCents($installment));
+    }
+
+    private function installmentOperationalPendingCents(Installment $installment): int
+    {
+        $remainingCents = Money::cents($installment->remaining_amount);
+
+        if ($remainingCents <= 0) {
+            return 0;
+        }
+
+        $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+        if ($operationalCents <= 0) {
+            return $remainingCents;
+        }
+
+        return min($remainingCents, $operationalCents);
     }
 }

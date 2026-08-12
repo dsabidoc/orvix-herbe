@@ -9,7 +9,8 @@
         'green' => ['card' => 'border-emerald-200 bg-emerald-50/80', 'label' => 'text-emerald-700', 'dot' => '#10b981', 'track' => 'bg-emerald-100', 'bar' => 'bg-emerald-500'],
         'red' => ['card' => 'border-red-200 bg-red-50/80', 'label' => 'text-red-700', 'dot' => '#ef4444', 'track' => 'bg-red-100', 'bar' => 'bg-red-500'],
     ];
-    $chartTotal = max(1, collect($kpis)->sum('cents'));
+    $chartDisplayTotal = collect($kpis)->sum('cents');
+    $chartTotal = max(1, $chartDisplayTotal);
     $chartCursor = 0;
     $chartStops = [];
 
@@ -89,7 +90,7 @@
         </form>
     </section>
 
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+    <div class="grid gap-4 md:grid-cols-3">
         @foreach ($kpis as $kpi)
             @php
                 $kpiStyle = $kpiStyles[$kpi['color']];
@@ -109,12 +110,12 @@
         <div class="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-center">
             <div>
                 <h3 class="font-bold text-slate-950">Resumen visual</h3>
-                <p class="mt-1 text-sm text-slate-500">Distribucion de los indicadores del periodo seleccionado.</p>
+                <p class="mt-1 text-sm text-slate-500">Liquidacion, cobranza esperada y vencidos del periodo seleccionado.</p>
                 <div class="mx-auto mt-5 grid size-56 place-items-center rounded-full" style="background: conic-gradient({{ implode(', ', $chartStops) }});">
                     <div class="grid size-28 place-items-center rounded-full bg-white text-center shadow-sm">
                         <div>
                             <p class="text-xs font-semibold uppercase text-slate-500">Total</p>
-                            <p class="mt-1 text-sm font-bold text-slate-950">{{ Money::mxn(Money::decimal($chartTotal)) }}</p>
+                            <p class="mt-1 text-sm font-bold text-slate-950">{{ Money::mxn(Money::decimal($chartDisplayTotal)) }}</p>
                         </div>
                     </div>
                 </div>
