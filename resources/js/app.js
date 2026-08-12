@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (dialog instanceof HTMLDialogElement) {
         dialog.addEventListener('close', () => {
-            if (!['confirm', 'confirm-no-investors'].includes(dialog.returnValue) || !pendingPaidForm) {
+            if (!['confirm', 'confirm-no-investors', 'confirm-capital-advance'].includes(dialog.returnValue) || !pendingPaidForm) {
                 pendingPaidForm = null;
                 return;
             }
@@ -224,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const paymentDateInput = dialog.querySelector('#confirm-paid-date');
             let formPaymentDateInput = pendingPaidForm.querySelector('input[name="operated_on"]');
             let affectsInvestorsInput = pendingPaidForm.querySelector('input[name="affects_investors"]');
+            let paymentEffectInput = pendingPaidForm.querySelector('input[name="payment_effect"]');
 
             if (!(formPaymentDateInput instanceof HTMLInputElement)) {
                 formPaymentDateInput = document.createElement('input');
@@ -243,7 +244,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 pendingPaidForm.appendChild(affectsInvestorsInput);
             }
 
+            if (!(paymentEffectInput instanceof HTMLInputElement)) {
+                paymentEffectInput = document.createElement('input');
+                paymentEffectInput.type = 'hidden';
+                paymentEffectInput.name = 'payment_effect';
+                pendingPaidForm.appendChild(paymentEffectInput);
+            }
+
             affectsInvestorsInput.value = dialog.returnValue === 'confirm-no-investors' ? '0' : '1';
+            paymentEffectInput.value = {
+                'confirm-no-investors': 'no_investors',
+                'confirm-capital-advance': 'capital_advance',
+            }[dialog.returnValue] || 'normal';
 
             pendingPaidForm.dataset.confirmed = 'true';
             pendingPaidForm.requestSubmit();

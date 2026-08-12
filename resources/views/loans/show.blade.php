@@ -254,7 +254,19 @@
                 @endif
             </div>
             <div class="max-h-[560px] overflow-x-auto overflow-y-auto">
-                <table class="w-full min-w-[1040px] text-left text-sm">
+                <table class="w-full min-w-[1040px] table-fixed text-left text-sm">
+                    <colgroup>
+                        <col class="w-[44px]">
+                        <col class="w-[68px]">
+                        <col class="w-[116px]">
+                        <col class="w-[104px]">
+                        <col class="w-[108px]">
+                        <col>
+                        <col>
+                        <col>
+                        <col>
+                        <col>
+                    </colgroup>
                     <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
                             <th class="px-4 py-3">
@@ -264,8 +276,8 @@
                             </th>
                             <th class="px-4 py-3">Letra</th>
                             <th class="px-4 py-3">Fecha</th>
-                            <th class="px-4 py-3">Estatus</th>
-                            <th class="px-4 py-3 text-right">Pagado</th>
+                            <th class="px-2 py-3">Estatus</th>
+                            <th class="px-2 py-3 text-right">Pagado</th>
                             <th class="px-4 py-3 text-right">Abono a Capital</th>
                             <th class="px-4 py-3 text-right">Interes</th>
                             <th class="px-4 py-3 text-right">Subtotal</th>
@@ -298,10 +310,10 @@
                                 </td>
                                 <td class="px-4 py-2 font-semibold">{{ $installment->number }}</td>
                                 <td class="px-4 py-2">{{ $installment->due_date->format('d/m/Y') }}</td>
-                                <td class="px-4 py-2">
+                                <td class="px-2 py-2">
                                     <span class="{{ $statusClass }} rounded px-2 py-1 text-xs font-bold">{{ $statusLabel }}</span>
                                 </td>
-                                <td class="px-4 py-2 text-right">
+                                <td class="px-2 py-2 text-right">
                                     @if (Money::cents($installment->remaining_amount) > 0 && ! $movement)
                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid>
                                             @csrf

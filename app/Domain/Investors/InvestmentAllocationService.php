@@ -293,10 +293,12 @@ class InvestmentAllocationService
                     continue;
                 }
 
-                if ($movement->type === 'advance') {
+                if (in_array($movement->type, ['advance', 'capital_advance'], true)) {
                     $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
                     $currentMonthEnd = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->endOfMonth();
-                    $interestCents = $dueDate->greaterThan($currentMonthEnd) ? 0 : (int) round(Money::cents($installment->interest_amount) * min(1, $appliedCents / $contractCents));
+                    $interestCents = $movement->type === 'capital_advance' || $dueDate->greaterThan($currentMonthEnd)
+                        ? 0
+                        : (int) round(Money::cents($installment->interest_amount) * min(1, $appliedCents / $contractCents));
                     $principalCents = $appliedCents;
                 } else {
                     $paidRatio = min(1, $appliedCents / $contractCents);

@@ -121,10 +121,19 @@ class CollectionController extends Controller
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'delinquency_amount' => ['nullable', 'numeric', 'min:0'],
             'affects_investors' => ['nullable', 'boolean'],
+            'payment_effect' => ['nullable', 'in:normal,no_investors,capital_advance'],
             'notes' => ['nullable', 'string', 'max:500'],
             'return_to' => ['nullable', 'string', 'max:20'],
             'cut_id' => ['nullable', 'exists:weekly_cuts,id'],
         ]);
+
+        $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
+        $movementType = $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary';
+        $contractAmountCents = $paymentEffect === 'capital_advance'
+            ? $this->capitalAdvanceAmountCents($installment)
+            : Money::cents($data['contract_amount']);
+
+        abort_if($contractAmountCents <= 0, 422, 'Esta letra no tiene abono a capital disponible.');
 
         $selectedCut = null;
         if (($data['return_to'] ?? null) === 'cut') {
@@ -139,23 +148,23 @@ class CollectionController extends Controller
         $movement = CollectionMovement::query()->create([
             'public_id' => (string) Str::ulid(),
             'folio' => 'MOV-'.$registeredAt->format('ymd').'-'.str_pad((string) (CollectionMovement::query()->count() + 1), 4, '0', STR_PAD_LEFT),
-            'idempotency_key' => sha1('installment|'.$installment->id.'|'.$data['operated_on'].'|'.Money::decimal(Money::cents($data['contract_amount']))),
+            'idempotency_key' => sha1('installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents)),
             'loan_id' => $installment->loan_id,
             'target_installment_id' => $installment->id,
             'operator_id' => $installment->loan->operator_id,
             'registered_by' => $request->user()->id,
             'operated_on' => $data['operated_on'],
             'registered_at' => $registeredAt,
-            'contract_amount' => Money::decimal(Money::cents($data['contract_amount'])),
+            'contract_amount' => Money::decimal($contractAmountCents),
             'operator_surcharge_amount' => Money::decimal(Money::cents($data['operator_surcharge_amount'] ?? 0)),
             'external_concepts_amount' => Money::decimal(Money::cents($data['external_concepts_amount'] ?? 0)),
             'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
             'delinquency_amount' => Money::decimal(Money::cents($data['delinquency_amount'] ?? 0)),
-            'affects_investors' => (bool) ($data['affects_investors'] ?? true),
+            'affects_investors' => $paymentEffect !== 'no_investors',
             'origin_weekly_cut_id' => $selectedCut?->id,
-            'type' => 'ordinary',
+            'type' => $movementType,
             'payment_method' => 'cash',
-            'notes' => $data['notes'] ?? 'Marcado pagado desde cobranza',
+            'notes' => $data['notes'] ?? ($paymentEffect === 'capital_advance' ? 'Marcado como abono a capital desde cobranza' : 'Marcado pagado desde cobranza'),
             'confirmation_status' => 'reported',
         ]);
 
@@ -193,6 +202,7 @@ class CollectionController extends Controller
             'loan_id' => ['required', 'exists:loans,id'],
             'operated_on' => ['required', 'date'],
             'affects_investors' => ['nullable', 'boolean'],
+            'payment_effect' => ['nullable', 'in:normal,no_investors,capital_advance'],
             'return_to' => ['nullable', 'string', 'max:20'],
         ]);
 
@@ -222,26 +232,38 @@ class CollectionController extends Controller
                 continue;
             }
 
+            $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
+            $movementType = $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary';
+            $contractAmountCents = $paymentEffect === 'capital_advance'
+                ? $this->capitalAdvanceAmountCents($installment)
+                : Money::cents($installment->remaining_amount);
+
+            if ($contractAmountCents <= 0) {
+                continue;
+            }
+
             $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
             $movement = CollectionMovement::query()->create([
                 'public_id' => (string) Str::ulid(),
                 'folio' => 'MOV-'.$registeredAt->format('ymd').'-'.str_pad((string) (CollectionMovement::query()->count() + 1), 4, '0', STR_PAD_LEFT),
-                'idempotency_key' => sha1('bulk-installment|'.$installment->id.'|'.$data['operated_on'].'|'.Money::decimal(Money::cents($installment->remaining_amount))),
+                'idempotency_key' => sha1('bulk-installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents)),
                 'loan_id' => $installment->loan_id,
                 'target_installment_id' => $installment->id,
                 'operator_id' => $installment->loan->operator_id,
                 'registered_by' => $request->user()->id,
                 'operated_on' => $data['operated_on'],
                 'registered_at' => $registeredAt,
-                'contract_amount' => Money::decimal(Money::cents($installment->remaining_amount)),
+                'contract_amount' => Money::decimal($contractAmountCents),
                 'operator_surcharge_amount' => '0.00',
                 'external_concepts_amount' => '0.00',
                 'additional_charge_amount' => '0.00',
                 'delinquency_amount' => '0.00',
-                'affects_investors' => (bool) ($data['affects_investors'] ?? true),
-                'type' => 'ordinary',
+                'affects_investors' => $paymentEffect !== 'no_investors',
+                'type' => $movementType,
                 'payment_method' => 'cash',
-                'notes' => 'Marcado pagado en bloque desde calendario contractual',
+                'notes' => $paymentEffect === 'capital_advance'
+                    ? 'Marcado como abono a capital en bloque desde calendario contractual'
+                    : 'Marcado pagado en bloque desde calendario contractual',
                 'confirmation_status' => 'reported',
             ]);
 
@@ -270,6 +292,20 @@ class CollectionController extends Controller
         }
 
         return $request->filled('operator_id') ? (int) $request->input('operator_id') : null;
+    }
+
+    private function capitalAdvanceAmountCents(Installment $installment): int
+    {
+        $remainingCents = Money::cents($installment->remaining_amount);
+        $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+        if ($remainingCents <= 0 || $operationalCents <= 0) {
+            return 0;
+        }
+
+        $ratio = min(1, $remainingCents / $operationalCents);
+
+        return min($remainingCents, (int) round(Money::cents($installment->principal_amount) * $ratio));
     }
 
     private function authorizeInstallmentAccess(Request $request, Installment $installment): void

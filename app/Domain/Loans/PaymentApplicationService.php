@@ -40,6 +40,7 @@ class PaymentApplicationService
             $remainingCents = Money::cents($movement->contract_amount);
             $installments = $movement->loan->installments()
                 ->where('remaining_amount', '>', 0)
+                ->when($this->isDirectCapitalAdvance($movement), fn ($query) => $query->whereKey($movement->target_installment_id))
                 ->when(
                     $movement->type === 'advance',
                     fn ($query) => $query->orderByDesc('number'),
@@ -50,9 +51,15 @@ class PaymentApplicationService
                 ->lockForUpdate()
                 ->get();
 
-            if ($movement->type === 'advance') {
+            $advanceAllowed = [];
+            if ($this->isCapitalAdvance($movement)) {
                 $advanceAllowed = $this->advanceAllowedAmounts($movement, $installments);
+            }
+
+            if ($movement->type === 'advance') {
                 $this->assertAdvanceCoversAllowedAmounts($remainingCents, $advanceAllowed);
+            } elseif ($this->isDirectCapitalAdvance($movement)) {
+                $this->assertDirectCapitalAdvanceAmount($remainingCents, $advanceAllowed);
             }
 
             foreach ($installments as $installment) {
@@ -60,7 +67,7 @@ class PaymentApplicationService
                     break;
                 }
 
-                $installmentRemaining = $movement->type === 'advance'
+                $installmentRemaining = $this->isCapitalAdvance($movement)
                     ? ($advanceAllowed[$installment->id] ?? 0)
                     : Money::cents($installment->remaining_amount);
 
@@ -69,7 +76,7 @@ class PaymentApplicationService
                 }
 
                 $applied = min($remainingCents, $installmentRemaining);
-                $totalRemainingAfter = $movement->type === 'advance' && $applied === $installmentRemaining
+                $totalRemainingAfter = $this->isCapitalAdvance($movement) && $applied === $installmentRemaining
                     ? 0
                     : Money::cents($installment->remaining_amount) - $applied;
                 $newApplied = Money::cents($installment->applied_amount) + $applied;
@@ -154,7 +161,7 @@ class PaymentApplicationService
                     $allocationCents = Money::cents($allocation->amount);
                     $appliedCents = max(0, Money::cents($installment->applied_amount) - $allocationCents);
                     $contractCents = $this->operationalCents($installment);
-                    $remainingCents = $movement->type === 'advance'
+                    $remainingCents = $this->isCapitalAdvance($movement)
                         ? $contractCents
                         : Money::cents($installment->remaining_amount) + $allocationCents;
 
@@ -203,7 +210,7 @@ class PaymentApplicationService
 
     private function statusForCoveredInstallment(string $movementType): string
     {
-        return $movementType === 'advance' ? 'advanced' : 'confirmed';
+        return in_array($movementType, ['advance', 'capital_advance'], true) ? 'advanced' : 'confirmed';
     }
 
     /**
@@ -247,6 +254,18 @@ class PaymentApplicationService
         throw new RuntimeException('El abono a capital debe liquidar cuotas completas desde la ultima letra; no se permiten abonos parciales arbitrarios.');
     }
 
+    /**
+     * @param  array<int, int>  $allowedAmounts
+     */
+    private function assertDirectCapitalAdvanceAmount(int $amountCents, array $allowedAmounts): void
+    {
+        if ($amountCents === array_sum($allowedAmounts)) {
+            return;
+        }
+
+        throw new RuntimeException('El abono a capital de esta letra debe cubrir exactamente el abono a capital pendiente.');
+    }
+
     private function recordInvestorReturns(CollectionMovement $movement, $installment, int $appliedCents, int $userId): void
     {
         $contractCents = $this->operationalCents($installment);
@@ -255,7 +274,7 @@ class PaymentApplicationService
             return;
         }
 
-        if ($movement->type === 'advance') {
+        if ($this->isCapitalAdvance($movement)) {
             $this->investorReturnRecorder->record($movement->loan, $installment, $appliedCents, 0, $movement, $userId);
 
             return;
@@ -273,6 +292,16 @@ class PaymentApplicationService
         $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
 
         return $operationalCents > 0 ? $operationalCents : Money::cents($installment->contract_amount);
+    }
+
+    private function isCapitalAdvance(CollectionMovement $movement): bool
+    {
+        return in_array($movement->type, ['advance', 'capital_advance'], true);
+    }
+
+    private function isDirectCapitalAdvance(CollectionMovement $movement): bool
+    {
+        return $movement->type === 'capital_advance' && filled($movement->target_installment_id);
     }
 
     private function reverseInvestorReturns(CollectionMovement $movement, int $userId): void
