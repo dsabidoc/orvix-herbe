@@ -94,9 +94,19 @@
                         <option value="regular" @selected(old('calculation_method') === 'regular')>Prestamo regular</option>
                     </select>
                 </label>
-                <label class="block text-sm font-semibold text-slate-700">Capital requerido
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="capital" placeholder="Ej. 100000" type="number" step="0.01" value="{{ old('capital') }}" required>
-                </label>
+                <div class="grid gap-3 md:grid-cols-2">
+                    <label class="block text-sm font-semibold text-slate-700">Capital requerido
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="capital" placeholder="Ej. 100000" type="number" step="0.01" value="{{ old('capital') }}" required>
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">Meses
+                        <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="term_months" required>
+                            <option value="">Meses</option>
+                            @foreach ($terms as $term)
+                                <option value="{{ $term }}" @selected((string) old('term_months') === (string) $term)>{{ $term }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <label class="block text-sm font-semibold text-slate-700">Tipo de tasa
                         <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="rate_type" required>
@@ -144,19 +154,9 @@
                         <option value="outstanding_balance" @selected(old('interest_calculation_method') === 'outstanding_balance')>Interes sobre saldo insoluto</option>
                     </select>
                 </label>
-                <div class="grid grid-cols-3 gap-3">
-                    <label class="block text-sm font-semibold text-slate-700">Meses
-                        <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="term_months" required>
-                            <option value="">Meses</option>
-                            @foreach ($terms as $term)
-                                <option value="{{ $term }}" @selected((string) old('term_months') === (string) $term)>{{ $term }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                    <label class="col-span-2 block text-sm font-semibold text-slate-700">Dia de pago
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ $defaultPaymentDay }}" data-sync-payment-day-target required>
-                    </label>
-                </div>
+                <label class="block text-sm font-semibold text-slate-700">Dia de pago
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ $defaultPaymentDay }}" data-sync-payment-day-target required>
+                </label>
             </section>
         </div>
         <div class="mt-5">
