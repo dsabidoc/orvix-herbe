@@ -14,6 +14,8 @@
     $canOperateLoan = ! $isInvestorReadOnly;
     $canReverseInstallmentPayment = $loanUser->can('payments.confirm') && ! $loanUser->hasRole('operador-cartera');
     $settlementTodayCents = $settlementQuote['total_cents'] ?? 0;
+    $vehicleTitle = trim(implode(' ', array_filter([$loan->vehicle?->brand, $loan->vehicle?->model, $loan->vehicle?->year])));
+    $vehicleTitle = $vehicleTitle !== '' ? $vehicleTitle : 'Vehiculo sin datos';
     $nextDelinquencyCents = 0;
     if ($next && (float) ($loan->delinquency_rate ?? 0) > 0) {
         $graceLimit = $next->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
@@ -35,10 +37,13 @@
         <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <p class="text-sm font-semibold text-[#0f766e]">{{ $loan->operator?->name }} · {{ $loan->vehicle?->model }} {{ $loan->vehicle?->year }}</p>
-                    <h3 class="mt-1 text-xl font-bold text-slate-950">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</h3>
+                    <p class="text-sm font-semibold text-[#0f766e]">{{ $loan->operator?->name }} · {{ $loan->folio }}</p>
+                    <h3 class="mt-1 text-2xl font-bold text-slate-950">{{ $vehicleTitle }}</h3>
+                    <p class="mt-1 text-base font-semibold text-slate-700">
+                        Dia de pago {{ $loan->payment_day }} · {{ $loan->client->first_name }} {{ $loan->client->last_name }}
+                    </p>
                     <p class="mt-1 text-sm text-slate-500">
-                        Dia de pago {{ $loan->payment_day }} · {{ $loan->term_months }} meses · tasa {{ number_format(((float) $loan->monthly_rate) * 100, 2) }}% mensual · {{ $interestMethodLabel }} · {{ $loan->vat_enabled ? 'Con IVA' : 'Sin IVA' }}
+                        {{ $loan->term_months }} meses · tasa {{ number_format(((float) $loan->monthly_rate) * 100, 2) }}% mensual · {{ $interestMethodLabel }} · {{ $loan->vat_enabled ? 'Con IVA' : 'Sin IVA' }}
                         @if (Money::cents($loan->administration_fee ?? 0) > 0)
                             · Gtos Admon {{ Money::mxn($loan->administration_fee) }} fijo mensual
                         @endif
