@@ -178,6 +178,12 @@ html[data-theme='dark'] .bg-blue-100 {
     background-color: rgba(37, 99, 235, 0.14) !important;
 }
 
+html[data-theme='dark'] .bg-indigo-50,
+html[data-theme='dark'] .bg-indigo-50\/80,
+html[data-theme='dark'] .bg-indigo-100 {
+    background-color: rgba(99, 102, 241, 0.15) !important;
+}
+
 html[data-theme='dark'] .bg-orange-50\/80,
 html[data-theme='dark'] .bg-orange-100 {
     background-color: rgba(249, 115, 22, 0.13) !important;
@@ -241,6 +247,11 @@ html[data-theme='dark'] .text-blue-800 {
     color: #93c5fd !important;
 }
 
+html[data-theme='dark'] .text-indigo-700,
+html[data-theme='dark'] .text-indigo-800 {
+    color: #a5b4fc !important;
+}
+
 html[data-theme='dark'] .text-orange-700 {
     color: #fdba74 !important;
 }
@@ -275,6 +286,10 @@ html[data-theme='dark'] .border-emerald-200 {
 
 html[data-theme='dark'] .border-blue-200 {
     border-color: rgba(96, 165, 250, 0.42) !important;
+}
+
+html[data-theme='dark'] .ring-indigo-100 {
+    --tw-ring-color: rgba(129, 140, 248, 0.42) !important;
 }
 
 html[data-theme='dark'] .border-orange-200 {
