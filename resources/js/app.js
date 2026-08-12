@@ -131,6 +131,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    document.querySelectorAll('[data-loan-purchase-date]').forEach((input) => {
+        input.addEventListener('change', () => {
+            if (!(input instanceof HTMLInputElement) || !input.value) {
+                return;
+            }
+
+            const form = input.closest('form');
+            const firstPaymentInput = form?.querySelector('input[name="first_payment_date"]');
+            const disbursementInput = form?.querySelector('input[name="disbursement_delivered_on"]');
+            const [year, month, day] = input.value.split('-').map((part) => Number(part));
+
+            if (!year || !month || !day) {
+                return;
+            }
+
+            const targetYear = month === 12 ? year + 1 : year;
+            const targetMonthIndex = month === 12 ? 0 : month;
+            const lastTargetDay = new Date(Date.UTC(targetYear, targetMonthIndex + 1, 0)).getUTCDate();
+            const nextMonthDate = new Date(Date.UTC(targetYear, targetMonthIndex, Math.min(day, lastTargetDay)));
+
+            const nextMonthValue = nextMonthDate.toISOString().slice(0, 10);
+
+            if (firstPaymentInput instanceof HTMLInputElement) {
+                firstPaymentInput.value = nextMonthValue;
+                firstPaymentInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            if (disbursementInput instanceof HTMLInputElement) {
+                disbursementInput.value = input.value;
+            }
+        });
+    });
+
     const bulkPaymentForm = document.querySelector('[data-bulk-payment-form]');
     const bulkPaymentToggle = document.querySelector('[data-bulk-payment-toggle]');
     const bulkPaymentCheckboxes = Array.from(document.querySelectorAll('[data-bulk-payment-checkbox]'));

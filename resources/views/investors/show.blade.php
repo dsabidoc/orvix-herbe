@@ -1,7 +1,10 @@
 @php
     use App\Support\Money;
 
-    $investedCents = $investor->investments->where('status', 'active')->sum(fn ($investment) => Money::cents($investment->amount));
+    $investedCents = $investor->investments
+        ->filter(fn ($investment) => $investment->status === 'active' && $investment->loan?->status === 'active')
+        ->sum(fn ($investment) => Money::cents($investment->amount));
+    $capitalTotalCents = Money::cents($investor->available_capital) + Money::cents($investor->returned_capital_balance);
     $estimatedInterestCents = $investor->investments->sum(function ($investment) {
         return $investment->loan?->installments?->sum(fn ($installment) => (int) round(\App\Support\Money::cents($installment->interest_amount) * (float) $investment->investor_share_rate)) ?? 0;
     });
@@ -18,8 +21,9 @@
                 </div>
                 <span class="self-start rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ $investor->status === 'active' ? 'Activo' : 'Inactivo' }}</span>
             </div>
-            <dl class="mt-5 grid gap-3 md:grid-cols-4">
-                <div class="rounded-md bg-blue-50 p-3 ring-1 ring-blue-100"><dt class="text-sm text-blue-700">Capital disponible</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->available_capital) }}</dd></div>
+            <dl class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div class="rounded-md bg-blue-50 p-3 ring-1 ring-blue-100"><dt class="text-sm text-blue-700">Capital total</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($capitalTotalCents)) }}</dd></div>
+                <div class="rounded-md bg-indigo-50 p-3 ring-1 ring-indigo-100"><dt class="text-sm text-indigo-700">Capital disponible</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->available_capital) }}</dd></div>
                 <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Capital invertido</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($investedCents)) }}</dd></div>
                 <div class="rounded-md bg-emerald-50 p-3 ring-1 ring-emerald-100"><dt class="text-sm text-emerald-700">Capital retornado</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->returned_capital_balance) }}</dd></div>
                 <div class="rounded-md bg-amber-50 p-3 ring-1 ring-amber-100"><dt class="text-sm text-amber-700">Interes generado</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->generated_interest_balance) }}</dd></div>

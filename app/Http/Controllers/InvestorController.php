@@ -156,33 +156,29 @@ class InvestorController extends Controller
 
         $data = $request->validate([
             'initial_capital' => ['required', 'numeric', 'min:0'],
+            'available_capital' => ['required', 'numeric'],
         ]);
 
         DB::transaction(function () use ($request, $investor, $data, $ledger) {
             $investor = Investor::query()->whereKey($investor->id)->lockForUpdate()->firstOrFail();
 
-            $oldInitialCents = Money::cents($investor->initial_capital);
             $newInitialCents = Money::cents($data['initial_capital']);
-            $deltaCents = $newInitialCents - $oldInitialCents;
-
-            if ($deltaCents < 0 && Money::cents($investor->available_capital) + $deltaCents < 0) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'initial_capital' => 'No se puede bajar el capital inicial por debajo del capital disponible actual.',
-                ]);
-            }
+            $oldAvailableCents = Money::cents($investor->available_capital);
+            $newAvailableCents = Money::cents($data['available_capital']);
+            $availableDeltaCents = $newAvailableCents - $oldAvailableCents;
 
             $investor->forceFill([
                 'initial_capital' => Money::decimal($newInitialCents),
             ])->save();
 
-            if ($deltaCents > 0) {
-                $ledger->creditAvailable($investor, $deltaCents, 'initial_capital_adjusted', $request->user()->id, notes: 'Ajuste de capital inicial');
-            } elseif ($deltaCents < 0) {
-                $ledger->debitAvailable($investor, abs($deltaCents), 'initial_capital_adjusted', $request->user()->id, notes: 'Ajuste de capital inicial');
+            if ($availableDeltaCents > 0) {
+                $ledger->creditAvailable($investor, $availableDeltaCents, 'available_capital_adjusted', $request->user()->id, notes: 'Ajuste manual de capital disponible');
+            } elseif ($availableDeltaCents < 0) {
+                $ledger->debitAvailable($investor, abs($availableDeltaCents), 'available_capital_adjusted', $request->user()->id, notes: 'Ajuste manual de capital disponible');
             }
         });
 
-        return back()->with('status', 'Capital inicial actualizado.');
+        return back()->with('status', 'Capital del inversionista actualizado.');
     }
 
     public function destroy(Request $request, Investor $investor): RedirectResponse

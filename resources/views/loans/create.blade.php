@@ -1,6 +1,7 @@
 @php
     $defaultStartDate = old('start_date', now('America/Merida')->toDateString());
-    $defaultFirstPaymentDate = old('first_payment_date', now('America/Merida')->toDateString());
+    $defaultFirstPaymentDate = old('first_payment_date', \Carbon\CarbonImmutable::parse($defaultStartDate)->addMonthNoOverflow()->toDateString());
+    $defaultDisbursementDate = old('disbursement_delivered_on', $defaultStartDate);
     $defaultPaymentDay = old('payment_day', \Carbon\CarbonImmutable::parse($defaultFirstPaymentDate)->day);
 @endphp
 
@@ -120,13 +121,13 @@
                     </label>
                 </div>
                 <label class="block text-sm font-semibold text-slate-700">Fecha de compra
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $defaultStartDate }}" required>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $defaultStartDate }}" data-loan-purchase-date required>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Fecha de vencimiento
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_payment_date" type="date" value="{{ $defaultFirstPaymentDate }}" data-sync-payment-day-source required>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Fecha real de entrega/desembolso
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="disbursement_delivered_on" type="date" value="{{ old('disbursement_delivered_on', now('America/Merida')->toDateString()) }}">
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="disbursement_delivered_on" type="date" value="{{ $defaultDisbursementDate }}">
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Nota de entrega
                     <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="disbursement_notes" rows="2" placeholder="Opcional">{{ old('disbursement_notes') }}</textarea>

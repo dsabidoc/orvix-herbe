@@ -90,7 +90,10 @@
                     <label class="block text-sm font-semibold text-slate-700">Capital inicial
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="initial_capital" type="number" step="0.01" min="0" value="{{ old('initial_capital', $investor->initial_capital) }}">
                     </label>
-                    <p class="text-xs text-slate-500">El ajuste aumenta o disminuye tambien el capital disponible. Si parte del capital ya fue usado, no se podra bajar mas de lo disponible.</p>
+                    <label class="block text-sm font-semibold text-slate-700">Capital disponible
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="available_capital" type="number" step="0.01" value="{{ old('available_capital', $investor->available_capital) }}">
+                    </label>
+                    <p class="text-xs text-slate-500">El capital disponible se ajusta directo y queda registrado en movimientos. Puede ser negativo durante la carga inicial si el capital asignado supera el saldo capturado.</p>
                 </div>
                 <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
                     <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>
