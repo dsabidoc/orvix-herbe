@@ -609,7 +609,7 @@
                         </tbody>
                     </table>
                 </div>
-                <p class="text-sm text-slate-500">La suma de capital debe ser exactamente {{ Money::mxn($loan->capital) }} y la suma de porcentajes debe ser exactamente 100%.</p>
+                <p class="text-sm text-slate-500">La suma de capital debe ser exactamente {{ Money::mxn($loan->capital) }} y la suma de porcentajes debe ser exactamente 100%. Si dejas todos los inversionistas en blanco, el prestamo quedara sin inversionistas asignados.</p>
             </div>
             <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
                 <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>

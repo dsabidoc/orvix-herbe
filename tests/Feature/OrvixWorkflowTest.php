@@ -1052,6 +1052,51 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame(-8000000, Money::cents($investor->fresh()->available_capital));
     }
 
+    public function test_can_unassign_all_investors_from_loan_during_initial_load(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+        $investor = Investor::query()->where('available_capital', '>=', 80000)->firstOrFail();
+        $availableBeforeCents = Money::cents($investor->available_capital);
+
+        $this->actingAs($admin)
+            ->post(route('loans.store'), [
+                'first_name' => 'Cliente Desasignar Inversionista',
+                'operator_id' => $operator->id,
+                'capital' => '80000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'payment_day' => 10,
+                'start_date' => '2026-08-05',
+                'first_payment_date' => '2026-08-10',
+                'investors' => [
+                    ['investor_id' => $investor->id, 'capital_amount' => '80000', 'interest_share_percent' => '100'],
+                ],
+            ])
+            ->assertRedirect();
+
+        $loan = Loan::query()
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Desasignar Inversionista'))
+            ->firstOrFail();
+
+        $this->assertSame($availableBeforeCents - 8000000, Money::cents($investor->fresh()->available_capital));
+
+        $this->actingAs($admin)
+            ->post(route('loans.investments.store', $loan), [
+                'investors' => [
+                    ['investor_id' => null, 'capital_amount' => '0', 'interest_share_percent' => '0'],
+                ],
+            ])
+            ->assertRedirect(route('loans.show', $loan));
+
+        $this->assertSame(0, $loan->investments()->count());
+        $this->assertSame($availableBeforeCents, Money::cents($investor->fresh()->available_capital));
+    }
+
     public function test_assigning_investors_after_confirmed_payment_replays_returns(): void
     {
         $this->seed(DatabaseSeeder::class);

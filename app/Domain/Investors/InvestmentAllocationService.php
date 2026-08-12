@@ -99,7 +99,7 @@ class InvestmentAllocationService
      */
     public function assignFromInput(Loan $loan, array $input, ?int $userId = null): void
     {
-        $participants = $this->participants($input, Money::cents($loan->capital), $loan);
+        $participants = $this->participants($input, Money::cents($loan->capital), $loan, allowEmpty: true);
 
         DB::transaction(function () use ($loan, $participants, $userId) {
             $loan = Loan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
