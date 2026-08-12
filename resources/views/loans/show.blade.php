@@ -13,6 +13,7 @@
     $isInvestorReadOnly = $loanUser->can('investments.view-own') && ! $loanUser->can('investors.manage');
     $canOperateLoan = ! $isInvestorReadOnly;
     $canReverseInstallmentPayment = $loanUser->can('payments.confirm') && ! $loanUser->hasRole('operador-cartera');
+    $settlementTodayCents = $settlementQuote['total_cents'] ?? 0;
     $nextDelinquencyCents = 0;
     if ($next && (float) ($loan->delinquency_rate ?? 0) > 0) {
         $graceLimit = $next->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
@@ -67,7 +68,7 @@
                 </div>
             </div>
 
-            <dl class="mt-5 grid gap-3 md:grid-cols-4">
+            <dl class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <div class="rounded-md bg-slate-50 p-3">
                     <dt class="text-sm text-slate-500">Capital</dt>
                     <dd class="mt-1 font-bold">{{ Money::mxn($loan->capital) }}</dd>
@@ -83,6 +84,10 @@
                 <div class="rounded-md bg-slate-50 p-3">
                     <dt class="text-sm text-slate-500">Saldo</dt>
                     <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($balance)) }}</dd>
+                </div>
+                <div class="rounded-md bg-red-50 p-3">
+                    <dt class="text-sm text-red-700">Liquidar hoy</dt>
+                    <dd class="mt-1 font-bold text-red-700">{{ Money::mxn(Money::decimal($settlementTodayCents)) }}</dd>
                 </div>
             </dl>
             @if ($overdueCount > 0)

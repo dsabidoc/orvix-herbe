@@ -396,7 +396,8 @@ class OrvixWorkflowTest extends TestCase
             ->firstOrFail();
         $lastInstallment = $loan->installments->first();
         $remainingBefore = $lastInstallment->remaining_amount;
-        $invalidAmount = Money::decimal(Money::cents($remainingBefore) + 100);
+        $lastPrincipalCents = Money::cents($lastInstallment->principal_amount);
+        $invalidAmount = Money::decimal($lastPrincipalCents + 100);
 
         $movement = CollectionMovement::query()->create([
             'public_id' => (string) str()->ulid(),
@@ -419,6 +420,46 @@ class OrvixWorkflowTest extends TestCase
             ->assertSessionHas('warning');
 
         $this->assertSame($remainingBefore, $lastInstallment->fresh()->remaining_amount);
+    }
+
+    public function test_advance_payment_covers_last_installment_with_principal_only(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $loan = Loan::query()
+            ->where('status', 'active')
+            ->whereHas('installments', fn ($query) => $query->where('remaining_amount', '>', 0)->where('principal_amount', '>', 0))
+            ->with(['installments' => fn ($query) => $query->where('remaining_amount', '>', 0)->orderByDesc('number')])
+            ->firstOrFail();
+        $lastInstallment = $loan->installments->first();
+        $principalOnly = Money::decimal(Money::cents($lastInstallment->principal_amount));
+
+        $movement = CollectionMovement::query()->create([
+            'public_id' => (string) str()->ulid(),
+            'folio' => 'MOV-ADV-PRINCIPAL-TEST',
+            'idempotency_key' => (string) str()->uuid(),
+            'loan_id' => $loan->id,
+            'operator_id' => $loan->operator_id,
+            'registered_by' => $admin->id,
+            'operated_on' => '2026-08-10',
+            'contract_amount' => $principalOnly,
+            'operator_surcharge_amount' => '0.00',
+            'external_concepts_amount' => '0.00',
+            'type' => 'advance',
+            'payment_method' => 'cash',
+            'confirmation_status' => 'reported',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('payments.confirm', $movement))
+            ->assertSessionHas('status');
+
+        $lastInstallment->refresh();
+
+        $this->assertSame('advanced', $lastInstallment->status);
+        $this->assertSame(0, Money::cents($lastInstallment->remaining_amount));
+        $this->assertSame(Money::cents($principalOnly), Money::cents($lastInstallment->applied_amount));
     }
 
     public function test_settlement_charges_future_principal_without_future_interest(): void

@@ -11,7 +11,6 @@ use App\Models\InvestorCapitalMovement;
 use App\Models\PaymentAllocation;
 use App\Models\WeeklyCutItem;
 use App\Support\Money;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -62,7 +61,7 @@ class PaymentApplicationService
                 }
 
                 $installmentRemaining = $movement->type === 'advance'
-                    ? min(Money::cents($installment->remaining_amount), $advanceAllowed[$installment->id] ?? 0)
+                    ? ($advanceAllowed[$installment->id] ?? 0)
                     : Money::cents($installment->remaining_amount);
 
                 if ($installmentRemaining <= 0) {
@@ -70,8 +69,9 @@ class PaymentApplicationService
                 }
 
                 $applied = min($remainingCents, $installmentRemaining);
-                $newRemaining = $installmentRemaining - $applied;
-                $totalRemainingAfter = Money::cents($installment->remaining_amount) - $applied;
+                $totalRemainingAfter = $movement->type === 'advance' && $applied === $installmentRemaining
+                    ? 0
+                    : Money::cents($installment->remaining_amount) - $applied;
                 $newApplied = Money::cents($installment->applied_amount) + $applied;
 
                 $installment->update([
@@ -153,8 +153,10 @@ class PaymentApplicationService
                     $installment = $allocation->installment()->lockForUpdate()->firstOrFail();
                     $allocationCents = Money::cents($allocation->amount);
                     $appliedCents = max(0, Money::cents($installment->applied_amount) - $allocationCents);
-                    $remainingCents = Money::cents($installment->remaining_amount) + $allocationCents;
                     $contractCents = $this->operationalCents($installment);
+                    $remainingCents = $movement->type === 'advance'
+                        ? $contractCents
+                        : Money::cents($installment->remaining_amount) + $allocationCents;
 
                     $installment->update([
                         'applied_amount' => Money::decimal($appliedCents),
@@ -209,19 +211,15 @@ class PaymentApplicationService
      */
     private function advanceAllowedAmounts(CollectionMovement $movement, $installments): array
     {
-        $operatedOn = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->startOfDay();
-        $currentMonthEnd = $operatedOn->endOfMonth();
         $allowed = [];
 
         foreach ($installments as $installment) {
-            $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
             $remainingCents = Money::cents($installment->remaining_amount);
             $contractCents = $this->operationalCents($installment);
             $ratio = $contractCents > 0 ? min(1, $remainingCents / $contractCents) : 0;
+            $principalCents = (int) round(Money::cents($installment->principal_amount) * $ratio);
 
-            $allowed[$installment->id] = $dueDate->greaterThan($currentMonthEnd)
-                ? min($remainingCents, (int) round(Money::cents($installment->principal_amount) * $ratio))
-                : $remainingCents;
+            $allowed[$installment->id] = min($remainingCents, $principalCents);
         }
 
         return array_filter($allowed, fn (int $amount) => $amount > 0);
@@ -258,10 +256,7 @@ class PaymentApplicationService
         }
 
         if ($movement->type === 'advance') {
-            $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
-            $currentMonthEnd = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->endOfMonth();
-            $interestCents = $dueDate->greaterThan($currentMonthEnd) ? 0 : (int) round(Money::cents($installment->interest_amount) * min(1, $appliedCents / $contractCents));
-            $this->investorReturnRecorder->record($movement->loan, $installment, $appliedCents, $interestCents, $movement, $userId);
+            $this->investorReturnRecorder->record($movement->loan, $installment, $appliedCents, 0, $movement, $userId);
 
             return;
         }
