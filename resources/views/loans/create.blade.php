@@ -3,6 +3,14 @@
     $defaultFirstPaymentDate = old('first_payment_date', \Carbon\CarbonImmutable::parse($defaultStartDate)->addMonthNoOverflow()->toDateString());
     $defaultDisbursementDate = old('disbursement_delivered_on', $defaultStartDate);
     $defaultPaymentDay = old('payment_day', \Carbon\CarbonImmutable::parse($defaultFirstPaymentDate)->day);
+    $clientPrefill = $clients->mapWithKeys(fn ($client) => [
+        $client->id => [
+            'first_name' => $client->first_name,
+            'last_name' => $client->last_name,
+            'phone' => $client->phone,
+            'email' => $client->email,
+        ],
+    ]);
 @endphp
 
 <x-layouts.app title="Crear prestamo">
@@ -32,7 +40,7 @@
                     <h3 class="font-bold text-slate-950">Cliente</h3>
                     <div>
                         <label class="text-sm font-semibold text-slate-700">Cliente existente</label>
-                        <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="client_id">
+                        <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="client_id" data-client-prefill data-clients='@json($clientPrefill)'>
                             <option value="">Crear cliente basico</option>
                             @foreach ($clients as $client)
                                 <option value="{{ $client->id }}" @selected((string) old('client_id') === (string) $client->id)>{{ $client->first_name }} {{ $client->last_name }} · {{ $client->phone }}</option>
@@ -40,11 +48,11 @@
                         </select>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
-                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_name" placeholder="Nombre requerido" value="{{ old('first_name') }}">
-                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="last_name" placeholder="Apellidos opcional" value="{{ old('last_name') }}">
+                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_name" placeholder="Nombre requerido" value="{{ old('first_name') }}" data-client-field="first_name">
+                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="last_name" placeholder="Apellidos opcional" value="{{ old('last_name') }}" data-client-field="last_name">
                     </div>
-                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Celular opcional" value="{{ old('phone') }}">
-                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" placeholder="Correo opcional" type="email" value="{{ old('email') }}">
+                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Celular opcional" value="{{ old('phone') }}" data-client-field="phone">
+                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" placeholder="Correo opcional" type="email" value="{{ old('email') }}" data-client-field="email">
                 </section>
 
                 <section class="space-y-4">
