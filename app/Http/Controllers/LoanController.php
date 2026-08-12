@@ -11,6 +11,7 @@ use App\Models\Loan;
 use App\Models\LoanInvoiceMovement;
 use App\Models\LoanNote;
 use App\Models\Operator;
+use App\Models\Vehicle;
 use App\Support\LoanFolios;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -18,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class LoanController extends Controller
@@ -273,6 +275,8 @@ class LoanController extends Controller
         $data['administration_fee_type'] = 'monthly';
         $newAdministrationFee = number_format((float) ($data['administration_fee'] ?? 0), 2, '.', '');
         $data['vat_enabled'] = $request->boolean('vat_enabled', true);
+        $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
+        $this->ensureVinIsAvailable($data['vin'], $loan);
         $conditionsChanged = $this->conditionsChanged($loan, $data, $newMonthlyRate);
 
         if ($conditionsChanged && ! $this->canEditConditions($loan)) {
@@ -297,18 +301,13 @@ class LoanController extends Controller
                 'email' => $data['email'] ?? null,
             ]);
 
-            $loan->vehicle?->update([
-                'brand' => $data['brand'] ?? 'Sin marca',
-                'model' => $data['model'] ?? 'Vehiculo',
-                'year' => $data['year'] ?? null,
-                'plates' => $data['plates'] ?? null,
-                'vin' => $data['vin'] ?? null,
-            ]);
+            $vehicle = $this->updateVehicleForLoan($loan, $data);
 
             if (! $conditionsChanged) {
                 $loan->update([
                     'folio' => $updatedFolio,
                     'operator_id' => $data['operator_id'],
+                    'vehicle_id' => $vehicle?->id,
                     'guarantor_name' => $data['guarantor_name'] ?? null,
                     'guarantor_address' => $data['guarantor_address'] ?? null,
                     'guarantor_phone' => $data['guarantor_phone'] ?? null,
@@ -337,6 +336,7 @@ class LoanController extends Controller
             $loan->update([
                 'folio' => $updatedFolio,
                 'operator_id' => $data['operator_id'],
+                'vehicle_id' => $vehicle?->id,
                 'capital' => $schedule->capital(),
                 'monthly_rate' => $newMonthlyRate,
                 'administration_fee' => $newAdministrationFee,
@@ -420,5 +420,68 @@ class LoanController extends Controller
         $decimalRate = $rateValue / 100;
 
         return $rateType === 'annual' ? $decimalRate / 12 : $decimalRate;
+    }
+
+    private function ensureVinIsAvailable(?string $vin, Loan $currentLoan): void
+    {
+        if (! $vin) {
+            return;
+        }
+
+        $conflict = Loan::query()
+            ->where('status', 'active')
+            ->whereKeyNot($currentLoan->id)
+            ->whereHas('vehicle', fn ($query) => $query->whereRaw('UPPER(vin) = ?', [$vin]))
+            ->exists();
+
+        if ($conflict) {
+            throw ValidationException::withMessages([
+                'vin' => 'Este VIN ya esta ligado a un prestamo activo. Solo se puede reutilizar cuando el prestamo anterior este liquidado.',
+            ]);
+        }
+    }
+
+    private function normalizeVin(mixed $vin): ?string
+    {
+        $vin = Str::upper(trim((string) $vin));
+
+        return $vin === '' ? null : $vin;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function updateVehicleForLoan(Loan $loan, array $data): ?Vehicle
+    {
+        $vehicleData = [
+            'client_id' => $loan->client_id,
+            'brand' => $data['brand'] ?? 'Sin marca',
+            'model' => $data['model'] ?? 'Vehiculo',
+            'year' => $data['year'] ?? null,
+            'plates' => $data['plates'] ?? null,
+            'vin' => $data['vin'] ?? null,
+            'status' => 'financed',
+        ];
+
+        $existingByVin = $data['vin']
+            ? Vehicle::query()->whereRaw('UPPER(vin) = ?', [$data['vin']])->first()
+            : null;
+
+        if ($existingByVin && (int) $existingByVin->id !== (int) $loan->vehicle_id) {
+            $existingByVin->update($vehicleData);
+
+            return $existingByVin;
+        }
+
+        if ($loan->vehicle) {
+            $loan->vehicle->update($vehicleData);
+
+            return $loan->vehicle;
+        }
+
+        return Vehicle::query()->create($vehicleData + [
+            'public_id' => (string) Str::ulid(),
+            'client_id' => $loan->client_id,
+        ]);
     }
 }

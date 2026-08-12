@@ -25,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class LoanCreationController extends Controller
@@ -114,6 +115,8 @@ class LoanCreationController extends Controller
         if ($allocator->hasParticipants($data['investors'] ?? [])) {
             $allocator->participants($data['investors'], Money::cents($data['capital']), allowEmpty: true);
         }
+        $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
+        $this->ensureVinHasNoActiveLoan($data['vin']);
 
         $client = ($data['client_id'] ?? null)
             ? Client::query()->findOrFail($data['client_id'])
@@ -486,7 +489,7 @@ class LoanCreationController extends Controller
      */
     private function validatedRoundedData(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'client_id' => ['nullable', 'exists:clients,id'],
             'first_name' => ['required_without:client_id', 'nullable', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
@@ -524,6 +527,11 @@ class LoanCreationController extends Controller
             'invoice_mime_type' => ['nullable', 'string', 'max:120'],
             'invoice_size' => ['nullable', 'integer', 'min:0'],
         ]);
+
+        $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
+        $this->ensureVinHasNoActiveLoan($data['vin']);
+
+        return $data;
     }
 
     /**
@@ -695,5 +703,30 @@ class LoanCreationController extends Controller
     private function roundedTerms(): array
     {
         return [6, 12, 18, 24, 36, 48];
+    }
+
+    private function ensureVinHasNoActiveLoan(?string $vin): void
+    {
+        if (! $vin) {
+            return;
+        }
+
+        $conflict = Loan::query()
+            ->where('status', 'active')
+            ->whereHas('vehicle', fn ($query) => $query->whereRaw('UPPER(vin) = ?', [$vin]))
+            ->exists();
+
+        if ($conflict) {
+            throw ValidationException::withMessages([
+                'vin' => 'Este VIN ya esta ligado a un prestamo activo. Solo se puede reutilizar cuando el prestamo anterior este liquidado.',
+            ]);
+        }
+    }
+
+    private function normalizeVin(mixed $vin): ?string
+    {
+        $vin = Str::upper(trim((string) $vin));
+
+        return $vin === '' ? null : $vin;
     }
 }

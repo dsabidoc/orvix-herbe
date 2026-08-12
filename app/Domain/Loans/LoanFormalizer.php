@@ -9,6 +9,7 @@ use App\Models\Vehicle;
 use App\Support\LoanFolios;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class LoanFormalizer
 {
@@ -86,6 +87,39 @@ class LoanFormalizer
 
     public function vehicleFor(Client $client, array $data): Vehicle
     {
+        $vin = $this->normalizeVin($data['vin'] ?? null);
+
+        if ($vin) {
+            $existingVehicle = Vehicle::query()
+                ->whereRaw('UPPER(vin) = ?', [$vin])
+                ->first();
+
+            if ($existingVehicle) {
+                $hasActiveLoan = $existingVehicle->loans()
+                    ->where('status', 'active')
+                    ->exists();
+
+                if ($hasActiveLoan) {
+                    throw ValidationException::withMessages([
+                        'vin' => 'Este VIN ya esta ligado a un prestamo activo. Solo se puede reutilizar cuando el prestamo anterior este liquidado.',
+                    ]);
+                }
+
+                $existingVehicle->update([
+                    'client_id' => $client->id,
+                    'brand' => $data['brand'] ?? $existingVehicle->brand ?? 'Sin marca',
+                    'model' => $data['model'] ?? $existingVehicle->model ?? 'Vehiculo',
+                    'year' => $data['year'] ?? $existingVehicle->year,
+                    'color' => $data['color'] ?? $existingVehicle->color,
+                    'plates' => $data['plates'] ?? $existingVehicle->plates,
+                    'price' => $data['price'] ?? $existingVehicle->price,
+                    'status' => 'financed',
+                ]);
+
+                return $existingVehicle;
+            }
+        }
+
         return Vehicle::query()->create([
             'public_id' => (string) Str::ulid(),
             'client_id' => $client->id,
@@ -93,7 +127,7 @@ class LoanFormalizer
             'model' => $data['model'] ?? 'Vehiculo',
             'year' => $data['year'] ?? null,
             'color' => $data['color'] ?? null,
-            'vin' => $data['vin'] ?? null,
+            'vin' => $vin,
             'plates' => $data['plates'] ?? null,
             'price' => $data['price'] ?? null,
             'status' => 'financed',
@@ -109,5 +143,12 @@ class LoanFormalizer
         $interest = (int) round(((float) ($installment['interest'] ?? 0)) * 100);
 
         return number_format(($principal + $interest) / 100, 2, '.', '');
+    }
+
+    private function normalizeVin(mixed $vin): ?string
+    {
+        $vin = Str::upper(trim((string) $vin));
+
+        return $vin === '' ? null : $vin;
     }
 }
