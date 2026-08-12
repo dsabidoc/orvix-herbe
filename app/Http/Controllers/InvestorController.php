@@ -11,6 +11,7 @@ use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Role;
@@ -41,6 +42,12 @@ class InvestorController extends Controller
 
         return view('investors.index', [
             'investors' => $query->paginate(15)->withQueryString(),
+            'investorUsers' => User::query()
+                ->role('inversionista')
+                ->whereDoesntHave('investorProfile')
+                ->where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name', 'email', 'phone']),
         ]);
     }
 
@@ -49,19 +56,36 @@ class InvestorController extends Controller
         abort_unless($request->user()->can('investors.manage'), 403);
 
         $data = $request->validate([
+            'user_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('status', 'active')),
+                Rule::unique('investors', 'user_id'),
+            ],
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
             'phone' => ['nullable', 'string', 'max:40'],
             'initial_capital' => ['nullable', 'numeric', 'min:0'],
             'create_user' => ['nullable', 'boolean'],
-            'email' => [$request->boolean('create_user') ? 'required' : 'nullable', 'email', 'max:160', 'unique:investors,email', 'unique:users,email'],
+            'email' => [
+                ($request->boolean('create_user') || $request->filled('user_id')) ? 'required' : 'nullable',
+                'email',
+                'max:160',
+                'unique:investors,email',
+                Rule::unique('users', 'email')->ignore($request->input('user_id')),
+            ],
             'password' => ['nullable', 'string', 'min:8', 'max:80'],
         ]);
 
         $investor = DB::transaction(function () use ($request, $data, $ledger) {
             $user = null;
 
-            if ($request->boolean('create_user')) {
+            if (! empty($data['user_id'])) {
+                $user = User::query()->role('inversionista')->whereKey($data['user_id'])->lockForUpdate()->firstOrFail();
+
+                if ($user->investorProfile()->exists()) {
+                    abort(422, 'Este usuario ya esta ligado a un inversionista.');
+                }
+            } elseif ($request->boolean('create_user')) {
                 $password = $data['password'] ?: 'orvix-demo';
                 $user = User::query()->create([
                     'name' => trim($data['first_name'].' '.($data['last_name'] ?? '')),

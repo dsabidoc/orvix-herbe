@@ -247,6 +247,55 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    document.querySelectorAll('[data-investor-user-select]').forEach((select) => {
+        const syncInvestorUser = () => {
+            let users = {};
+
+            try {
+                users = JSON.parse(select.dataset.investorUsers || '{}');
+            } catch {
+                users = {};
+            }
+
+            const form = select.closest('form');
+
+            if (!(form instanceof HTMLFormElement)) {
+                return;
+            }
+
+            const selectedUser = users[select.value] || null;
+
+            if (selectedUser) {
+                form.querySelectorAll('[data-investor-user-field]').forEach((field) => {
+                    if (!(field instanceof HTMLInputElement)) {
+                        return;
+                    }
+
+                    field.value = selectedUser[field.dataset.investorUserField] || '';
+                });
+            }
+
+            const createUserInput = form.querySelector('input[name="create_user"]');
+            const createUserRow = form.querySelector('[data-create-investor-user-row]');
+            const passwordRow = form.querySelector('[data-create-investor-password-row]');
+            const hasSelectedUser = Boolean(select.value);
+
+            if (createUserInput instanceof HTMLInputElement) {
+                createUserInput.checked = hasSelectedUser ? false : createUserInput.checked;
+                createUserInput.disabled = hasSelectedUser;
+            }
+
+            [createUserRow, passwordRow].forEach((row) => {
+                if (row instanceof HTMLElement) {
+                    row.classList.toggle('hidden', hasSelectedUser);
+                }
+            });
+        };
+
+        select.addEventListener('change', syncInvestorUser);
+        syncInvestorUser();
+    });
+
     document.querySelectorAll('[data-generate-password]').forEach((button) => {
         button.addEventListener('click', () => {
             const form = button.closest('form');

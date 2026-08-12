@@ -78,6 +78,46 @@ class OrvixWorkflowTest extends TestCase
             ->assertSee('Nuevo Operador');
     }
 
+    public function test_existing_investor_user_can_be_linked_when_creating_investor_profile(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $investorUser = User::query()->create([
+            'name' => 'Usuario Inversionista Nuevo',
+            'email' => 'usuario.inversionista@orvix.test',
+            'phone' => '9991234567',
+            'password' => 'orvix-demo',
+            'status' => 'active',
+        ]);
+        $investorUser->assignRole('inversionista');
+
+        $this->actingAs($admin)
+            ->get(route('investors.index'))
+            ->assertOk()
+            ->assertSee('Usuario Inversionista Nuevo')
+            ->assertSee('usuario.inversionista@orvix.test');
+
+        $this->actingAs($admin)
+            ->post(route('investors.store'), [
+                'user_id' => $investorUser->id,
+                'first_name' => 'Usuario',
+                'last_name' => 'Inversionista Nuevo',
+                'email' => 'usuario.inversionista@orvix.test',
+                'phone' => '9991234567',
+                'initial_capital' => '250000',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('investors', [
+            'user_id' => $investorUser->id,
+            'name' => 'Usuario Inversionista Nuevo',
+            'email' => 'usuario.inversionista@orvix.test',
+            'initial_capital' => '250000.00',
+            'available_capital' => '250000.00',
+        ]);
+    }
+
     public function test_admin_confirmation_applies_reported_payment_to_installments(): void
     {
         $this->seed(DatabaseSeeder::class);

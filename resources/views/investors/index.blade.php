@@ -1,5 +1,18 @@
 @php
     use App\Support\Money;
+
+    $investorUserOptions = ($investorUsers ?? collect())->mapWithKeys(function ($user) {
+        $parts = preg_split('/\s+/', trim($user->name), 2);
+
+        return [
+            $user->id => [
+                'first_name' => $parts[0] ?? $user->name,
+                'last_name' => $parts[1] ?? '',
+                'email' => $user->email,
+                'phone' => $user->phone ?? '',
+            ],
+        ];
+    });
 @endphp
 
 <x-layouts.app title="Inversionistas">
@@ -61,31 +74,41 @@
                 <h3 class="mt-1 text-lg font-bold text-slate-950">Alta de capital</h3>
             </div>
             <div class="grid gap-4 px-5 py-4 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                    <label class="text-sm font-semibold text-slate-700">Usuario inversionista existente</label>
+                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="user_id" data-investor-user-select data-investor-users='@json($investorUserOptions)'>
+                        <option value="">Crear inversionista sin usuario ligado</option>
+                        @foreach ($investorUsers ?? [] as $user)
+                            <option value="{{ $user->id }}" @selected((string) old('user_id') === (string) $user->id)>{{ $user->name }} · {{ $user->email }}</option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">Si el usuario ya fue dado de alta con rol inversionista, seleccionalo aqui para precargar sus datos y ligar su acceso.</p>
+                </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Nombre</label>
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_name" value="{{ old('first_name') }}" required>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_name" value="{{ old('first_name') }}" data-investor-user-field="first_name" required>
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Apellidos</label>
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="last_name" value="{{ old('last_name') }}">
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="last_name" value="{{ old('last_name') }}" data-investor-user-field="last_name">
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Correo</label>
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" type="email" value="{{ old('email') }}">
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" type="email" value="{{ old('email') }}" data-investor-user-field="email">
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Celular</label>
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" value="{{ old('phone') }}">
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" value="{{ old('phone') }}" data-investor-user-field="phone">
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Capital inicial</label>
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="initial_capital" type="number" step="0.01" min="0" value="{{ old('initial_capital', '0') }}">
                 </div>
-                <label class="mt-7 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <label class="mt-7 flex items-center gap-2 text-sm font-semibold text-slate-700" data-create-investor-user-row>
                     <input class="rounded border-slate-300 text-[#0d9488]" name="create_user" type="checkbox" value="1" @checked(old('create_user'))>
                     Crear usuario inversionista
                 </label>
-                <div class="sm:col-span-2">
+                <div class="sm:col-span-2" data-create-investor-password-row>
                     <label class="text-sm font-semibold text-slate-700">Contraseña generica</label>
                     <div class="mt-1 flex gap-2">
                         <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" data-generated-password value="{{ old('password', 'orvix-demo') }}">
