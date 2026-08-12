@@ -58,7 +58,6 @@ class Investor extends Model
     {
         return $query
             ->where('status', 'active')
-            ->where('available_capital', '>', 0)
             ->orderBy('name');
     }
 }

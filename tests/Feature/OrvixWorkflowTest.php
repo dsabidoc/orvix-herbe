@@ -843,6 +843,61 @@ class OrvixWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_investor_can_share_interest_without_contributing_capital(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+        $capitalInvestor = Investor::query()->where('available_capital', '>=', 75000)->firstOrFail();
+        $interestOnlyInvestor = Investor::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'first_name' => 'Interes',
+            'last_name' => 'Sin Capital',
+            'name' => 'Interes Sin Capital',
+            'email' => 'interes.sin.capital@orvix.test',
+            'phone' => '9995555555',
+            'initial_capital' => '0.00',
+            'available_capital' => '0.00',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('loans.store'), [
+                'first_name' => 'Cliente Interes Compartido',
+                'operator_id' => $operator->id,
+                'capital' => '75000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'payment_day' => 10,
+                'start_date' => '2026-08-05',
+                'first_payment_date' => '2026-08-10',
+            ])
+            ->assertRedirect();
+
+        $loan = Loan::query()
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Interes Compartido'))
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('loans.investments.store', $loan), [
+                'investors' => [
+                    ['investor_id' => $capitalInvestor->id, 'capital_amount' => '75000', 'interest_share_percent' => '50'],
+                    ['investor_id' => $interestOnlyInvestor->id, 'capital_amount' => '0', 'interest_share_percent' => '50'],
+                ],
+            ])
+            ->assertRedirect(route('loans.show', $loan));
+
+        $this->assertDatabaseHas('investments', [
+            'loan_id' => $loan->id,
+            'investor_id' => $interestOnlyInvestor->id,
+            'amount' => '0',
+            'investor_share_rate' => '0.5',
+        ]);
+    }
+
     public function test_create_loan_form_uses_orvix_default_conditions(): void
     {
         $this->seed(DatabaseSeeder::class);

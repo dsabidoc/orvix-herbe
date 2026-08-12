@@ -70,9 +70,9 @@ class InvestmentAllocationService
             ]);
         }
 
-        if ($participants->contains(fn (array $row) => $row['capital_cents'] <= 0)) {
+        if ($participants->contains(fn (array $row) => $row['capital_cents'] < 0)) {
             throw ValidationException::withMessages([
-                'investors' => 'Cada inversionista debe aportar un monto de capital mayor a cero.',
+                'investors' => 'El capital aportado por inversionista no puede ser negativo.',
             ]);
         }
 
