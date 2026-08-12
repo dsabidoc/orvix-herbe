@@ -90,15 +90,8 @@ class InvestmentAllocationService
             ]);
         }
 
-        foreach ($participants as $participant) {
-            $availableCents = $this->availableCentsForInvestor($participant['investor'], $loan);
-
-            if ($participant['capital_cents'] > $availableCents) {
-                throw ValidationException::withMessages([
-                    'investors' => $participant['investor']->name.' no tiene capital disponible suficiente. Disponible: '.Money::mxn(Money::decimal($availableCents)).'.',
-                ]);
-            }
-        }
+        // Temporalmente se permite asignar capital aunque el inversionista no tenga saldo disponible,
+        // para facilitar la carga inicial de prestamos existentes.
     }
 
     /**
@@ -192,12 +185,6 @@ class InvestmentAllocationService
 
         $beforeCents = Money::cents($investor->available_capital ?? 0);
         $afterCents = $beforeCents - $amountCents;
-
-        if ($afterCents < 0) {
-            throw ValidationException::withMessages([
-                'amount' => 'El inversionista no tiene capital disponible suficiente.',
-            ]);
-        }
 
         $investor->forceFill(['available_capital' => Money::decimal($afterCents)])->save();
         $this->recordMovement($investor, -$amountCents, $beforeCents, $afterCents, $type, $userId, $loanId, $investmentId, $notes);
