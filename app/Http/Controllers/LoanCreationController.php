@@ -694,6 +694,6 @@ class LoanCreationController extends Controller
      */
     private function roundedTerms(): array
     {
-        return [3, 6, 8, 10, 12, 18, 20, 24, 30, 36, 40, 48, 50, 70];
+        return [6, 12, 18, 24, 36, 48];
     }
 }
