@@ -88,12 +88,6 @@
 
             <section class="space-y-4">
                 <h3 class="font-bold text-slate-950">Condiciones</h3>
-                <label class="block text-sm font-semibold text-slate-700">Metodo de prestamo
-                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method">
-                        <option value="rounded" @selected(old('calculation_method', 'rounded') === 'rounded')>Prestamo con redondeo</option>
-                        <option value="regular" @selected(old('calculation_method') === 'regular')>Prestamo regular</option>
-                    </select>
-                </label>
                 <div class="grid gap-3 md:grid-cols-2">
                     <label class="block text-sm font-semibold text-slate-700">Capital requerido
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="capital" placeholder="Ej. 100000" type="number" step="0.01" value="{{ old('capital') }}" required>
@@ -141,6 +135,12 @@
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Nota de entrega
                     <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="disbursement_notes" rows="2" placeholder="Opcional">{{ old('disbursement_notes') }}</textarea>
+                </label>
+                <label class="block text-sm font-semibold text-slate-700">Metodo de prestamo
+                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method">
+                        <option value="rounded" @selected(old('calculation_method', 'rounded') === 'rounded')>Prestamo con redondeo</option>
+                        <option value="regular" @selected(old('calculation_method') === 'regular')>Prestamo regular</option>
+                    </select>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">IVA
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="vat_enabled" required>
