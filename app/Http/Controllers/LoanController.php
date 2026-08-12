@@ -78,9 +78,16 @@ class LoanController extends Controller
             'movements' => fn ($query) => $query->with(['registeredBy', 'allocations.installment'])->latest(),
         ]);
 
+        $fundingInvestors = Investor::availableForFunding()
+            ->get()
+            ->merge($loan->investments->pluck('investor')->filter())
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
+
         return view('loans.show', [
             'loan' => $loan,
-            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
+            'investors' => $fundingInvestors,
             'settlementQuote' => $loan->status === 'active' ? $settlementService->quote($loan) : null,
         ]);
     }

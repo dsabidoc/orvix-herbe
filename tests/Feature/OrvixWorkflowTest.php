@@ -743,6 +743,59 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame($availableBeforeCents - 10000000, Money::cents($investor->fresh()->available_capital));
     }
 
+    public function test_rounded_quote_lists_available_investors_for_funding(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+
+        $availableInvestor = Investor::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'first_name' => 'Disponible',
+            'last_name' => 'Preview',
+            'name' => 'Disponible Preview',
+            'email' => 'disponible.preview@orvix.test',
+            'phone' => '9991112222',
+            'initial_capital' => '75000.00',
+            'available_capital' => '75000.00',
+            'status' => 'active',
+        ]);
+
+        Investor::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'first_name' => 'Eliminado',
+            'last_name' => 'Preview',
+            'name' => 'Eliminado Preview',
+            'email' => 'eliminado.preview@orvix.test',
+            'phone' => '9993334444',
+            'initial_capital' => '75000.00',
+            'available_capital' => '75000.00',
+            'status' => 'deleted',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('loans.quote-rounded'), [
+                'calculation_method' => 'rounded',
+                'first_name' => 'Cliente Preview',
+                'operator_id' => $operator->id,
+                'capital' => '75000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'administration_fee' => '300',
+                'vat_enabled' => '0',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 36,
+                'payment_day' => 1,
+                'start_date' => '2026-08-01',
+                'first_payment_date' => '2026-09-01',
+            ])
+            ->assertOk()
+            ->assertSee('Disponible Preview')
+            ->assertSee(Money::mxn($availableInvestor->available_capital))
+            ->assertDontSee('Eliminado Preview');
+    }
+
     public function test_user_can_upload_document_to_loan_file(): void
     {
         $this->seed(DatabaseSeeder::class);

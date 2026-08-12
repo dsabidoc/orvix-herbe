@@ -38,7 +38,7 @@ class LoanCreationController extends Controller
         return view('loans.create', [
             'clients' => Client::query()->orderBy('last_name')->orderBy('first_name')->get(),
             'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
-            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
+            'investors' => Investor::availableForFunding()->get(),
             'terms' => $this->roundedTerms(),
             'selectedOperatorId' => $request->integer('operator_id') ?: $weeklyCut?->operator_id,
             'weeklyCut' => $weeklyCut,
@@ -198,7 +198,7 @@ class LoanCreationController extends Controller
         return view('loans.quote-rounded', [
             'data' => $data,
             'quote' => $quote,
-            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
+            'investors' => Investor::availableForFunding()->get(),
         ]);
     }
 

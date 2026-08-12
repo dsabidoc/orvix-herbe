@@ -130,7 +130,7 @@ class LoanApplicationController extends Controller
             'openingFeeLabel' => $this->openingFeeLabel($conditions['opening_fee_type'], (float) $conditions['opening_fee_value']),
             'openingFeeAmount' => Money::decimal($openingFeeCents),
             'contractTotalWithFee' => Money::decimal($schedule->contractTotalCents + $openingFeeCents),
-            'investors' => Investor::query()->where('status', 'active')->orderBy('name')->get(),
+            'investors' => Investor::availableForFunding()->get(),
         ]);
     }
 

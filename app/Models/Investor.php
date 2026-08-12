@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class Investor extends Model
 {
@@ -51,5 +52,13 @@ class Investor extends Model
     public function withdrawalRequests(): HasMany
     {
         return $this->hasMany(InvestorWithdrawalRequest::class);
+    }
+
+    public function scopeAvailableForFunding(Builder $query): Builder
+    {
+        return $query
+            ->where('status', 'active')
+            ->where('available_capital', '>', 0)
+            ->orderBy('name');
     }
 }
