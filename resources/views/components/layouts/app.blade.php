@@ -13,7 +13,6 @@
             })();
         </script>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
-        @livewireStyles
     </head>
     <body class="min-h-screen bg-[#f4f7fb] text-[#172033] antialiased">
         @auth
@@ -309,6 +308,5 @@
         @else
             {{ $slot }}
         @endauth
-        @livewireScripts
     </body>
 </html>
