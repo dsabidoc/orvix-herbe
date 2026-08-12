@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Operator;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Permission;
@@ -62,13 +65,16 @@ class SettingsController extends Controller
             'role' => ['required', 'exists:roles,name'],
         ]);
 
-        $user = User::query()->create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'status' => 'active',
-        ]);
-        $user->assignRole($data['role']);
+        DB::transaction(function () use ($data): void {
+            $user = User::query()->create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'status' => 'active',
+            ]);
+            $user->assignRole($data['role']);
+            $this->syncOperatorProfile($user);
+        });
 
         return back()->with('status', 'Usuario creado.');
     }
@@ -96,9 +102,12 @@ class SettingsController extends Controller
             $update['force_password_change'] = true;
         }
 
-        $user->update($update);
-        $user->syncRoles(array_filter([$data['role'] ?? null]));
-        $user->syncPermissions($data['permissions'] ?? []);
+        DB::transaction(function () use ($user, $update, $data): void {
+            $user->update($update);
+            $user->syncRoles(array_filter([$data['role'] ?? null]));
+            $user->syncPermissions($data['permissions'] ?? []);
+            $this->syncOperatorProfile($user->refresh());
+        });
 
         return back()->with('status', 'Usuario actualizado.');
     }
@@ -107,7 +116,10 @@ class SettingsController extends Controller
     {
         abort_unless($request->user()->can('users.manage'), 403);
 
-        $user->update(['status' => $user->status === 'active' ? 'inactive' : 'active']);
+        DB::transaction(function () use ($user): void {
+            $user->update(['status' => $user->status === 'active' ? 'inactive' : 'active']);
+            $this->syncOperatorProfile($user->refresh());
+        });
 
         return back()->with('status', 'Usuario actualizado.');
     }
@@ -155,5 +167,28 @@ class SettingsController extends Controller
         Permission::create(['name' => $data['name'], 'guard_name' => 'web']);
 
         return back()->with('status', 'Permiso creado.');
+    }
+
+    private function syncOperatorProfile(User $user): void
+    {
+        $operator = Operator::query()->firstOrNew(['user_id' => $user->id]);
+
+        if (! $user->hasRole('operador-cartera')) {
+            if ($operator->exists) {
+                $operator->update(['status' => 'inactive']);
+            }
+
+            return;
+        }
+
+        $operator->fill([
+            'public_id' => $operator->public_id ?: (string) Str::ulid(),
+            'name' => $user->name,
+            'phone' => $user->phone,
+            'email' => $user->email,
+            'status' => $user->status === 'active' ? 'active' : 'inactive',
+        ]);
+
+        $operator->save();
     }
 }

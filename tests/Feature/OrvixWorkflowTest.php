@@ -48,6 +48,36 @@ class OrvixWorkflowTest extends TestCase
         $this->actingAs($samuel)->get(route('loans.show', $darioLoan))->assertForbidden();
     }
 
+    public function test_creating_operator_user_creates_operator_profile_for_loan_forms(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('settings.users.store'), [
+                'name' => 'Nuevo Operador',
+                'email' => 'nuevo.operador@orvix.test',
+                'password' => 'orvix-demo',
+                'role' => 'operador-cartera',
+            ])
+            ->assertSessionHas('status');
+
+        $operatorUser = User::query()->where('email', 'nuevo.operador@orvix.test')->firstOrFail();
+
+        $this->assertDatabaseHas('operators', [
+            'user_id' => $operatorUser->id,
+            'name' => 'Nuevo Operador',
+            'email' => 'nuevo.operador@orvix.test',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('loans.create'))
+            ->assertOk()
+            ->assertSee('Nuevo Operador');
+    }
+
     public function test_admin_confirmation_applies_reported_payment_to_installments(): void
     {
         $this->seed(DatabaseSeeder::class);
