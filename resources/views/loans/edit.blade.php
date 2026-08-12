@@ -98,12 +98,12 @@
                     <label class="block text-sm font-semibold text-slate-700">Dia de pago
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="payment_day" placeholder="Dia" type="number" min="1" max="31" value="{{ old('payment_day', $loan->payment_day) }}" data-sync-payment-day-target @disabled(! $canEditConditions) required>
                     </label>
-                    <label class="block text-sm font-semibold text-slate-700">Fecha inicio
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="start_date" type="date" value="{{ old('start_date', $loan->start_date->toDateString()) }}" data-sync-payment-day-source @disabled(! $canEditConditions) required>
+                    <label class="block text-sm font-semibold text-slate-700">Fecha de compra
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="start_date" type="date" value="{{ old('start_date', $loan->start_date->toDateString()) }}" @disabled(! $canEditConditions) required>
                     </label>
                 </div>
-                <label class="block text-sm font-semibold text-slate-700">Fecha cobranza
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="first_payment_date" type="date" value="{{ old('first_payment_date', optional($loan->first_payment_date ?? $loan->start_date)->toDateString()) }}" @disabled(! $canEditConditions) required>
+                <label class="block text-sm font-semibold text-slate-700">Fecha de vencimiento
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500" name="first_payment_date" type="date" value="{{ old('first_payment_date', optional($loan->first_payment_date ?? $loan->start_date)->toDateString()) }}" data-sync-payment-day-source @disabled(! $canEditConditions) required>
                 </label>
 
                 @unless ($canEditConditions)

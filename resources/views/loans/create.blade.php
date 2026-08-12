@@ -1,6 +1,7 @@
 @php
     $defaultStartDate = old('start_date', now('America/Merida')->toDateString());
-    $defaultPaymentDay = old('payment_day', \Carbon\CarbonImmutable::parse($defaultStartDate)->day);
+    $defaultFirstPaymentDate = old('first_payment_date', now('America/Merida')->toDateString());
+    $defaultPaymentDay = old('payment_day', \Carbon\CarbonImmutable::parse($defaultFirstPaymentDate)->day);
 @endphp
 
 <x-layouts.app title="Crear prestamo">
@@ -118,11 +119,11 @@
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_grace_days" placeholder="Ej. 5" type="number" min="0" max="365" value="{{ old('delinquency_grace_days', '0') }}">
                     </label>
                 </div>
-                <label class="block text-sm font-semibold text-slate-700">Fecha de inicio
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $defaultStartDate }}" data-sync-payment-day-source required>
+                <label class="block text-sm font-semibold text-slate-700">Fecha de compra
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="start_date" type="date" value="{{ $defaultStartDate }}" required>
                 </label>
-                <label class="block text-sm font-semibold text-slate-700">Fecha de cobranza
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_payment_date" type="date" value="{{ old('first_payment_date', now('America/Merida')->toDateString()) }}" required>
+                <label class="block text-sm font-semibold text-slate-700">Fecha de vencimiento
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_payment_date" type="date" value="{{ $defaultFirstPaymentDate }}" data-sync-payment-day-source required>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Fecha real de entrega/desembolso
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="disbursement_delivered_on" type="date" value="{{ old('disbursement_delivered_on', now('America/Merida')->toDateString()) }}">
