@@ -1,10 +1,34 @@
 @php
     use App\Support\Money;
 
-    $investedCents = $investor->investments
+    $activeInvestments = $investor->investments
         ->filter(fn ($investment) => $investment->status === 'active' && $investment->loan?->status === 'active')
-        ->sum(fn ($investment) => Money::cents($investment->amount));
-    $capitalTotalCents = Money::cents($investor->available_capital) + Money::cents($investor->returned_capital_balance);
+        ->values();
+    $investedCents = $activeInvestments->sum(fn ($investment) => Money::cents($investment->amount));
+    $pendingReturnCapitalCents = $activeInvestments->sum(function ($investment) {
+        $loanCapitalCents = Money::cents($investment->loan?->capital);
+
+        if ($loanCapitalCents <= 0) {
+            return 0;
+        }
+
+        $capitalShareRate = Money::cents($investment->amount) / $loanCapitalCents;
+
+        return $investment->loan?->installments?->sum(function ($installment) use ($capitalShareRate) {
+            $remainingCents = Money::cents($installment->remaining_amount);
+            $principalCents = Money::cents($installment->principal_amount);
+            $operationalCents = $principalCents + Money::cents($installment->interest_amount);
+
+            if ($remainingCents <= 0 || $principalCents <= 0 || $operationalCents <= 0) {
+                return 0;
+            }
+
+            $pendingPrincipalCents = (int) round($principalCents * min(1, $remainingCents / $operationalCents));
+
+            return (int) round($pendingPrincipalCents * $capitalShareRate);
+        }) ?? 0;
+    });
+    $capitalTotalCents = Money::cents($investor->available_capital) + $pendingReturnCapitalCents;
     $estimatedInterestCents = $investor->investments->sum(function ($investment) {
         return $investment->loan?->installments?->sum(fn ($installment) => (int) round(\App\Support\Money::cents($installment->interest_amount) * (float) $investment->investor_share_rate)) ?? 0;
     });
