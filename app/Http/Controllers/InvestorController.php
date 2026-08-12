@@ -30,7 +30,10 @@ class InvestorController extends Controller
 
         abort_unless($request->user()->can('investors.manage'), 403);
 
-        $query = Investor::query()->withCount(['investments', 'withdrawalRequests'])->orderBy('name');
+        $query = Investor::query()
+            ->where('status', '!=', 'deleted')
+            ->withCount(['investments', 'withdrawalRequests'])
+            ->orderBy('name');
 
         if ($request->filled('q')) {
             $search = '%'.$request->string('q')->toString().'%';
@@ -121,8 +124,32 @@ class InvestorController extends Controller
         return redirect()->route('investors.show', $investor)->with('status', 'Inversionista creado.');
     }
 
+    public function destroy(Request $request, Investor $investor): RedirectResponse
+    {
+        abort_unless($request->user()->can('investors.manage'), 403);
+
+        $hasLiveLoan = $investor->investments()
+            ->where('status', 'active')
+            ->whereHas('loan', fn ($query) => $query->where('status', 'active'))
+            ->exists();
+
+        if ($hasLiveLoan) {
+            return back()->withErrors([
+                'investor' => 'No se puede eliminar este inversionista porque tiene prestamos activos vivos.',
+            ]);
+        }
+
+        $investor->forceFill([
+            'status' => 'deleted',
+        ])->save();
+
+        return redirect()->route('investors.index')->with('status', 'Inversionista eliminado.');
+    }
+
     public function show(Request $request, Investor $investor): View
     {
+        abort_if($investor->status === 'deleted', 404);
+
         if ($request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage')) {
             abort_unless($request->user()->investorProfile?->id === $investor->id, 403);
         } else {

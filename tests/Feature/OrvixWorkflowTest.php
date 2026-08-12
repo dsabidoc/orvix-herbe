@@ -118,6 +118,61 @@ class OrvixWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_delete_investor_without_live_active_loans(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $investor = Investor::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'first_name' => 'Sin',
+            'last_name' => 'Prestamos',
+            'name' => 'Sin Prestamos',
+            'email' => 'sin.prestamos@orvix.test',
+            'phone' => '9990000000',
+            'initial_capital' => '0.00',
+            'available_capital' => '0.00',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('investors.destroy', $investor))
+            ->assertRedirect(route('investors.index'))
+            ->assertSessionHas('status', 'Inversionista eliminado.');
+
+        $this->assertDatabaseHas('investors', [
+            'id' => $investor->id,
+            'status' => 'deleted',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('investors.index'))
+            ->assertOk()
+            ->assertDontSee('Sin Prestamos');
+    }
+
+    public function test_admin_cannot_delete_investor_with_live_active_loan(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $investor = Investor::query()
+            ->whereHas('investments', fn ($query) => $query
+                ->where('status', 'active')
+                ->whereHas('loan', fn ($loanQuery) => $loanQuery->where('status', 'active')))
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->delete(route('investors.destroy', $investor))
+            ->assertRedirect()
+            ->assertSessionHasErrors('investor');
+
+        $this->assertDatabaseHas('investors', [
+            'id' => $investor->id,
+            'status' => 'active',
+        ]);
+    }
+
     public function test_admin_confirmation_applies_reported_payment_to_installments(): void
     {
         $this->seed(DatabaseSeeder::class);

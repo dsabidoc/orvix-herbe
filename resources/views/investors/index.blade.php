@@ -39,6 +39,7 @@
                         <th class="px-5 py-3 text-right">Retornos por reinvertir</th>
                         <th class="px-5 py-3 text-right">Prestamos</th>
                         <th class="px-5 py-3">Estado</th>
+                        <th class="px-5 py-3 text-right">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -53,10 +54,17 @@
                             <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal(Money::cents($investor->returned_capital_balance) + Money::cents($investor->generated_interest_balance))) }}</td>
                             <td class="px-5 py-3 text-right">{{ $investor->investments_count }}</td>
                             <td class="px-5 py-3"><span class="rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ $investor->status === 'active' ? 'Activo' : 'Inactivo' }}</span></td>
+                            <td class="px-5 py-3 text-right">
+                                <form method="POST" action="{{ route('investors.destroy', $investor) }}" onsubmit="return confirm('Eliminar este inversionista? Solo se permite si no tiene prestamos activos vivos.');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700" type="submit">Eliminar</button>
+                                </form>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td class="px-5 py-8 text-slate-500" colspan="7">No hay inversionistas registrados.</td>
+                            <td class="px-5 py-8 text-slate-500" colspan="8">No hay inversionistas registrados.</td>
                         </tr>
                     @endforelse
                 </tbody>

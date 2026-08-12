@@ -55,6 +55,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/inversionistas', [InvestorController::class, 'index'])->name('investors.index');
     Route::post('/inversionistas', [InvestorController::class, 'store'])->name('investors.store');
     Route::get('/inversionistas/{investor}', [InvestorController::class, 'show'])->name('investors.show');
+    Route::delete('/inversionistas/{investor}', [InvestorController::class, 'destroy'])->name('investors.destroy');
     Route::post('/inversionistas/{investor}/retiros', [InvestorController::class, 'requestWithdrawal'])->name('investors.withdrawals.request');
     Route::post('/inversionistas/retiros/{withdrawal}/resolver', [InvestorController::class, 'processWithdrawal'])->name('investors.withdrawals.process');
     Route::post('/inversionistas/{investor}/retornos', [InvestorController::class, 'creditReturns'])->name('investors.returns.credit');
