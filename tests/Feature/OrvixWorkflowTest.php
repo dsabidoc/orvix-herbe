@@ -1266,6 +1266,43 @@ class OrvixWorkflowTest extends TestCase
         $this->assertTrue($target->hasDirectPermission($permission->name));
     }
 
+    public function test_admin_can_delete_another_user(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $target = User::query()->create([
+            'name' => 'Usuario Temporal',
+            'email' => 'temporal@orvix.test',
+            'password' => 'orvix-demo',
+            'status' => 'active',
+        ]);
+        $target->assignRole('responsable-documental');
+
+        $this->actingAs($admin)
+            ->delete(route('settings.users.destroy', $target))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseMissing('users', [
+            'id' => $target->id,
+        ]);
+    }
+
+    public function test_admin_cannot_delete_current_user(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->delete(route('settings.users.destroy', $admin))
+            ->assertSessionHasErrors('user');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $admin->id,
+        ]);
+    }
+
     public function test_admin_can_edit_role_permissions(): void
     {
         $this->seed(DatabaseSeeder::class);

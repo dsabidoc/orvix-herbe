@@ -99,6 +99,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/configuracion/usuarios', [SettingsController::class, 'storeUser'])->name('settings.users.store');
     Route::put('/configuracion/usuarios/{user}', [SettingsController::class, 'updateUser'])->name('settings.users.update');
     Route::post('/configuracion/usuarios/{user}/estado', [SettingsController::class, 'toggleUser'])->name('settings.users.toggle');
+    Route::delete('/configuracion/usuarios/{user}', [SettingsController::class, 'destroyUser'])->name('settings.users.destroy');
     Route::post('/configuracion/roles', [SettingsController::class, 'storeRole'])->name('settings.roles.store');
     Route::put('/configuracion/roles/{role}', [SettingsController::class, 'updateRole'])->name('settings.roles.update');
     Route::post('/configuracion/permisos', [SettingsController::class, 'storePermission'])->name('settings.permissions.store');

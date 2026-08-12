@@ -124,6 +124,23 @@ class SettingsController extends Controller
         return back()->with('status', 'Usuario actualizado.');
     }
 
+    public function destroyUser(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($request->user()->can('users.manage'), 403);
+
+        if ($request->user()->is($user)) {
+            return back()->withErrors(['user' => 'No puedes eliminar tu propio usuario mientras estas en sesion.']);
+        }
+
+        DB::transaction(function () use ($user): void {
+            $user->syncRoles([]);
+            $user->syncPermissions([]);
+            $user->delete();
+        });
+
+        return back()->with('status', 'Usuario eliminado.');
+    }
+
     public function storeRole(Request $request): RedirectResponse
     {
         abort_unless($request->user()->can('settings.manage'), 403);

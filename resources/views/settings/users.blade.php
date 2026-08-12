@@ -24,6 +24,9 @@
                             @csrf
                             <button class="rounded-md border border-slate-300 px-3 py-2 font-semibold">{{ $user->status === 'active' ? 'Desactivar' : 'Activar' }}</button>
                         </form>
+                        @unless (auth()->id() === $user->id)
+                            <button class="rounded-md border border-red-200 px-3 py-2 font-semibold text-red-700" type="button" data-open-modal="delete-user-modal-{{ $user->id }}">Eliminar</button>
+                        @endunless
                     </div>
                 </div>
             @endforeach
@@ -111,5 +114,28 @@
                 </div>
             </form>
         </dialog>
+    @endforeach
+
+    @foreach ($users as $user)
+        @unless (auth()->id() === $user->id)
+            <dialog id="delete-user-modal-{{ $user->id }}" class="w-[min(92vw,460px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+                <form method="POST" action="{{ route('settings.users.destroy', $user) }}">
+                    @csrf
+                    @method('DELETE')
+                    <div class="border-b border-slate-200 px-5 py-4">
+                        <p class="text-sm font-semibold uppercase tracking-[0.16em] text-red-700">Eliminar usuario</p>
+                        <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $user->name }}</h3>
+                    </div>
+                    <div class="space-y-2 px-5 py-4 text-sm text-slate-600">
+                        <p>Esta accion elimina el acceso de este usuario al sistema.</p>
+                        <p>Los registros historicos permanecen; cuando aplique, la relacion con este usuario quedara sin usuario ligado.</p>
+                    </div>
+                    <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                        <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>No</button>
+                        <button class="rounded-md bg-red-600 px-4 py-2 text-sm font-bold text-white">Si, eliminar</button>
+                    </div>
+                </form>
+            </dialog>
+        @endunless
     @endforeach
 </x-layouts.app>
