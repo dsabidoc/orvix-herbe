@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\LoanScheduleCalculator;
 use App\Domain\Loans\LoanSettlementService;
-use App\Models\CollectionMovement;
 use App\Models\Document;
 use App\Models\Installment;
 use App\Models\Investor;
@@ -54,7 +52,6 @@ class LoanController extends Controller
         return view('loans.index', [
             'loans' => $query->latest()->paginate(15)->withQueryString(),
             'today' => CarbonImmutable::now('America/Merida')->toDateString(),
-            'kpis' => $this->kpis($request),
         ]);
     }
 
@@ -423,49 +420,5 @@ class LoanController extends Controller
         $decimalRate = $rateValue / 100;
 
         return $rateType === 'annual' ? $decimalRate / 12 : $decimalRate;
-    }
-
-    private function kpis(Request $request): array
-    {
-        $loanIds = Loan::query()
-            ->where('status', 'active')
-            ->where('is_frozen', false)
-            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
-            ->pluck('id');
-        $today = CarbonImmutable::now('America/Merida')->startOfDay();
-        $cutPeriod = app(WeeklyCutPeriodService::class)->periodFor($today);
-        $weekStart = $cutPeriod['start'];
-        $weekEnd = $cutPeriod['end'];
-        $monthStart = $today->startOfMonth();
-        $monthEnd = $today->endOfMonth();
-        $remainingCents = Installment::query()->whereIn('loan_id', $loanIds)->sum('remaining_amount') * 100;
-        $expectedWeekCents = Installment::query()
-            ->whereIn('loan_id', $loanIds)
-            ->whereBetween('due_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->where('remaining_amount', '>', 0)
-            ->sum('remaining_amount') * 100;
-        $expectedPeriodCents = Installment::query()
-            ->whereIn('loan_id', $loanIds)
-            ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
-            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
-            ->value('subtotal') * 100;
-        $pendingReportedCents = CollectionMovement::query()
-            ->whereIn('loan_id', $loanIds)
-            ->where('confirmation_status', 'reported')
-            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$monthStart->startOfDay(), $monthEnd->endOfDay()])
-            ->sum('contract_amount') * 100;
-        $overdueCents = Installment::query()
-            ->whereIn('loan_id', $loanIds)
-            ->whereDate('due_date', '<', $today->toDateString())
-            ->where('remaining_amount', '>', 0)
-            ->sum('remaining_amount') * 100;
-
-        return [
-            ['title' => 'Cartera activa', 'value' => Money::mxn(Money::decimal((int) $remainingCents)), 'caption' => 'Saldo contractual pendiente', 'color' => 'blue'],
-            ['title' => 'Esperado semanal', 'value' => Money::mxn(Money::decimal((int) $expectedWeekCents)), 'caption' => 'Letras vencen esta semana', 'color' => 'orange'],
-            ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
-            ['title' => 'Reportado pendiente', 'value' => Money::mxn(Money::decimal((int) $pendingReportedCents)), 'caption' => 'Cobros aun por confirmar', 'color' => 'green'],
-            ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas no aplicadas', 'color' => 'red'],
-        ];
     }
 }

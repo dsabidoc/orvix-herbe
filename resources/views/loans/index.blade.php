@@ -25,8 +25,6 @@
         <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Filtrar</button>
     </form>
 
-    @include('partials.kpi-cards', ['kpis' => $kpis])
-
     <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table class="hidden w-full text-left text-sm lg:table">
             <thead class="bg-slate-50 text-xs uppercase text-slate-500">
