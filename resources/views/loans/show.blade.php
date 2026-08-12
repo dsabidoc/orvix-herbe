@@ -2,8 +2,9 @@
     use App\Support\Money;
     use App\Support\StatusLabels;
 
-    $balance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
-    $paid = $loan->installments->sum(fn ($installment) => Money::cents($installment->applied_amount));
+    $operationalTotal = $loan->installments->sum(fn ($installment) => Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount));
+    $operationalBalance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
+    $operationalPaid = max(0, $operationalTotal - $operationalBalance);
     $next = $loan->installments->first(fn ($installment) => Money::cents($installment->remaining_amount) > 0);
     $today = now('America/Merida')->toDateString();
     $overdueCount = $loan->installments->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0 && $installment->due_date->toDateString() < $today)->count();
@@ -74,15 +75,15 @@
                 </div>
                 <div class="rounded-md bg-slate-50 p-3">
                     <dt class="text-sm text-slate-500">Contrato</dt>
-                    <dd class="mt-1 font-bold">{{ Money::mxn($loan->contract_total) }}</dd>
+                    <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($operationalTotal)) }}</dd>
                 </div>
                 <div class="rounded-md bg-slate-50 p-3">
                     <dt class="text-sm text-slate-500">Aplicado</dt>
-                    <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($paid)) }}</dd>
+                    <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($operationalPaid)) }}</dd>
                 </div>
                 <div class="rounded-md bg-slate-50 p-3">
                     <dt class="text-sm text-slate-500">Saldo</dt>
-                    <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($balance)) }}</dd>
+                    <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($operationalBalance)) }}</dd>
                 </div>
                 <div class="rounded-md bg-red-50 p-3">
                     <dt class="text-sm text-red-700">Liquidar hoy</dt>
