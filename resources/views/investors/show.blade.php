@@ -43,7 +43,12 @@
                     <h3 class="mt-1 text-xl font-bold text-slate-950">{{ $investor->name }}</h3>
                     <p class="mt-1 text-sm text-slate-500">{{ $investor->email ?: 'Sin correo' }} · {{ $investor->phone ?: 'Sin celular' }}</p>
                 </div>
-                <span class="self-start rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ $investor->status === 'active' ? 'Activo' : 'Inactivo' }}</span>
+                <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                    @if ($canManage)
+                        <button class="rounded-md bg-[#0d9488] px-3 py-2 text-sm font-bold text-white" type="button" data-open-modal="credit-investor-capital-modal">Aportar capital</button>
+                    @endif
+                    <span class="self-start rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ $investor->status === 'active' ? 'Activo' : 'Inactivo' }}</span>
+                </div>
             </div>
             <dl class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <div class="rounded-md bg-blue-50 p-3 ring-1 ring-blue-100"><dt class="text-sm text-blue-700">Capital total</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($capitalTotalCents)) }}</dd></div>
@@ -54,7 +59,7 @@
             </dl>
         </section>
 
-        <div class="grid gap-6 xl:grid-cols-[1fr_360px]">
+        <div class="investor-detail-grid grid gap-6">
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 px-5 py-4">
                     <h3 class="font-bold text-slate-950">Prestamos asignados</h3>
@@ -189,7 +194,19 @@
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-5 py-3">Fecha</th><th class="px-5 py-3">Tipo</th><th class="px-5 py-3 text-right">Monto</th><th class="px-5 py-3 text-right">Saldo antes</th><th class="px-5 py-3 text-right">Saldo despues</th><th class="px-5 py-3">Nota</th></tr></thead>
                     <tbody class="divide-y divide-slate-100">
                         @forelse ($investor->capitalMovements as $movement)
-                            <tr><td class="px-5 py-3">{{ $movement->created_at->format('d/m/Y H:i') }}</td><td class="px-5 py-3">{{ str_replace('_', ' ', $movement->type) }}</td><td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($movement->amount) }}</td><td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_before) }}</td><td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_after) }}</td><td class="px-5 py-3 text-slate-500">{{ $movement->notes }}</td></tr>
+                            @php
+                                $movementLabels = [
+                                    'available_capital_contribution' => 'Aporte a capital disponible',
+                                    'available_capital_adjusted' => 'Ajuste de capital disponible',
+                                    'initial_capital_adjusted' => 'Ajuste de capital inicial',
+                                    'withdrawal' => 'Retiro',
+                                    'reinvest_capital' => 'Reinversion de capital',
+                                    'reinvest_interest' => 'Reinversion de interes',
+                                    'capital_return' => 'Retorno de capital',
+                                    'interest_return' => 'Retorno de interes',
+                                ];
+                            @endphp
+                            <tr><td class="px-5 py-3">{{ $movement->created_at->format('d/m/Y H:i') }}</td><td class="px-5 py-3">{{ $movementLabels[$movement->type] ?? str_replace('_', ' ', $movement->type) }}</td><td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($movement->amount) }}</td><td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_before) }}</td><td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_after) }}</td><td class="px-5 py-3 text-slate-500">{{ $movement->notes }}</td></tr>
                         @empty
                             <tr><td class="px-5 py-8 text-slate-500" colspan="6">Sin movimientos.</td></tr>
                         @endforelse
@@ -198,4 +215,29 @@
             </div>
         </section>
     </div>
+
+    @if ($canManage)
+        <dialog id="credit-investor-capital-modal" class="w-[min(94vw,480px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <form method="POST" action="{{ route('investors.available-capital.credit', $investor) }}">
+                @csrf
+                <div class="border-b border-slate-200 px-5 py-4">
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Aportar capital</p>
+                    <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $investor->name }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">Disponible actual: {{ Money::mxn($investor->available_capital) }}</p>
+                </div>
+                <div class="space-y-4 px-5 py-4">
+                    <label class="block text-sm font-semibold text-slate-700">Monto que entrega
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="amount" type="number" step="0.01" min="1" placeholder="Ej. 50000" required>
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">Nota opcional
+                        <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="notes" rows="2" placeholder="Referencia, forma de entrega o comentario"></textarea>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>
+                    <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Agregar capital</button>
+                </div>
+            </form>
+        </dialog>
+    @endif
 </x-layouts.app>

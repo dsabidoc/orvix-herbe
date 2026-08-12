@@ -55,7 +55,8 @@
                             <td class="px-5 py-3 text-right">{{ $investor->investments_count }}</td>
                             <td class="px-5 py-3"><span class="rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ $investor->status === 'active' ? 'Activo' : 'Inactivo' }}</span></td>
                             <td class="px-5 py-3 text-right">
-                                <div class="flex justify-end gap-2">
+                                <div class="flex flex-wrap justify-end gap-2">
+                                    <button class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700" type="button" data-open-modal="credit-investor-capital-modal-{{ $investor->id }}">Aportar capital</button>
                                     <button class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700" type="button" data-open-modal="edit-investor-modal-{{ $investor->id }}">Editar</button>
                                     <form method="POST" action="{{ route('investors.destroy', $investor) }}" data-confirm-delete data-confirm-title="¿Eliminar este inversionista?" data-confirm-message="Solo se permite eliminarlo si no tiene prestamos activos vivos. El historial permanecera resguardado.">
                                         @csrf
@@ -98,6 +99,29 @@
                 <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
                     <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>
                     <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Guardar cambios</button>
+                </div>
+            </form>
+        </dialog>
+
+        <dialog id="credit-investor-capital-modal-{{ $investor->id }}" class="w-[min(94vw,480px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <form method="POST" action="{{ route('investors.available-capital.credit', $investor) }}">
+                @csrf
+                <div class="border-b border-slate-200 px-5 py-4">
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Aportar capital</p>
+                    <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $investor->name }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">Disponible actual: {{ Money::mxn($investor->available_capital) }}</p>
+                </div>
+                <div class="space-y-4 px-5 py-4">
+                    <label class="block text-sm font-semibold text-slate-700">Monto que entrega
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="amount" type="number" step="0.01" min="1" placeholder="Ej. 50000" required>
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">Nota opcional
+                        <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="notes" rows="2" placeholder="Referencia, forma de entrega o comentario"></textarea>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>
+                    <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Agregar capital</button>
                 </div>
             </form>
         </dialog>

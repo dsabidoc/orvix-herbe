@@ -249,23 +249,23 @@
                         <input name="loan_id" type="hidden" value="{{ $loan->id }}">
                         <input name="return_to" type="hidden" value="loan">
                         <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
-                        <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Pagar todas</button>
+                        <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Pagar todas las seleccionadas</button>
                     </form>
                 @endif
             </div>
             <div class="max-h-[560px] overflow-x-auto overflow-y-auto">
-                <table class="w-full min-w-[1040px] table-fixed text-left text-sm">
+                <table class="w-full min-w-[940px] table-fixed text-left text-sm">
                     <colgroup>
-                        <col class="w-[44px]">
-                        <col class="w-[68px]">
-                        <col class="w-[116px]">
+                        <col class="w-[40px]">
+                        <col class="w-[56px]">
                         <col class="w-[104px]">
-                        <col class="w-[108px]">
-                        <col>
-                        <col>
-                        <col>
-                        <col>
-                        <col>
+                        <col class="w-[96px]">
+                        <col class="w-[128px]">
+                        <col class="w-[104px]">
+                        <col class="w-[110px]">
+                        <col class="w-[110px]">
+                        <col class="w-[110px]">
+                        <col class="w-[104px]">
                     </colgroup>
                     <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
@@ -274,15 +274,15 @@
                                     <input class="rounded border-slate-300" type="checkbox" data-bulk-payment-toggle aria-label="Seleccionar todas las letras visibles">
                                 @endif
                             </th>
-                            <th class="px-4 py-3">Letra</th>
-                            <th class="px-4 py-3">Fecha</th>
-                            <th class="px-2 py-3">Estatus</th>
-                            <th class="px-2 py-3 text-right">Pagado</th>
-                            <th class="px-4 py-3 text-right">Abono a Capital</th>
-                            <th class="px-4 py-3 text-right">Interes</th>
-                            <th class="px-4 py-3 text-right">Subtotal</th>
-                            <th class="px-4 py-3 text-right">Pagaré</th>
-                            <th class="px-4 py-3 text-right">Capital</th>
+                            <th class="px-3 py-3">Letra</th>
+                            <th class="px-3 py-3">Fecha</th>
+                            <th class="px-3 py-3 text-right">Pagado</th>
+                            <th class="px-3 py-3 text-right">Abono a Capital</th>
+                            <th class="px-3 py-3 text-right">Interes</th>
+                            <th class="px-3 py-3 text-right">Subtotal</th>
+                            <th class="px-3 py-3 text-right">Pagaré</th>
+                            <th class="px-3 py-3 text-right">Capital</th>
+                            <th class="px-3 py-3">Estatus</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -311,17 +311,14 @@
                                         ->isEmpty();
                             @endphp
                             <tr class="{{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
-                                <td class="px-4 py-2">
+                                <td class="px-3 py-2">
                                     @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
                                         <input class="rounded border-slate-300" type="checkbox" value="{{ $installment->id }}" data-bulk-payment-checkbox aria-label="Seleccionar letra {{ $installment->number }}">
                                     @endif
                                 </td>
-                                <td class="px-4 py-2 font-semibold">{{ $installment->number }}</td>
-                                <td class="px-4 py-2">{{ $installment->due_date->format('d/m/Y') }}</td>
-                                <td class="px-2 py-2">
-                                    <span class="{{ $statusClass }} rounded px-2 py-1 text-xs font-bold">{{ $statusLabel }}</span>
-                                </td>
-                                <td class="px-2 py-2 text-right">
+                                <td class="px-3 py-2 font-semibold">{{ $installment->number }}</td>
+                                <td class="px-3 py-2">{{ $installment->due_date->format('d/m/Y') }}</td>
+                                <td class="px-3 py-2 text-right">
                                     @if (Money::cents($installment->remaining_amount) > 0 && ! $movement)
                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}">
                                             @csrf
@@ -343,11 +340,14 @@
                                         <span class="text-xs font-semibold text-slate-400">-</span>
                                     @endif
                                 </td>
-                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->principal_amount) }}</td>
-                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->interest_amount) }}</td>
-                                <td class="px-4 py-2 text-right">{{ Money::mxn(Money::decimal($subtotalCents)) }}</td>
-                                <td class="px-4 py-2 text-right font-semibold">{{ Money::mxn($installment->contract_amount) }}</td>
-                                <td class="px-4 py-2 text-right">{{ Money::mxn($installment->capital_balance) }}</td>
+                                <td class="px-3 py-2 text-right">{{ Money::mxn($installment->principal_amount) }}</td>
+                                <td class="px-3 py-2 text-right">{{ Money::mxn($installment->interest_amount) }}</td>
+                                <td class="px-3 py-2 text-right">{{ Money::mxn(Money::decimal($subtotalCents)) }}</td>
+                                <td class="px-3 py-2 text-right font-semibold">{{ Money::mxn($installment->contract_amount) }}</td>
+                                <td class="px-3 py-2 text-right">{{ Money::mxn($installment->capital_balance) }}</td>
+                                <td class="px-3 py-2">
+                                    <span class="{{ $statusClass }} rounded px-2 py-1 text-xs font-bold">{{ $statusLabel }}</span>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

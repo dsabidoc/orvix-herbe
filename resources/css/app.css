@@ -26,6 +26,16 @@
     display: none;
 }
 
+.investor-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 96rem) {
+    .investor-detail-grid {
+        grid-template-columns: minmax(0, 1fr) 360px;
+    }
+}
+
 @media print {
     @page {
         size: letter portrait;

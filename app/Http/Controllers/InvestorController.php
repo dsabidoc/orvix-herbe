@@ -310,6 +310,27 @@ class InvestorController extends Controller
         return back()->with('status', 'Retiro directo registrado.');
     }
 
+    public function creditAvailableCapital(Request $request, Investor $investor, InvestmentAllocationService $ledger): RedirectResponse
+    {
+        abort_unless($request->user()->can('investors.manage'), 403);
+        abort_if($investor->status === 'deleted', 404);
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:1'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $ledger->creditAvailable(
+            $investor,
+            Money::cents($data['amount']),
+            'available_capital_contribution',
+            $request->user()->id,
+            notes: $data['notes'] ?? 'Aporte directo a capital disponible',
+        );
+
+        return back()->with('status', 'Capital disponible agregado.');
+    }
+
     public function creditReturns(Request $request, Investor $investor): RedirectResponse
     {
         abort_unless($request->user()->can('investors.manage'), 403);
