@@ -616,7 +616,7 @@
                                 <a class="grid size-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 hover:text-[#0f766e]" href="{{ route('documents.download', $document) }}" title="Descargar archivo">
                                     <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                                 </a>
-                                <form method="POST" action="{{ route('documents.destroy', $document) }}" data-confirm-document-delete>
+                                <form method="POST" action="{{ route('documents.destroy', $document) }}" data-confirm-delete data-confirm-title="¿Eliminar este archivo del expediente?" data-confirm-message="Esta accion quitara el archivo del expediente. Si fue un error, tendran que volver a subirlo.">
                                     @csrf
                                     @method('DELETE')
                                     <button class="grid size-8 place-items-center rounded-md border border-red-100 bg-white text-red-600 hover:bg-red-50" type="submit" title="Eliminar archivo">

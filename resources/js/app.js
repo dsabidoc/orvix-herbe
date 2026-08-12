@@ -1,5 +1,5 @@
 let pendingPaidForm = null;
-let pendingDocumentDeleteForm = null;
+let pendingDeleteForm = null;
 
 const applyTheme = (theme) => {
     const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
@@ -67,7 +67,7 @@ document.addEventListener('submit', (event) => {
 document.addEventListener('submit', (event) => {
     const form = event.target;
 
-    if (!(form instanceof HTMLFormElement) || !form.matches('[data-confirm-document-delete]')) {
+    if (!(form instanceof HTMLFormElement) || !form.matches('[data-confirm-delete], [data-confirm-document-delete]')) {
         return;
     }
 
@@ -75,14 +75,26 @@ document.addEventListener('submit', (event) => {
         return;
     }
 
-    const dialog = document.getElementById('confirm-document-delete-dialog');
+    const dialog = document.getElementById('confirm-delete-dialog');
 
     if (!(dialog instanceof HTMLDialogElement)) {
         return;
     }
 
     event.preventDefault();
-    pendingDocumentDeleteForm = form;
+    pendingDeleteForm = form;
+
+    const title = dialog.querySelector('[data-confirm-delete-title]');
+    const message = dialog.querySelector('[data-confirm-delete-message]');
+
+    if (title instanceof HTMLElement) {
+        title.textContent = form.dataset.confirmTitle || '¿Eliminar este registro?';
+    }
+
+    if (message instanceof HTMLElement) {
+        message.textContent = form.dataset.confirmMessage || 'Esta accion no se puede deshacer.';
+    }
+
     dialog.showModal();
 });
 
@@ -179,18 +191,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const documentDeleteDialog = document.getElementById('confirm-document-delete-dialog');
+    const deleteDialog = document.getElementById('confirm-delete-dialog');
 
-    if (documentDeleteDialog instanceof HTMLDialogElement) {
-        documentDeleteDialog.addEventListener('close', () => {
-            if (documentDeleteDialog.returnValue !== 'confirm' || !pendingDocumentDeleteForm) {
-                pendingDocumentDeleteForm = null;
+    if (deleteDialog instanceof HTMLDialogElement) {
+        deleteDialog.addEventListener('close', () => {
+            if (deleteDialog.returnValue !== 'confirm' || !pendingDeleteForm) {
+                pendingDeleteForm = null;
                 return;
             }
 
-            pendingDocumentDeleteForm.dataset.confirmed = 'true';
-            pendingDocumentDeleteForm.requestSubmit();
-            pendingDocumentDeleteForm = null;
+            pendingDeleteForm.dataset.confirmed = 'true';
+            pendingDeleteForm.requestSubmit();
+            pendingDeleteForm = null;
         });
     }
 

@@ -290,17 +290,17 @@
                 </form>
             </dialog>
 
-            <dialog id="confirm-document-delete-dialog" class="w-[min(92vw,420px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <dialog id="confirm-delete-dialog" class="w-[min(92vw,420px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
                 <form method="dialog">
                     <div class="border-b border-slate-200 px-5 py-4">
-                        <p class="text-sm font-semibold uppercase tracking-[0.16em] text-red-700">Eliminar archivo</p>
-                        <h3 class="mt-1 text-lg font-bold text-slate-950">¿Eliminar este archivo del expediente?</h3>
+                        <p class="text-sm font-semibold uppercase tracking-[0.16em] text-red-700">Confirmar eliminacion</p>
+                        <h3 class="mt-1 text-lg font-bold text-slate-950" data-confirm-delete-title>¿Eliminar este registro?</h3>
                     </div>
                     <div class="px-5 py-4">
-                        <p class="text-sm leading-6 text-slate-600">Esta accion quitara el archivo del expediente. Si fue un error, tendran que volver a subirlo.</p>
+                        <p class="text-sm leading-6 text-slate-600" data-confirm-delete-message>Esta accion no se puede deshacer.</p>
                     </div>
                     <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
-                        <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" value="cancel">Cancelar</button>
+                        <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" value="cancel">No</button>
                         <button class="rounded-md bg-red-700 px-4 py-2 text-sm font-bold text-white" value="confirm">Si, eliminar</button>
                     </div>
                 </form>

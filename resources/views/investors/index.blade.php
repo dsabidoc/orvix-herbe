@@ -57,7 +57,7 @@
                             <td class="px-5 py-3 text-right">
                                 <div class="flex justify-end gap-2">
                                     <button class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700" type="button" data-open-modal="edit-investor-modal-{{ $investor->id }}">Editar</button>
-                                    <form method="POST" action="{{ route('investors.destroy', $investor) }}" onsubmit="return confirm('Eliminar este inversionista? Solo se permite si no tiene prestamos activos vivos.');">
+                                    <form method="POST" action="{{ route('investors.destroy', $investor) }}" data-confirm-delete data-confirm-title="¿Eliminar este inversionista?" data-confirm-message="Solo se permite eliminarlo si no tiene prestamos activos vivos. El historial permanecera resguardado.">
                                         @csrf
                                         @method('DELETE')
                                         <button class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700" type="submit">Eliminar</button>
