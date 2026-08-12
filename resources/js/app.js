@@ -54,6 +54,14 @@ document.addEventListener('submit', (event) => {
     event.preventDefault();
     pendingPaidForm = form;
 
+    const capitalAdvanceButton = dialog.querySelector('[data-capital-advance-action]');
+    const allowsCapitalAdvance = form.dataset.capitalAdvanceAllowed === 'true';
+
+    if (capitalAdvanceButton instanceof HTMLButtonElement) {
+        capitalAdvanceButton.hidden = !allowsCapitalAdvance;
+        capitalAdvanceButton.disabled = !allowsCapitalAdvance;
+    }
+
     const paymentDateInput = dialog.querySelector('#confirm-paid-date');
     const formPaymentDateInput = form.querySelector('input[name="operated_on"]');
 
@@ -217,6 +225,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dialog instanceof HTMLDialogElement) {
         dialog.addEventListener('close', () => {
             if (!['confirm', 'confirm-no-investors', 'confirm-capital-advance'].includes(dialog.returnValue) || !pendingPaidForm) {
+                pendingPaidForm = null;
+                return;
+            }
+
+            if (dialog.returnValue === 'confirm-capital-advance' && pendingPaidForm.dataset.capitalAdvanceAllowed !== 'true') {
                 pendingPaidForm = null;
                 return;
             }

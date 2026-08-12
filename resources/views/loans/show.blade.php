@@ -301,6 +301,14 @@
                                 $rowDelinquencyCents = (! $movement && Money::cents($installment->remaining_amount) > 0 && (float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < $today)
                                     ? (int) round($subtotalCents * ((float) $loan->delinquency_rate / 100))
                                     : 0;
+                                $capitalAdvanceAllowed = $canOperateLoan
+                                    && ! $movement
+                                    && Money::cents($installment->remaining_amount) > 0
+                                    && Money::cents($installment->principal_amount) > 0
+                                    && $loan->installments
+                                        ->filter(fn ($candidate) => $candidate->number > $installment->number)
+                                        ->filter(fn ($candidate) => Money::cents($candidate->remaining_amount) > 0 && ! $candidate->reportedMovement)
+                                        ->isEmpty();
                             @endphp
                             <tr class="{{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
                                 <td class="px-4 py-2">
@@ -315,7 +323,7 @@
                                 </td>
                                 <td class="px-2 py-2 text-right">
                                     @if (Money::cents($installment->remaining_amount) > 0 && ! $movement)
-                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid>
+                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}">
                                             @csrf
                                             <input name="return_to" type="hidden" value="loan">
                                             <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">

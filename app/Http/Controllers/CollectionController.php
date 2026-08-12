@@ -129,6 +129,11 @@ class CollectionController extends Controller
 
         $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
         $movementType = $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary';
+
+        if ($paymentEffect === 'capital_advance' && ! $this->isCapitalAdvanceEligible($installment)) {
+            return back()->with('warning', 'El abono a capital solo se puede aplicar desde la ultima letra pendiente, avanzando de atras hacia adelante.');
+        }
+
         $contractAmountCents = $paymentEffect === 'capital_advance'
             ? $this->capitalAdvanceAmountCents($installment)
             : Money::cents($data['contract_amount']);
@@ -205,6 +210,8 @@ class CollectionController extends Controller
             'payment_effect' => ['nullable', 'in:normal,no_investors,capital_advance'],
             'return_to' => ['nullable', 'string', 'max:20'],
         ]);
+
+        abort_if(($data['payment_effect'] ?? null) === 'capital_advance', 422, 'El abono a capital no esta disponible en pagos masivos; debe hacerse letra por letra desde la ultima pendiente.');
 
         $installments = Installment::query()
             ->with('loan.operator')
@@ -306,6 +313,20 @@ class CollectionController extends Controller
         $ratio = min(1, $remainingCents / $operationalCents);
 
         return min($remainingCents, (int) round(Money::cents($installment->principal_amount) * $ratio));
+    }
+
+    private function isCapitalAdvanceEligible(Installment $installment): bool
+    {
+        if (Money::cents($installment->remaining_amount) <= 0 || Money::cents($installment->principal_amount) <= 0) {
+            return false;
+        }
+
+        return ! Installment::query()
+            ->where('loan_id', $installment->loan_id)
+            ->where('number', '>', $installment->number)
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->exists();
     }
 
     private function authorizeInstallmentAccess(Request $request, Installment $installment): void

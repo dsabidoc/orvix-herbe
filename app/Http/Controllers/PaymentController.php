@@ -19,7 +19,7 @@ class PaymentController extends Controller
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
-            'type' => ['required', 'in:ordinary,partial,advance,capital_advance,settlement'],
+            'type' => ['required', 'in:ordinary,partial,advance,settlement'],
             'operated_on' => ['required', 'date'],
             'contract_amount' => ['required', 'numeric', 'min:1'],
             'operator_surcharge_amount' => ['nullable', 'numeric', 'min:0'],
