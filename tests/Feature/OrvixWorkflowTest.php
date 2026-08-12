@@ -743,6 +743,23 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame($availableBeforeCents - 10000000, Money::cents($investor->fresh()->available_capital));
     }
 
+    public function test_create_loan_form_uses_orvix_default_conditions(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('loans.create'))
+            ->assertOk()
+            ->assertSee('value="rounded" selected', false)
+            ->assertSee('name="rate_value"', false)
+            ->assertSee('value="2"', false)
+            ->assertSee('name="delinquency_rate"', false)
+            ->assertSee('value="10"', false)
+            ->assertSee('value="0" selected', false);
+    }
+
     public function test_rounded_quote_lists_available_investors_for_funding(): void
     {
         $this->seed(DatabaseSeeder::class);

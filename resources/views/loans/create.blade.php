@@ -76,8 +76,8 @@
                 <h3 class="font-bold text-slate-950">Condiciones</h3>
                 <label class="block text-sm font-semibold text-slate-700">Metodo de prestamo
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method">
-                        <option value="regular" @selected(old('calculation_method', 'regular') === 'regular')>Prestamo regular</option>
-                        <option value="rounded" @selected(old('calculation_method') === 'rounded')>Prestamo con redondeo</option>
+                        <option value="rounded" @selected(old('calculation_method', 'rounded') === 'rounded')>Prestamo con redondeo</option>
+                        <option value="regular" @selected(old('calculation_method') === 'regular')>Prestamo regular</option>
                     </select>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Capital requerido
@@ -91,7 +91,7 @@
                         </select>
                     </label>
                     <label class="block text-sm font-semibold text-slate-700">Porcentaje
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="rate_value" placeholder="Ej. 2" type="number" step="0.000001" value="{{ old('rate_value') }}" required>
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="rate_value" placeholder="Ej. 2" type="number" step="0.000001" value="{{ old('rate_value', '2') }}" required>
                     </label>
                 </div>
                 <p class="-mt-2 text-xs text-slate-500">Captura el porcentaje en numero: para 2% escribe 2; para 24% escribe 24.</p>
@@ -100,7 +100,7 @@
                 </label>
                 <div class="grid grid-cols-2 gap-3">
                     <label class="block text-sm font-semibold text-slate-700">Morosidad %
-                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_rate" placeholder="Ej. 6" type="number" step="0.0001" min="0" max="100" value="{{ old('delinquency_rate', '0') }}">
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_rate" placeholder="Ej. 10" type="number" step="0.0001" min="0" max="100" value="{{ old('delinquency_rate', '10') }}">
                     </label>
                     <label class="block text-sm font-semibold text-slate-700">Dias gracia
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="delinquency_grace_days" placeholder="Ej. 5" type="number" min="0" max="365" value="{{ old('delinquency_grace_days', '0') }}">
@@ -120,8 +120,8 @@
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">IVA
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="vat_enabled" required>
-                        <option value="1" @selected(old('vat_enabled', '1') === '1')>Con IVA</option>
-                        <option value="0" @selected(old('vat_enabled') === '0')>Sin IVA</option>
+                        <option value="0" @selected(old('vat_enabled', '0') === '0')>Sin IVA</option>
+                        <option value="1" @selected(old('vat_enabled') === '1')>Con IVA</option>
                     </select>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Calculo de interes
