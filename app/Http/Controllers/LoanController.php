@@ -13,6 +13,7 @@ use App\Models\Loan;
 use App\Models\LoanInvoiceMovement;
 use App\Models\LoanNote;
 use App\Models\Operator;
+use App\Support\LoanFolios;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -285,6 +286,11 @@ class LoanController extends Controller
 
         DB::transaction(function () use ($loan, $data, $newMonthlyRate, $newAdministrationFee, $conditionsChanged, $calculator) {
             $loan = Loan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
+            $folioSourceChanged = (int) $loan->operator_id !== (int) $data['operator_id']
+                || $loan->start_date->toDateString() !== CarbonImmutable::parse($data['start_date'])->toDateString();
+            $updatedFolio = $folioSourceChanged
+                ? LoanFolios::next((int) $data['operator_id'], $data['start_date'], $loan->id)
+                : $loan->folio;
 
             $loan->client->update([
                 'operator_id' => $data['operator_id'],
@@ -304,6 +310,7 @@ class LoanController extends Controller
 
             if (! $conditionsChanged) {
                 $loan->update([
+                    'folio' => $updatedFolio,
                     'operator_id' => $data['operator_id'],
                     'guarantor_name' => $data['guarantor_name'] ?? null,
                     'guarantor_address' => $data['guarantor_address'] ?? null,
@@ -331,6 +338,7 @@ class LoanController extends Controller
 
             $loan->installments()->delete();
             $loan->update([
+                'folio' => $updatedFolio,
                 'operator_id' => $data['operator_id'],
                 'capital' => $schedule->capital(),
                 'monthly_rate' => $newMonthlyRate,

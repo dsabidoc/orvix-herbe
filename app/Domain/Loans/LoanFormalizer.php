@@ -35,7 +35,7 @@ class LoanFormalizer
 
             $loan = Loan::query()->create([
                 'public_id' => (string) Str::ulid(),
-                'folio' => LoanFolios::next($data['operator_id'] ?? $client->operator_id),
+                'folio' => LoanFolios::next($data['operator_id'] ?? $client->operator_id, $data['start_date']),
                 'client_id' => $client->id,
                 'operator_id' => $data['operator_id'] ?? $client->operator_id,
                 'vehicle_id' => $data['vehicle_id'] ?? null,
