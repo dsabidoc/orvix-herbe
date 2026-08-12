@@ -11,6 +11,7 @@ use App\Http\Controllers\LoanController;
 use App\Http\Controllers\LoanCreationController;
 use App\Http\Controllers\LoanInvestmentController;
 use App\Http\Controllers\LoanSettlementController;
+use App\Http\Controllers\OperatorController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PortfolioBalanceController;
 use App\Http\Controllers\SettingsController;
@@ -83,6 +84,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/clientes/nuevo', [ClientController::class, 'create'])->name('clients.create');
     Route::post('/clientes', [ClientController::class, 'store'])->name('clients.store');
     Route::get('/clientes/{client}', [ClientController::class, 'show'])->name('clients.show');
+
+    Route::get('/operadores', [OperatorController::class, 'index'])->name('operators.index');
+    Route::post('/operadores', [OperatorController::class, 'store'])->name('operators.store');
 
     Route::get('/simulador', [SimulatorController::class, 'index'])->name('simulator.index');
 

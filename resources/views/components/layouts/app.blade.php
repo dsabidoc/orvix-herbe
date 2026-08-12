@@ -46,6 +46,9 @@
                                 ['Solicitudes', 'applications.index', 'file'],
                                 ['Clientes', 'clients.index', 'users'],
                             ];
+                        if (! $isInvestorOnly && auth()->user()->can('operators.manage')) {
+                            $mainNavItems[] = ['Operadores', 'operators.index', 'users'];
+                        }
                         if (! $isInvestorOnly && $canOpenInvestors) {
                             $mainNavItems[] = ['Inversionistas', 'investors.index', 'portfolio'];
                         }

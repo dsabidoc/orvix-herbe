@@ -74,4 +74,4 @@ Artisan::command('orvix:rebuild-loan-folios {--dry-run}', function () {
     $this->info($changed->count().' folio(s) de prestamos actualizados.');
 
     return 0;
-})->purpose('Rebuild loan folios using operator initial, purchase date and sequence');
+})->purpose('Rebuild loan folios using operator 3-letter prefix, purchase date and sequence');

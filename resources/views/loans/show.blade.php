@@ -8,7 +8,6 @@
     $today = now('America/Merida')->toDateString();
     $overdueCount = $loan->installments->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0 && $installment->due_date->toDateString() < $today)->count();
     $interestMethodLabel = $loan->interest_calculation_method === 'outstanding_balance' ? 'saldo insoluto' : 'capital fijo';
-    $totalInterest = $loan->installments->sum(fn ($installment) => Money::cents($installment->interest_amount));
     $loanUser = auth()->user();
     $isInvestorReadOnly = $loanUser->can('investments.view-own') && ! $loanUser->can('investors.manage');
     $canOperateLoan = ! $isInvestorReadOnly;
@@ -204,13 +203,12 @@
                 @endif
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[760px] text-left text-sm">
+                <table class="w-full min-w-[620px] text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
                             <th class="px-5 py-3">Participante</th>
                             <th class="px-5 py-3 text-right">Capital</th>
                             <th class="px-5 py-3 text-right">% Interes</th>
-                            <th class="px-5 py-3 text-right">Interes estimado</th>
                             <th class="px-5 py-3">Rol</th>
                         </tr>
                     </thead>
@@ -218,18 +216,16 @@
                         @forelse ($loan->investments as $investment)
                             @php
                                 $interestSharePercent = (float) $investment->investor_share_rate * 100;
-                                $estimatedInterest = (int) round($totalInterest * (float) $investment->investor_share_rate);
                             @endphp
                             <tr>
                                 <td class="px-5 py-3 font-semibold text-slate-950">{{ $investment->investor?->name }}</td>
                                 <td class="px-5 py-3 text-right">{{ Money::mxn($investment->amount) }}</td>
                                 <td class="px-5 py-3 text-right">{{ number_format($interestSharePercent, 2) }}%</td>
-                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($estimatedInterest)) }}</td>
                                 <td class="px-5 py-3 text-slate-500">Inversionista</td>
                             </tr>
                         @empty
                             <tr>
-                                <td class="px-5 py-6 text-sm text-slate-500" colspan="5">Este prestamo aun no tiene inversionistas configurados.</td>
+                                <td class="px-5 py-6 text-sm text-slate-500" colspan="4">Este prestamo aun no tiene inversionistas configurados.</td>
                             </tr>
                         @endforelse
                     </tbody>

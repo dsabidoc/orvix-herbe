@@ -29,9 +29,6 @@
         }) ?? 0;
     });
     $capitalTotalCents = Money::cents($investor->available_capital) + $pendingReturnCapitalCents;
-    $estimatedInterestCents = $investor->investments->sum(function ($investment) {
-        return $investment->loan?->installments?->sum(fn ($installment) => (int) round(\App\Support\Money::cents($installment->interest_amount) * (float) $investment->investor_share_rate)) ?? 0;
-    });
 @endphp
 
 <x-layouts.app title="Inversionista · {{ $investor->name }}">
@@ -66,14 +63,13 @@
                     <p class="mt-1 text-sm text-slate-500">Consulta de cartera ligada al inversionista. No se muestra operador.</p>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[840px] text-left text-sm">
+                    <table class="w-full min-w-[700px] text-left text-sm">
                         <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                             <tr>
                                 <th class="px-5 py-3">Prestamo</th>
                                 <th class="px-5 py-3">Vehiculo</th>
                                 <th class="px-5 py-3 text-right">Capital aportado</th>
                                 <th class="px-5 py-3 text-right">% Interes</th>
-                                <th class="px-5 py-3 text-right">Interes estimado</th>
                                 <th class="px-5 py-3">Estado</th>
                             </tr>
                         </thead>
@@ -81,7 +77,6 @@
                             @forelse ($investor->investments as $investment)
                                 @php
                                     $loan = $investment->loan;
-                                    $interestCents = $loan?->installments?->sum(fn ($installment) => (int) round(Money::cents($installment->interest_amount) * (float) $investment->investor_share_rate)) ?? 0;
                                 @endphp
                                 <tr>
                                     <td class="px-5 py-3">
@@ -95,11 +90,10 @@
                                     <td class="px-5 py-3 text-slate-600">{{ $loan?->vehicle?->brand }} {{ $loan?->vehicle?->model }} {{ $loan?->vehicle?->year }}</td>
                                     <td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($investment->amount) }}</td>
                                     <td class="px-5 py-3 text-right">{{ number_format((float) $investment->investor_share_rate * 100, 2) }}%</td>
-                                    <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($interestCents)) }}</td>
                                     <td class="px-5 py-3"><span class="rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{{ $loan?->status === 'active' ? 'Activo' : 'Cerrado' }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td class="px-5 py-8 text-slate-500" colspan="6">Sin prestamos asignados.</td></tr>
+                                <tr><td class="px-5 py-8 text-slate-500" colspan="5">Sin prestamos asignados.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

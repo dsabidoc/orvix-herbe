@@ -27,10 +27,11 @@ class LoanFolios
     public static function prefix(?int $operatorId = null, string|CarbonInterface|null $date = null): string
     {
         $operator = $operatorId ? Operator::query()->find($operatorId) : null;
-        $operatorLetter = Str::upper(Str::substr(Str::ascii($operator?->name ?: 'O'), 0, 1)) ?: 'O';
+        $operatorPrefix = preg_replace('/[^A-Z0-9]/', '', Str::upper(Str::ascii($operator?->name ?: 'OPE')));
+        $operatorPrefix = Str::substr($operatorPrefix ?: 'OPE', 0, 3);
         $purchaseDate = self::date($date)->format('dmY');
 
-        return $operatorLetter.'-'.$purchaseDate.'-';
+        return $operatorPrefix.'-'.$purchaseDate.'-';
     }
 
     public static function format(string $prefix, int $sequence): string
