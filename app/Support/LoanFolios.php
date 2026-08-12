@@ -29,7 +29,7 @@ class LoanFolios
         $operator = $operatorId ? Operator::query()->find($operatorId) : null;
         $operatorPrefix = preg_replace('/[^A-Z0-9]/', '', Str::upper(Str::ascii($operator?->name ?: 'OPE')));
         $operatorPrefix = Str::substr($operatorPrefix ?: 'OPE', 0, 3);
-        $purchaseDate = self::date($date)->format('dmY');
+        $purchaseDate = self::date($date)->format('dmy');
 
         return $operatorPrefix.'-'.$purchaseDate.'-';
     }
