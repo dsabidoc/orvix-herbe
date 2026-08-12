@@ -46,7 +46,6 @@ class InvestorController extends Controller
         return view('investors.index', [
             'investors' => $query->paginate(15)->withQueryString(),
             'investorUsers' => User::query()
-                ->role('inversionista')
                 ->whereDoesntHave('investorProfile')
                 ->where('status', 'active')
                 ->orderBy('name')
@@ -83,7 +82,11 @@ class InvestorController extends Controller
             $user = null;
 
             if (! empty($data['user_id'])) {
-                $user = User::query()->role('inversionista')->whereKey($data['user_id'])->lockForUpdate()->firstOrFail();
+                $user = User::query()
+                    ->where('status', 'active')
+                    ->whereKey($data['user_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
                 if ($user->investorProfile()->exists()) {
                     abort(422, 'Este usuario ya esta ligado a un inversionista.');

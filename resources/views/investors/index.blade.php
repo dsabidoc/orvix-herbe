@@ -83,14 +83,14 @@
             </div>
             <div class="grid gap-4 px-5 py-4 sm:grid-cols-2">
                 <div class="sm:col-span-2">
-                    <label class="text-sm font-semibold text-slate-700">Usuario inversionista existente</label>
+                    <label class="text-sm font-semibold text-slate-700">Usuario existente</label>
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="user_id" data-investor-user-select data-investor-users='@json($investorUserOptions)'>
                         <option value="">Crear inversionista sin usuario ligado</option>
                         @foreach ($investorUsers ?? [] as $user)
                             <option value="{{ $user->id }}" @selected((string) old('user_id') === (string) $user->id)>{{ $user->name }} · {{ $user->email }}</option>
                         @endforeach
                     </select>
-                    <p class="mt-1 text-xs text-slate-500">Si el usuario ya fue dado de alta con rol inversionista, seleccionalo aqui para precargar sus datos y ligar su acceso.</p>
+                    <p class="mt-1 text-xs text-slate-500">Si la persona ya existe como usuario, seleccionala aqui para precargar sus datos y ligar su perfil de inversionista.</p>
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Nombre</label>
