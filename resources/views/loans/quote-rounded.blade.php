@@ -41,7 +41,7 @@
                             <input name="selected_option" type="hidden" value="{{ $key }}">
                             <div class="mb-4 rounded-md bg-slate-50 p-3">
                                 <h4 class="font-bold text-slate-950">Inversionistas</h4>
-                                <p class="mt-1 text-sm text-slate-500">Cubre {{ Money::mxn(Money::decimal($quote['input']['capital_cents'])) }} de capital y 100% de intereses.</p>
+                                <p class="mt-1 text-sm text-slate-500">Opcional al crear. Si los capturas ahora, deben cubrir {{ Money::mxn(Money::decimal($quote['input']['capital_cents'])) }} de capital y 100% de intereses; tambien puedes asignarlos despues desde el detalle del prestamo.</p>
                                 <div class="mt-3 space-y-2">
                                     @for ($index = 0; $index < 4; $index++)
                                         <div class="grid gap-2 sm:grid-cols-[1fr_130px_120px]">

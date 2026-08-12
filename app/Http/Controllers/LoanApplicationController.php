@@ -188,14 +188,16 @@ class LoanApplicationController extends Controller
 
         $data = $request->validate([
             'start_date' => ['required', 'date'],
-            'investors' => ['required', 'array', 'min:1', 'max:8'],
+            'investors' => ['nullable', 'array', 'max:8'],
             'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
             'investors.*.capital_amount' => ['nullable', 'numeric', 'min:0'],
             'investors.*.interest_share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
         $conditions = $application->approved_conditions;
-        $allocator->participants($data['investors'], Money::cents($conditions['capital']));
+        if ($allocator->hasParticipants($data['investors'] ?? [])) {
+            $allocator->participants($data['investors'], Money::cents($conditions['capital']), allowEmpty: true);
+        }
 
         $loan = $formalizer->create($application->client, [
             'operator_id' => $application->operator_id,
@@ -210,7 +212,7 @@ class LoanApplicationController extends Controller
             'payment_day' => (int) $conditions['payment_day'],
             'start_date' => $data['start_date'],
             'first_payment_date' => $conditions['first_payment_date'] ?? $data['start_date'],
-            'investors' => $data['investors'],
+            'investors' => $data['investors'] ?? [],
             'created_by' => $request->user()->id,
         ]);
 

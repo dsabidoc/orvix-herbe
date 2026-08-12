@@ -3,10 +3,12 @@
 namespace App\Domain\Investors;
 
 use App\Models\Investment;
+use App\Models\CollectionMovement;
 use App\Models\Investor;
 use App\Models\InvestorCapitalMovement;
 use App\Models\Loan;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,11 +16,13 @@ use Illuminate\Validation\ValidationException;
 
 class InvestmentAllocationService
 {
+    public function __construct(private readonly InvestorReturnRecorder $investorReturnRecorder) {}
+
     /**
      * @param  array<int, array<string, mixed>>  $input
      * @return Collection<int, array{investor:Investor, investor_id:int, capital_cents:int, interest_share_percent:float}>
      */
-    public function participants(array $input, int $capitalCents, ?Loan $loan = null): Collection
+    public function participants(array $input, int $capitalCents, ?Loan $loan = null, bool $allowEmpty = false): Collection
     {
         $participants = collect($input)
             ->filter(fn (array $row) => filled($row['investor_id'] ?? null))
@@ -34,7 +38,7 @@ class InvestmentAllocationService
             })
             ->values();
 
-        $this->validateParticipants($participants, $capitalCents, $loan);
+        $this->validateParticipants($participants, $capitalCents, $loan, $allowEmpty);
 
         return $participants;
     }
@@ -42,11 +46,15 @@ class InvestmentAllocationService
     /**
      * @param  Collection<int, array{investor:Investor|null, investor_id:int, capital_cents:int, interest_share_percent:float}>  $participants
      */
-    public function validateParticipants(Collection $participants, int $capitalCents, ?Loan $loan = null): void
+    public function validateParticipants(Collection $participants, int $capitalCents, ?Loan $loan = null, bool $allowEmpty = false): void
     {
         if ($participants->isEmpty()) {
+            if ($allowEmpty) {
+                return;
+            }
+
             throw ValidationException::withMessages([
-                'investors' => 'Selecciona al menos un inversionista para crear el prestamo.',
+                'investors' => 'Selecciona al menos un inversionista para asignar el prestamo.',
             ]);
         }
 
@@ -103,6 +111,8 @@ class InvestmentAllocationService
         DB::transaction(function () use ($loan, $participants, $userId) {
             $loan = Loan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
 
+            $this->reverseExistingPaymentReturns($loan, $userId);
+
             $loan->investments()->with('investor')->get()->each(function (Investment $investment) use ($userId) {
                 $investor = Investor::query()->whereKey($investment->investor_id)->lockForUpdate()->firstOrFail();
                 $this->creditAvailable($investor, Money::cents($investment->amount), 'loan_investment_released', $userId, $investment->loan_id, $investment->id);
@@ -138,7 +148,14 @@ class InvestmentAllocationService
                     ->first()
                     ?->update(['investment_id' => $investment->id]);
             }
+
+            $this->replayAppliedPaymentReturns($loan, $userId);
         });
+    }
+
+    public function hasParticipants(array $input): bool
+    {
+        return collect($input)->contains(fn (array $row) => filled($row['investor_id'] ?? null));
     }
 
     public function availableCentsForInvestor(Investor $investor, ?Loan $loan = null): int
@@ -200,5 +217,108 @@ class InvestmentAllocationService
             'balance_after' => Money::decimal($afterCents),
             'notes' => $notes,
         ]);
+    }
+
+    private function reverseExistingPaymentReturns(Loan $loan, ?int $userId): void
+    {
+        $alreadyReversedIds = InvestorCapitalMovement::query()
+            ->where('type', 'payment_returns_reversed')
+            ->where('loan_id', $loan->id)
+            ->get()
+            ->pluck('metadata.reversed_return_movement_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $returnMovements = InvestorCapitalMovement::query()
+            ->where('type', 'payment_returns_recorded')
+            ->where('loan_id', $loan->id)
+            ->when($alreadyReversedIds !== [], fn ($query) => $query->whereNotIn('id', $alreadyReversedIds))
+            ->get();
+
+        foreach ($returnMovements as $returnMovement) {
+            $investor = Investor::query()->whereKey($returnMovement->investor_id)->lockForUpdate()->first();
+
+            if (! $investor) {
+                continue;
+            }
+
+            $returnedCapitalCents = Money::cents($returnMovement->metadata['returned_capital'] ?? 0);
+            $generatedInterestCents = Money::cents($returnMovement->metadata['generated_interest'] ?? 0);
+
+            if (
+                Money::cents($investor->returned_capital_balance) < $returnedCapitalCents
+                || Money::cents($investor->generated_interest_balance) < $generatedInterestCents
+            ) {
+                throw ValidationException::withMessages([
+                    'investors' => 'No se pueden reasignar inversionistas: hay retornos de pagos ya usados o reinvertidos.',
+                ]);
+            }
+
+            $investor->forceFill([
+                'returned_capital_balance' => Money::decimal(Money::cents($investor->returned_capital_balance) - $returnedCapitalCents),
+                'generated_interest_balance' => Money::decimal(Money::cents($investor->generated_interest_balance) - $generatedInterestCents),
+            ])->save();
+
+            InvestorCapitalMovement::query()->create([
+                'public_id' => (string) Str::ulid(),
+                'investor_id' => $investor->id,
+                'loan_id' => $returnMovement->loan_id,
+                'investment_id' => $returnMovement->investment_id,
+                'created_by' => $userId,
+                'type' => 'payment_returns_reversed',
+                'amount' => Money::decimal(Money::cents($returnMovement->amount)),
+                'balance_before' => $investor->available_capital,
+                'balance_after' => $investor->available_capital,
+                'notes' => 'Retornos revertidos por reasignacion de inversionistas',
+                'metadata' => [
+                    'reversed_return_movement_id' => $returnMovement->id,
+                    'returned_capital' => Money::decimal($returnedCapitalCents),
+                    'generated_interest' => Money::decimal($generatedInterestCents),
+                ],
+            ]);
+        }
+    }
+
+    private function replayAppliedPaymentReturns(Loan $loan, ?int $userId): void
+    {
+        $movements = CollectionMovement::query()
+            ->with(['allocations.installment', 'loan.investments.investor'])
+            ->where('loan_id', $loan->id)
+            ->where('confirmation_status', 'applied')
+            ->where('affects_investors', true)
+            ->orderBy('confirmed_at')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($movements as $movement) {
+            foreach ($movement->allocations as $allocation) {
+                $installment = $allocation->installment;
+
+                if (! $installment) {
+                    continue;
+                }
+
+                $appliedCents = Money::cents($allocation->amount);
+                $contractCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+                if ($appliedCents <= 0 || $contractCents <= 0) {
+                    continue;
+                }
+
+                if ($movement->type === 'advance') {
+                    $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
+                    $currentMonthEnd = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->endOfMonth();
+                    $interestCents = $dueDate->greaterThan($currentMonthEnd) ? 0 : (int) round(Money::cents($installment->interest_amount) * min(1, $appliedCents / $contractCents));
+                    $principalCents = $appliedCents;
+                } else {
+                    $paidRatio = min(1, $appliedCents / $contractCents);
+                    $principalCents = (int) round(Money::cents($installment->principal_amount) * $paidRatio);
+                    $interestCents = (int) round(Money::cents($installment->interest_amount) * $paidRatio);
+                }
+
+                $this->investorReturnRecorder->record($movement->loan, $installment, $principalCents, $interestCents, $movement, $userId ?? $movement->confirmed_by ?? $movement->registered_by ?? 0);
+            }
+        }
     }
 }

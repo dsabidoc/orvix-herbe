@@ -743,6 +743,106 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame($availableBeforeCents - 10000000, Money::cents($investor->fresh()->available_capital));
     }
 
+    public function test_admin_can_create_loan_without_initial_investors(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('loans.store'), [
+                'first_name' => 'Cliente Sin Inversionista',
+                'operator_id' => $operator->id,
+                'capital' => '80000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'payment_day' => 10,
+                'start_date' => '2026-08-05',
+                'first_payment_date' => '2026-08-10',
+            ])
+            ->assertRedirect();
+
+        $loan = Loan::query()
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Sin Inversionista'))
+            ->firstOrFail();
+
+        $this->assertSame(0, $loan->investments()->count());
+        $this->assertSame(80000.0, (float) $loan->capital);
+    }
+
+    public function test_assigning_investors_after_confirmed_payment_replays_returns(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+        $investor = Investor::query()->where('available_capital', '>=', 80000)->firstOrFail();
+        $availableBeforeCents = Money::cents($investor->available_capital);
+        $returnedBeforeCents = Money::cents($investor->returned_capital_balance);
+        $interestBeforeCents = Money::cents($investor->generated_interest_balance);
+
+        $this->actingAs($admin)
+            ->post(route('loans.store'), [
+                'first_name' => 'Cliente Retorno Tardio',
+                'operator_id' => $operator->id,
+                'capital' => '80000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'interest_calculation_method' => 'fixed_principal',
+                'term_months' => 12,
+                'payment_day' => 10,
+                'start_date' => '2026-08-05',
+                'first_payment_date' => '2026-08-10',
+            ])
+            ->assertRedirect();
+
+        $loan = Loan::query()
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Retorno Tardio'))
+            ->with(['installments' => fn ($query) => $query->orderBy('number')])
+            ->firstOrFail();
+        $installment = $loan->installments->first();
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'operated_on' => '2026-08-10',
+                'contract_amount' => $installment->remaining_amount,
+                'operator_surcharge_amount' => 0,
+                'external_concepts_amount' => 0,
+                'return_to' => 'loan',
+            ])
+            ->assertSessionHas('status');
+
+        $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('payments.confirm', $movement))
+            ->assertSessionHas('status');
+
+        $this->assertSame(0, InvestorCapitalMovement::query()->where('loan_id', $loan->id)->where('type', 'payment_returns_recorded')->count());
+
+        $this->actingAs($admin)
+            ->post(route('loans.investments.store', $loan), [
+                'investors' => [
+                    ['investor_id' => $investor->id, 'capital_amount' => '80000', 'interest_share_percent' => '100'],
+                ],
+            ])
+            ->assertRedirect(route('loans.show', $loan));
+
+        $investor->refresh();
+
+        $this->assertSame($availableBeforeCents - 8000000, Money::cents($investor->available_capital));
+        $this->assertSame($returnedBeforeCents + Money::cents($installment->principal_amount), Money::cents($investor->returned_capital_balance));
+        $this->assertSame($interestBeforeCents + Money::cents($installment->interest_amount), Money::cents($investor->generated_interest_balance));
+        $this->assertDatabaseHas('investor_capital_movements', [
+            'loan_id' => $loan->id,
+            'investor_id' => $investor->id,
+            'type' => 'payment_returns_recorded',
+        ]);
+    }
+
     public function test_create_loan_form_uses_orvix_default_conditions(): void
     {
         $this->seed(DatabaseSeeder::class);

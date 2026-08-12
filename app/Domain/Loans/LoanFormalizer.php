@@ -75,7 +75,7 @@ class LoanFormalizer
                 ]);
             }
 
-            if (isset($data['investors'])) {
+            if (isset($data['investors']) && app(InvestmentAllocationService::class)->hasParticipants($data['investors'])) {
                 app(InvestmentAllocationService::class)->assignFromInput($loan, $data['investors'], $data['created_by'] ?? null);
             }
 

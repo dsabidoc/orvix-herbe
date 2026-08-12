@@ -83,7 +83,7 @@ class LoanCreationController extends Controller
                 'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
                 'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador'],
                 'documents.*' => ['nullable', 'file', 'max:10240'],
-                'investors' => ['required', 'array', 'min:1', 'max:8'],
+                'investors' => ['nullable', 'array', 'max:8'],
                 'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
                 'investors.*.capital_amount' => ['nullable', 'numeric', 'min:0'],
                 'investors.*.interest_share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -103,7 +103,9 @@ class LoanCreationController extends Controller
             ],
         );
 
-        $allocator->participants($data['investors'], Money::cents($data['capital']));
+        if ($allocator->hasParticipants($data['investors'] ?? [])) {
+            $allocator->participants($data['investors'], Money::cents($data['capital']), allowEmpty: true);
+        }
 
         $client = ($data['client_id'] ?? null)
             ? Client::query()->findOrFail($data['client_id'])
@@ -138,7 +140,7 @@ class LoanCreationController extends Controller
             'guarantor_phone' => $data['guarantor_phone'] ?? null,
             'delinquency_rate' => number_format((float) ($data['delinquency_rate'] ?? 0), 4, '.', ''),
             'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
-            'investors' => $data['investors'],
+            'investors' => $data['investors'] ?? [],
             'created_by' => $request->user()->id,
         ]);
 
@@ -208,7 +210,7 @@ class LoanCreationController extends Controller
 
         $data = $this->validatedRoundedData($request) + $request->validate([
             'selected_option' => ['required', 'in:regular,tens,hundreds'],
-            'investors' => ['required', 'array', 'min:1', 'max:8'],
+            'investors' => ['nullable', 'array', 'max:8'],
             'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
             'investors.*.capital_amount' => ['nullable', 'numeric', 'min:0'],
             'investors.*.interest_share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -217,7 +219,9 @@ class LoanCreationController extends Controller
         $data['first_payment_date'] = $data['first_payment_date'] ?? $data['start_date'];
 
         if (($data['calculation_method'] ?? 'regular') === 'regular') {
-            $allocator->participants($data['investors'], Money::cents($data['capital']));
+            if ($allocator->hasParticipants($data['investors'] ?? [])) {
+                $allocator->participants($data['investors'], Money::cents($data['capital']), allowEmpty: true);
+            }
 
             $loan = DB::transaction(function () use ($request, $data, $formalizer) {
                 $client = $this->clientFor($data);
@@ -241,7 +245,7 @@ class LoanCreationController extends Controller
                     'guarantor_phone' => $data['guarantor_phone'] ?? null,
                     'delinquency_rate' => number_format((float) ($data['delinquency_rate'] ?? 0), 4, '.', ''),
                     'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
-                    'investors' => $data['investors'],
+                    'investors' => $data['investors'] ?? [],
                     'created_by' => $request->user()->id,
                     'status' => 'active',
                 ]);
@@ -262,7 +266,9 @@ class LoanCreationController extends Controller
         ]);
         $option = $quote['options'][$data['selected_option']];
 
-        $allocator->participants($data['investors'], $quote['input']['capital_cents']);
+        if ($allocator->hasParticipants($data['investors'] ?? [])) {
+            $allocator->participants($data['investors'], $quote['input']['capital_cents'], allowEmpty: true);
+        }
 
         $loan = DB::transaction(function () use ($request, $data, $quote, $option, $allocator) {
             $client = $this->clientFor($data);
@@ -328,7 +334,9 @@ class LoanCreationController extends Controller
                 ]);
             }
 
-            $allocator->assignFromInput($loan, $data['investors'], $request->user()->id);
+            if ($allocator->hasParticipants($data['investors'] ?? [])) {
+                $allocator->assignFromInput($loan, $data['investors'], $request->user()->id);
+            }
             $this->recordFundDisbursement($loan, $data, $request->user()->id);
 
             AuditEvent::query()->create([

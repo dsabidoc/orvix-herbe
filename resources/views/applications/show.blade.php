@@ -159,7 +159,7 @@
                         </div>
                         <div class="rounded-md bg-slate-50 p-3">
                             <p class="font-bold text-slate-950">Inversionistas</p>
-                            <p class="mt-1 text-xs text-slate-500">Capital total {{ Money::mxn($conditions['capital']) }} · intereses 100%</p>
+                            <p class="mt-1 text-xs text-slate-500">Opcional al comenzar. Si los capturas, deben cubrir capital total {{ Money::mxn($conditions['capital']) }} e intereses 100%; tambien puedes asignarlos despues desde el prestamo.</p>
                             <div class="mt-3 space-y-2">
                                 @for ($index = 0; $index < 4; $index++)
                                     <div class="grid gap-2">
