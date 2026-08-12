@@ -55,11 +55,14 @@
                             <td class="px-5 py-3 text-right">{{ $investor->investments_count }}</td>
                             <td class="px-5 py-3"><span class="rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ $investor->status === 'active' ? 'Activo' : 'Inactivo' }}</span></td>
                             <td class="px-5 py-3 text-right">
-                                <form method="POST" action="{{ route('investors.destroy', $investor) }}" onsubmit="return confirm('Eliminar este inversionista? Solo se permite si no tiene prestamos activos vivos.');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700" type="submit">Eliminar</button>
-                                </form>
+                                <div class="flex justify-end gap-2">
+                                    <button class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700" type="button" data-open-modal="edit-investor-modal-{{ $investor->id }}">Editar</button>
+                                    <form method="POST" action="{{ route('investors.destroy', $investor) }}" onsubmit="return confirm('Eliminar este inversionista? Solo se permite si no tiene prestamos activos vivos.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700" type="submit">Eliminar</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -73,6 +76,29 @@
     </section>
 
     <div class="mt-4">{{ $investors->links() }}</div>
+
+    @foreach ($investors as $investor)
+        <dialog id="edit-investor-modal-{{ $investor->id }}" class="w-[min(94vw,520px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <form method="POST" action="{{ route('investors.update', $investor) }}">
+                @csrf
+                @method('PUT')
+                <div class="border-b border-slate-200 px-5 py-4">
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Editar inversionista</p>
+                    <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $investor->name }}</h3>
+                </div>
+                <div class="space-y-4 px-5 py-4">
+                    <label class="block text-sm font-semibold text-slate-700">Capital inicial
+                        <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="initial_capital" type="number" step="0.01" min="0" value="{{ old('initial_capital', $investor->initial_capital) }}">
+                    </label>
+                    <p class="text-xs text-slate-500">El ajuste aumenta o disminuye tambien el capital disponible. Si parte del capital ya fue usado, no se podra bajar mas de lo disponible.</p>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>
+                    <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Guardar cambios</button>
+                </div>
+            </form>
+        </dialog>
+    @endforeach
 
     <dialog id="create-investor-modal" class="w-[min(94vw,640px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
         <form method="POST" action="{{ route('investors.store') }}">

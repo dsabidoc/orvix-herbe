@@ -151,6 +151,96 @@ class OrvixWorkflowTest extends TestCase
             ->assertDontSee('Sin Prestamos');
     }
 
+    public function test_deleted_investor_user_can_be_reactivated_from_create_modal(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $user = User::query()->create([
+            'name' => 'Maria Gabriela Ramirez Redondo',
+            'email' => 'maria.gabriela.ramirez@orvix.test',
+            'phone' => '9997776666',
+            'password' => 'orvix-demo',
+            'status' => 'active',
+        ]);
+        $investor = Investor::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'user_id' => $user->id,
+            'first_name' => 'Maria Gabriela',
+            'last_name' => 'Ramirez Redondo',
+            'name' => 'Maria Gabriela Ramirez Redondo',
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'initial_capital' => '0.00',
+            'available_capital' => '0.00',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('investors.destroy', $investor))
+            ->assertSessionHas('status');
+
+        $this->actingAs($admin)
+            ->get(route('investors.index'))
+            ->assertOk()
+            ->assertSee($user->email);
+
+        $this->actingAs($admin)
+            ->post(route('investors.store'), [
+                'user_id' => $user->id,
+                'first_name' => 'Maria Gabriela',
+                'last_name' => 'Ramirez Redondo',
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'initial_capital' => '123000',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('investors', [
+            'id' => $investor->id,
+            'user_id' => $user->id,
+            'name' => 'Maria Gabriela Ramirez Redondo',
+            'status' => 'active',
+            'initial_capital' => '123000.00',
+            'available_capital' => '123000.00',
+        ]);
+    }
+
+    public function test_admin_can_edit_investor_initial_capital_and_available_delta(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $investor = Investor::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'first_name' => 'Capital',
+            'last_name' => 'Editable',
+            'name' => 'Capital Editable',
+            'email' => 'capital.editable@orvix.test',
+            'phone' => '9998887777',
+            'initial_capital' => '100000.00',
+            'available_capital' => '100000.00',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('investors.update', $investor), [
+                'initial_capital' => '125000',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Capital inicial actualizado.');
+
+        $investor->refresh();
+
+        $this->assertSame(12500000, Money::cents($investor->initial_capital));
+        $this->assertSame(12500000, Money::cents($investor->available_capital));
+        $this->assertDatabaseHas('investor_capital_movements', [
+            'investor_id' => $investor->id,
+            'type' => 'initial_capital_adjusted',
+            'amount' => '25000',
+        ]);
+    }
+
     public function test_admin_cannot_delete_investor_with_live_active_loan(): void
     {
         $this->seed(DatabaseSeeder::class);

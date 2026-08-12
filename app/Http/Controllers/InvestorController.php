@@ -46,7 +46,7 @@ class InvestorController extends Controller
         return view('investors.index', [
             'investors' => $query->paginate(15)->withQueryString(),
             'investorUsers' => User::query()
-                ->whereDoesntHave('investorProfile')
+                ->whereDoesntHave('investorProfile', fn ($query) => $query->where('status', '!=', 'deleted'))
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get(['id', 'name', 'email', 'phone']),
@@ -61,7 +61,7 @@ class InvestorController extends Controller
             'user_id' => [
                 'nullable',
                 Rule::exists('users', 'id')->where(fn ($query) => $query->where('status', 'active')),
-                Rule::unique('investors', 'user_id'),
+                Rule::unique('investors', 'user_id')->where(fn ($query) => $query->where('status', '!=', 'deleted')),
             ],
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
@@ -72,7 +72,7 @@ class InvestorController extends Controller
                 ($request->boolean('create_user') || $request->filled('user_id')) ? 'required' : 'nullable',
                 'email',
                 'max:160',
-                'unique:investors,email',
+                Rule::unique('investors', 'email')->where(fn ($query) => $query->where('status', '!=', 'deleted')),
                 Rule::unique('users', 'email')->ignore($request->input('user_id')),
             ],
             'password' => ['nullable', 'string', 'min:8', 'max:80'],
@@ -88,8 +88,30 @@ class InvestorController extends Controller
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                if ($user->investorProfile()->exists()) {
+                $existingProfile = $user->investorProfile()->lockForUpdate()->first();
+
+                if ($existingProfile && $existingProfile->status !== 'deleted') {
                     abort(422, 'Este usuario ya esta ligado a un inversionista.');
+                }
+
+                if ($existingProfile?->status === 'deleted') {
+                    $initialCapital = number_format((float) ($data['initial_capital'] ?? 0), 2, '.', '');
+                    $existingProfile->forceFill([
+                        'first_name' => $data['first_name'],
+                        'last_name' => $data['last_name'] ?? '',
+                        'name' => trim($data['first_name'].' '.($data['last_name'] ?? '')),
+                        'email' => $data['email'] ?? null,
+                        'phone' => $data['phone'] ?? null,
+                        'initial_capital' => $initialCapital,
+                        'available_capital' => '0.00',
+                        'returned_capital_balance' => '0.00',
+                        'generated_interest_balance' => '0.00',
+                        'status' => 'active',
+                    ])->save();
+
+                    $ledger->creditAvailable($existingProfile, Money::cents($initialCapital), 'initial_capital', $request->user()->id, notes: 'Capital inicial al reactivar inversionista');
+
+                    return $existingProfile;
                 }
             } elseif ($request->boolean('create_user')) {
                 $password = $data['password'] ?: 'orvix-demo';
@@ -125,6 +147,42 @@ class InvestorController extends Controller
         });
 
         return redirect()->route('investors.show', $investor)->with('status', 'Inversionista creado.');
+    }
+
+    public function update(Request $request, Investor $investor, InvestmentAllocationService $ledger): RedirectResponse
+    {
+        abort_unless($request->user()->can('investors.manage'), 403);
+        abort_if($investor->status === 'deleted', 404);
+
+        $data = $request->validate([
+            'initial_capital' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        DB::transaction(function () use ($request, $investor, $data, $ledger) {
+            $investor = Investor::query()->whereKey($investor->id)->lockForUpdate()->firstOrFail();
+
+            $oldInitialCents = Money::cents($investor->initial_capital);
+            $newInitialCents = Money::cents($data['initial_capital']);
+            $deltaCents = $newInitialCents - $oldInitialCents;
+
+            if ($deltaCents < 0 && Money::cents($investor->available_capital) + $deltaCents < 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'initial_capital' => 'No se puede bajar el capital inicial por debajo del capital disponible actual.',
+                ]);
+            }
+
+            $investor->forceFill([
+                'initial_capital' => Money::decimal($newInitialCents),
+            ])->save();
+
+            if ($deltaCents > 0) {
+                $ledger->creditAvailable($investor, $deltaCents, 'initial_capital_adjusted', $request->user()->id, notes: 'Ajuste de capital inicial');
+            } elseif ($deltaCents < 0) {
+                $ledger->debitAvailable($investor, abs($deltaCents), 'initial_capital_adjusted', $request->user()->id, notes: 'Ajuste de capital inicial');
+            }
+        });
+
+        return back()->with('status', 'Capital inicial actualizado.');
     }
 
     public function destroy(Request $request, Investor $investor): RedirectResponse
