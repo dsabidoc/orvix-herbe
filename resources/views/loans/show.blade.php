@@ -246,13 +246,16 @@
                     <p class="mt-1 text-sm text-slate-500">El saldo solo baja cuando un cobro se confirma/aplica.</p>
                 </div>
                 @if ($canOperateLoan)
-                    <form class="hidden shrink-0" method="POST" action="{{ route('collections.mark-paid.bulk') }}" data-confirm-paid data-bulk-payment-form>
-                        @csrf
-                        <input name="loan_id" type="hidden" value="{{ $loan->id }}">
-                        <input name="return_to" type="hidden" value="loan">
-                        <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
-                        <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Pagar todas las seleccionadas</button>
-                    </form>
+                    <div class="flex shrink-0 flex-wrap gap-2">
+                        <button class="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700" type="button" data-select-overdue-payments>Seleccionar todos los vencidos</button>
+                        <form class="hidden" method="POST" action="{{ route('collections.mark-paid.bulk') }}" data-confirm-paid data-bulk-payment-form>
+                            @csrf
+                            <input name="loan_id" type="hidden" value="{{ $loan->id }}">
+                            <input name="return_to" type="hidden" value="loan">
+                            <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
+                            <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Pagar todas las seleccionadas</button>
+                        </form>
+                    </div>
                 @endif
             </div>
             <div class="max-h-[560px] overflow-x-auto overflow-y-auto">
@@ -282,9 +285,9 @@
                             <th class="px-3 py-3 text-right">Abono a Capital</th>
                             <th class="px-3 py-3 text-right">Interes</th>
                             <th class="px-3 py-3 text-right">Subtotal</th>
-                            <th class="px-3 py-3 text-right">Pagaré</th>
                             <th class="px-3 py-3 text-right">Capital</th>
                             <th class="px-3 py-3">Estatus</th>
+                            <th class="px-3 py-3 text-right">Pagaré</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -315,7 +318,7 @@
                             <tr class="{{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
                                 <td class="px-3 py-2">
                                     @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
-                                        <input class="rounded border-slate-300" type="checkbox" value="{{ $installment->id }}" data-bulk-payment-checkbox aria-label="Seleccionar letra {{ $installment->number }}">
+                                        <input class="rounded border-slate-300" type="checkbox" value="{{ $installment->id }}" data-bulk-payment-checkbox @if($isOverdue) data-overdue-payment-checkbox @endif aria-label="Seleccionar letra {{ $installment->number }}">
                                     @endif
                                 </td>
                                 <td class="px-3 py-2 font-semibold">{{ $installment->number }}</td>
@@ -345,11 +348,11 @@
                                 <td class="px-3 py-2 text-right">{{ Money::mxn($installment->principal_amount) }}</td>
                                 <td class="px-3 py-2 text-right">{{ Money::mxn($installment->interest_amount) }}</td>
                                 <td class="px-3 py-2 text-right">{{ Money::mxn(Money::decimal($subtotalCents)) }}</td>
-                                <td class="px-3 py-2 text-right font-semibold">{{ Money::mxn($installment->contract_amount) }}</td>
                                 <td class="px-3 py-2 text-right">{{ Money::mxn($installment->capital_balance) }}</td>
                                 <td class="px-3 py-2">
                                     <span class="{{ $statusClass }} rounded px-2 py-1 text-xs font-bold">{{ $statusLabel }}</span>
                                 </td>
+                                <td class="px-3 py-2 text-right font-semibold">{{ Money::mxn($installment->contract_amount) }}</td>
                             </tr>
                         @endforeach
                     </tbody>

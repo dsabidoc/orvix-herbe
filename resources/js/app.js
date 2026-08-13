@@ -198,6 +198,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const selectOverduePaymentsButton = document.querySelector('[data-select-overdue-payments]');
+
+    if (selectOverduePaymentsButton instanceof HTMLButtonElement) {
+        selectOverduePaymentsButton.addEventListener('click', () => {
+            bulkPaymentCheckboxes.forEach((checkbox) => {
+                if (checkbox instanceof HTMLInputElement && checkbox.hasAttribute('data-overdue-payment-checkbox')) {
+                    checkbox.checked = true;
+                }
+            });
+
+            if (bulkPaymentToggle instanceof HTMLInputElement) {
+                bulkPaymentToggle.checked = bulkPaymentCheckboxes.length > 0
+                    && bulkPaymentCheckboxes.every((item) => item instanceof HTMLInputElement && item.checked);
+            }
+
+            refreshBulkPaymentForm();
+        });
+    }
+
     bulkPaymentCheckboxes.forEach((checkbox) => {
         checkbox.addEventListener('change', () => {
             if (bulkPaymentToggle instanceof HTMLInputElement) {
