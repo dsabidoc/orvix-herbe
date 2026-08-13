@@ -27,9 +27,9 @@
             </dl>
         </section>
 
-        <div class="grid gap-6 {{ count($quote['options']) > 1 ? 'xl:grid-cols-2' : '' }}">
+        <div class="grid min-w-0 gap-6 {{ count($quote['options']) > 1 ? 'xl:grid-cols-2' : '' }}">
             @foreach ($quote['options'] as $key => $option)
-                <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+                <section class="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 p-5">
                         <p class="text-xs font-bold uppercase tracking-[0.16em] text-[#0f766e]">{{ $option['name'] }}</p>
                         <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $option['description'] }}</h3>
@@ -47,20 +47,20 @@
                                 @endif
                             @endforeach
                             <input name="selected_option" type="hidden" value="{{ $key }}">
-                            <div class="mb-4 rounded-md bg-slate-50 p-3">
+                            <div class="mb-4 min-w-0 rounded-md bg-slate-50 p-3">
                                 <h4 class="font-bold text-slate-950">Inversionistas</h4>
                                 <p class="mt-1 text-sm text-slate-500">Opcional al crear. Si los capturas ahora, deben cubrir {{ Money::mxn(Money::decimal($quote['input']['capital_cents'])) }} de capital y 100% de intereses; tambien puedes asignarlos despues desde el detalle del prestamo.</p>
                                 <div class="mt-3 space-y-2">
                                     @for ($index = 0; $index < 4; $index++)
-                                        <div class="grid gap-2 sm:grid-cols-[1fr_130px_120px]">
-                                            <select class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" name="investors[{{ $index }}][investor_id]">
+                                        <div class="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(105px,135px)_minmax(88px,112px)]">
+                                            <select class="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" name="investors[{{ $index }}][investor_id]">
                                                 <option value="">Seleccionar inversionista</option>
                                                 @foreach ($investors as $investor)
                                                     <option value="{{ $investor->id }}">{{ $investor->name }} · {{ Money::mxn($investor->available_capital) }}</option>
                                                 @endforeach
                                             </select>
-                                            <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][capital_amount]" type="number" step="0.01" min="0" placeholder="Capital">
-                                            <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][interest_share_percent]" type="number" step="0.0001" min="0" max="100" placeholder="% interes">
+                                            <input class="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][capital_amount]" type="number" step="0.01" min="0" placeholder="Capital">
+                                            <input class="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][interest_share_percent]" type="number" step="0.0001" min="0" max="100" placeholder="% interes">
                                         </div>
                                     @endfor
                                 </div>
@@ -69,8 +69,8 @@
                         </form>
                     </div>
 
-                    <div class="max-h-[520px] overflow-auto">
-                        <table class="w-full min-w-[900px] text-left text-sm">
+                    <div class="max-h-[520px] max-w-full overflow-auto">
+                        <table class="w-full min-w-[820px] text-left text-sm">
                             <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
                                 <tr>
                                     <th class="px-4 py-3">Pago</th>

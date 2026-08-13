@@ -277,15 +277,16 @@ class LoanController extends Controller
         $data['vat_enabled'] = $request->boolean('vat_enabled', true);
         $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
         $this->ensureVinIsAvailable($data['vin'], $loan);
-        $conditionsChanged = $this->conditionsChanged($loan, $data, $newMonthlyRate);
+        $financialConditionsChanged = $this->financialConditionsChanged($loan, $data, $newMonthlyRate);
+        $dateScheduleChanged = $this->dateScheduleChanged($loan, $data);
 
-        if ($conditionsChanged && ! $this->canEditConditions($loan)) {
+        if ($financialConditionsChanged && ! $this->canEditConditions($loan)) {
             return back()
-                ->withErrors(['capital' => 'Este prestamo ya tiene cobros registrados; solo puedes editar cliente, operador y vehiculo.'])
+                ->withErrors(['capital' => 'Este prestamo ya tiene cobros registrados; solo puedes editar datos generales y fechas.'])
                 ->withInput();
         }
 
-        DB::transaction(function () use ($loan, $data, $newMonthlyRate, $newAdministrationFee, $conditionsChanged, $calculator) {
+        DB::transaction(function () use ($loan, $data, $newMonthlyRate, $newAdministrationFee, $financialConditionsChanged, $dateScheduleChanged, $calculator) {
             $loan = Loan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
             $folioSourceChanged = (int) $loan->operator_id !== (int) $data['operator_id']
                 || $loan->start_date->toDateString() !== CarbonImmutable::parse($data['start_date'])->toDateString();
@@ -303,17 +304,24 @@ class LoanController extends Controller
 
             $vehicle = $this->updateVehicleForLoan($loan, $data);
 
-            if (! $conditionsChanged) {
+            if (! $financialConditionsChanged) {
                 $loan->update([
                     'folio' => $updatedFolio,
                     'operator_id' => $data['operator_id'],
                     'vehicle_id' => $vehicle?->id,
+                    'start_date' => $data['start_date'],
+                    'first_payment_date' => $data['first_payment_date'],
+                    'payment_day' => (int) $data['payment_day'],
                     'guarantor_name' => $data['guarantor_name'] ?? null,
                     'guarantor_address' => $data['guarantor_address'] ?? null,
                     'guarantor_phone' => $data['guarantor_phone'] ?? null,
                     'delinquency_rate' => number_format((float) ($data['delinquency_rate'] ?? 0), 4, '.', ''),
                     'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
                 ]);
+
+                if ($dateScheduleChanged) {
+                    $this->updateInstallmentDueDates($loan, $data['first_payment_date'], (int) $data['payment_day']);
+                }
 
                 return;
             }
@@ -402,17 +410,36 @@ class LoanController extends Controller
             && ! $loan->movements()->exists();
     }
 
-    private function conditionsChanged(Loan $loan, array $data, string $newMonthlyRate): bool
+    private function financialConditionsChanged(Loan $loan, array $data, string $newMonthlyRate): bool
     {
         return Money::cents($loan->capital) !== Money::cents($data['capital'])
             || (string) $loan->monthly_rate !== $newMonthlyRate
             || Money::cents($loan->administration_fee ?? 0) !== Money::cents($data['administration_fee'] ?? 0)
             || (bool) $loan->vat_enabled !== (bool) $data['vat_enabled']
             || $loan->interest_calculation_method !== $data['interest_calculation_method']
-            || (int) $loan->term_months !== (int) $data['term_months']
-            || (int) $loan->payment_day !== (int) $data['payment_day']
+            || (int) $loan->term_months !== (int) $data['term_months'];
+    }
+
+    private function dateScheduleChanged(Loan $loan, array $data): bool
+    {
+        return (int) $loan->payment_day !== (int) $data['payment_day']
             || $loan->start_date->toDateString() !== CarbonImmutable::parse($data['start_date'])->toDateString()
             || ($loan->first_payment_date ?? $loan->start_date)->toDateString() !== CarbonImmutable::parse($data['first_payment_date'])->toDateString();
+    }
+
+    private function updateInstallmentDueDates(Loan $loan, string $firstPaymentDate, int $paymentDay): void
+    {
+        $firstDate = CarbonImmutable::parse($firstPaymentDate, 'America/Merida');
+
+        $loan->installments()
+            ->orderBy('number')
+            ->get()
+            ->each(function (Installment $installment) use ($firstDate, $paymentDay) {
+                $month = $firstDate->startOfMonth()->addMonthsNoOverflow($installment->number - 1);
+                $dueDate = $month->day(min($paymentDay, $month->daysInMonth));
+
+                $installment->update(['due_date' => $dueDate->toDateString()]);
+            });
     }
 
     private function monthlyRate(float $rateValue, string $rateType): float
