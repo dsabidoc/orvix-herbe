@@ -69,6 +69,15 @@
                         @endif
                         <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-investors-modal">Inversionistas</button>
                         <a class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" href="https://wa.me/52{{ preg_replace('/\D+/', '', $loan->client->phone) }}" target="_blank" rel="noreferrer">WhatsApp</a>
+                        @can('loans.formalize')
+                            @unless ($loanUser->hasRole('operador-cartera'))
+                                <form method="POST" action="{{ route('loans.destroy', $loan) }}" data-confirm-delete data-confirm-title="¿Eliminar este prestamo?" data-confirm-message="Se eliminara el prestamo como si no hubiera existido y se regresara el capital tomado a los inversionistas. Si algun retorno ya fue usado o reinvertido, el sistema lo bloqueara.">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="rounded-md border border-red-300 bg-red-100 px-3 py-2 text-sm font-bold text-red-800" type="submit">Eliminar prestamo</button>
+                                </form>
+                            @endunless
+                        @endcan
                     @endif
                 </div>
             </div>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Loans\LoanDeletionService;
 use App\Domain\Loans\LoanScheduleCalculator;
 use App\Domain\Loans\LoanSettlementService;
 use App\Models\Document;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use RuntimeException;
 
 class LoanController extends Controller
 {
@@ -385,6 +387,20 @@ class LoanController extends Controller
         });
 
         return redirect()->route('loans.show', $loan)->with('status', 'Prestamo actualizado.');
+    }
+
+    public function destroy(Request $request, Loan $loan, LoanDeletionService $deletionService): RedirectResponse
+    {
+        abort_unless($request->user()->can('loans.formalize') && ! $request->user()->hasRole('operador-cartera'), 403);
+        $this->authorizeLoanAccess($request, $loan);
+
+        try {
+            $deletionService->delete($loan, $request->user()->id);
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['loan' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('loans.index')->with('status', 'Prestamo eliminado y saldos relacionados revertidos.');
     }
 
     private function authorizeLoanAccess(Request $request, Loan $loan): void

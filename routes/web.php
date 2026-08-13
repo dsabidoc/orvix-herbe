@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/prestamos/nuevo/crear', [LoanCreationController::class, 'store'])->name('loans.store');
     Route::get('/prestamos/{loan}/editar', [LoanController::class, 'edit'])->name('loans.edit');
     Route::put('/prestamos/{loan}', [LoanController::class, 'update'])->name('loans.update');
+    Route::delete('/prestamos/{loan}', [LoanController::class, 'destroy'])->name('loans.destroy');
     Route::get('/prestamos/{loan}', [LoanController::class, 'show'])->name('loans.show');
     Route::post('/prestamos/{loan}/notas', [LoanController::class, 'storeNote'])->name('loans.notes.store');
     Route::post('/prestamos/{loan}/congelar', [LoanController::class, 'freeze'])->name('loans.freeze');
