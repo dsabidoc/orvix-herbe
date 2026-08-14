@@ -131,7 +131,7 @@ class PortfolioBalanceServiceTest extends TestCase
         $this->assertSame($ownLoan->folio, $report['loan_rows']->first()['folio']);
     }
 
-    public function test_detail_rows_show_each_pending_installment_separately(): void
+    public function test_detail_rows_show_each_pending_installment_separately_without_future_months(): void
     {
         [$admin, $operator] = $this->admin();
         $loan = $this->loanWithInstallments([
@@ -143,9 +143,9 @@ class PortfolioBalanceServiceTest extends TestCase
         $report = $this->service->build(['cutoff_date' => '2026-08-10'], $admin);
         $rows = $report['detail_rows']->where('loan_id', $loan->id)->values();
 
-        $this->assertCount(3, $rows);
-        $this->assertSame(['5/7', '6/7', '7/7'], $rows->pluck('payment_progress')->all());
-        $this->assertSame([220000, 220000, 220000], $rows->pluck('overdue_cents')->all());
+        $this->assertCount(2, $rows);
+        $this->assertSame(['5/7', '6/7'], $rows->pluck('payment_progress')->all());
+        $this->assertSame([220000, 220000], $rows->pluck('overdue_cents')->all());
     }
 
     /**

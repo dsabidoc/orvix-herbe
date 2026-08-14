@@ -2,23 +2,15 @@
     use App\Support\Money;
     use Carbon\CarbonImmutable;
 
-    $modeLabels = [
-        'complete' => 'Cartera completa',
-        'overdue' => 'Solo vencidos',
-        'current' => 'Al corriente',
-        'due_today' => 'Vencen hoy',
-        'upcoming' => 'Proximos vencimientos',
-    ];
-
     $money = fn (int $cents) => Money::mxn(Money::decimal($cents));
-    $filterQuery = collect(request()->except(['page', 'loan']))->filter(fn ($value) => $value !== null && $value !== '')->all();
+    $filterQuery = collect(request()->only(['operator_id']))->filter(fn ($value) => $value !== null && $value !== '')->all();
 @endphp
 
 <x-layouts.app title="Cartera y saldos">
     <div class="no-print mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
             <p class="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Cartera completa</p>
-            <p class="mt-1 text-sm text-slate-600">Fecha de corte: <strong>{{ $report['cutoff']->format('d/m/Y') }}</strong> · Proximos hasta: <strong>{{ $report['upcoming_end']->format('d/m/Y') }}</strong></p>
+            <p class="mt-1 text-sm text-slate-600">Muestra vencimientos pasados y pendientes del mes actual hasta <strong>{{ $report['period_end']->format('d/m/Y') }}</strong>.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             <a class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm" href="{{ route('portfolio-balances.export', $filterQuery) }}">Exportar CSV</a>
@@ -27,11 +19,7 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="cutoff_date">Fecha de corte / simulacion</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cutoff_date" name="cutoff_date" type="date" value="{{ $filters['cutoff_date'] }}">
-            </div>
+        <div class="grid gap-3 md:grid-cols-[minmax(220px,360px)_auto_auto] md:items-end">
             <div>
                 <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
@@ -44,94 +32,8 @@
                     @endforeach
                 </select>
             </div>
-            <div class="md:col-span-2">
-                <label class="text-sm font-semibold text-slate-700" for="q">Buscar</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Cliente, vehiculo, folio, operador, placas o VIN">
-            </div>
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="upcoming_range">Proximos</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="upcoming_range" name="upcoming_range">
-                    <option value="7" @selected(($filters['upcoming_range'] ?? '') === '7')>7 dias</option>
-                    <option value="15" @selected(($filters['upcoming_range'] ?? '') === '15')>15 dias</option>
-                    <option value="30" @selected(($filters['upcoming_range'] ?? '30') === '30')>30 dias</option>
-                    <option value="month" @selected(($filters['upcoming_range'] ?? '') === 'month')>Resto del mes</option>
-                </select>
-            </div>
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="payment_day">Dia pago</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="payment_day" name="payment_day" type="number" min="1" max="31" value="{{ $filters['payment_day'] ?? '' }}">
-            </div>
-        </div>
-
-        <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="loan_status">Estado prestamo</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="loan_status" name="loan_status">
-                    <option value="">Todos no cancelados</option>
-                    <option value="active" @selected(($filters['loan_status'] ?? '') === 'active')>Activo</option>
-                    <option value="settled" @selected(($filters['loan_status'] ?? '') === 'settled')>Liquidado</option>
-                    <option value="formalizing" @selected(($filters['loan_status'] ?? '') === 'formalizing')>Formalizando</option>
-                </select>
-            </div>
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="overdue_presence">Saldo vencido</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="overdue_presence" name="overdue_presence">
-                    <option value="">Todos</option>
-                    <option value="with" @selected(($filters['overdue_presence'] ?? '') === 'with')>Con saldo vencido</option>
-                    <option value="without" @selected(($filters['overdue_presence'] ?? '') === 'without')>Sin saldo vencido</option>
-                </select>
-            </div>
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="late_range">Dias atraso</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="late_range" name="late_range">
-                    <option value="">Todos</option>
-                    <option value="0" @selected(($filters['late_range'] ?? '') === '0')>0 dias</option>
-                    <option value="1-7" @selected(($filters['late_range'] ?? '') === '1-7')>1 a 7</option>
-                    <option value="8-30" @selected(($filters['late_range'] ?? '') === '8-30')>8 a 30</option>
-                    <option value="31-60" @selected(($filters['late_range'] ?? '') === '31-60')>31 a 60</option>
-                    <option value="61-90" @selected(($filters['late_range'] ?? '') === '61-90')>61 a 90</option>
-                    <option value="90+" @selected(($filters['late_range'] ?? '') === '90+')>Mas de 90</option>
-                </select>
-            </div>
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="overdue_min">Vencido min.</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="overdue_min" name="overdue_min" type="number" min="0" step="0.01" value="{{ $filters['overdue_min'] ?? '' }}">
-            </div>
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="sort">Ordenar</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="sort" name="sort">
-                    <option value="">Recomendado</option>
-                    <option value="operator" @selected(($filters['sort'] ?? '') === 'operator')>Operador</option>
-                    <option value="client" @selected(($filters['sort'] ?? '') === 'client')>Cliente</option>
-                    <option value="next_due" @selected(($filters['sort'] ?? '') === 'next_due')>Proxima fecha</option>
-                    <option value="overdue_count" @selected(($filters['sort'] ?? '') === 'overdue_count')>Mensualidades vencidas</option>
-                    <option value="max_late_days" @selected(($filters['sort'] ?? '') === 'max_late_days')>Dias maximos</option>
-                    <option value="overdue_balance" @selected(($filters['sort'] ?? '') === 'overdue_balance')>Saldo vencido</option>
-                    <option value="pending_balance" @selected(($filters['sort'] ?? '') === 'pending_balance')>Saldo total</option>
-                </select>
-            </div>
-            <div>
-                <label class="text-sm font-semibold text-slate-700" for="direction">Direccion</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="direction" name="direction">
-                    <option value="asc" @selected(($filters['direction'] ?? '') === 'asc')>Ascendente</option>
-                    <option value="desc" @selected(($filters['direction'] ?? '') === 'desc')>Descendente</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex flex-wrap gap-2">
-                @foreach ($modeLabels as $mode => $label)
-                    <label class="cursor-pointer rounded-md border px-3 py-2 text-sm font-bold {{ ($filters['mode'] ?? 'complete') === $mode ? 'border-[#0d9488] bg-[#e6f7f4] text-[#0f766e]' : 'border-slate-200 bg-white text-slate-600' }}">
-                        <input class="sr-only" type="radio" name="mode" value="{{ $mode }}" @checked(($filters['mode'] ?? 'complete') === $mode)>
-                        {{ $label }}
-                    </label>
-                @endforeach
-            </div>
-            <div class="flex gap-2">
-                <a class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" href="{{ route('portfolio-balances.index') }}">Limpiar</a>
-                <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Aplicar filtros</button>
-            </div>
+            <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Filtrar</button>
+            <a class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" href="{{ route('portfolio-balances.index') }}">Todos</a>
         </div>
     </form>
 

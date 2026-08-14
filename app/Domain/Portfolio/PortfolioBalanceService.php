@@ -29,7 +29,7 @@ class PortfolioBalanceService
     public function build(array $filters, User $user): array
     {
         $cutoff = $this->cutoffDate($filters['cutoff_date'] ?? null);
-        $upcomingEnd = $this->upcomingEnd($cutoff, (string) ($filters['upcoming_range'] ?? '30'));
+        $periodEnd = $cutoff->endOfMonth();
         $loans = $this->loanQuery($filters, $user)->get();
         $installmentIds = $loans->flatMap(fn (Loan $loan) => $loan->installments->pluck('id'))->values();
         $allocationAmounts = $this->allocationAmountsByInstallment($installmentIds, $cutoff);
@@ -37,7 +37,7 @@ class PortfolioBalanceService
         $allocationLastDates = $this->allocationLastDatesByInstallment($installmentIds, $cutoff);
 
         $loanRows = $loans
-            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $upcomingEnd, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $periodEnd, $allocationAmounts, $allocationCounts, $allocationLastDates))
             ->filter(fn (array $row) => $row['pending_cents'] > 0 || $row['inconsistencies'] !== [])
             ->filter(fn (array $row) => $this->passesDerivedFilters($row, $filters))
             ->values();
@@ -47,7 +47,8 @@ class PortfolioBalanceService
 
         return [
             'cutoff' => $cutoff,
-            'upcoming_end' => $upcomingEnd,
+            'period_end' => $periodEnd,
+            'upcoming_end' => $periodEnd,
             'loan_rows' => $loanRows,
             'detail_rows' => $detailRows,
             'operator_rows' => $this->operatorRows($loanRows),
@@ -80,37 +81,6 @@ class PortfolioBalanceService
             $query->whereNull('operator_id');
         } elseif (! empty($filters['operator_id'])) {
             $query->where('operator_id', (int) $filters['operator_id']);
-        }
-
-        if (! empty($filters['investor_id'])) {
-            $query->whereHas('investments', fn (Builder $query) => $query
-                ->where('investor_id', (int) $filters['investor_id'])
-                ->where('status', 'active'));
-        }
-
-        if (! empty($filters['loan_status'])) {
-            $query->where('status', (string) $filters['loan_status']);
-        }
-
-        if (! empty($filters['payment_day'])) {
-            $query->where('payment_day', (int) $filters['payment_day']);
-        }
-
-        if (! empty($filters['q'])) {
-            $search = '%'.trim((string) $filters['q']).'%';
-            $query->where(function (Builder $query) use ($search) {
-                $query->where('folio', 'like', $search)
-                    ->orWhereHas('client', fn (Builder $query) => $query
-                        ->where('first_name', 'like', $search)
-                        ->orWhere('last_name', 'like', $search)
-                        ->orWhere('phone', 'like', $search))
-                    ->orWhereHas('operator', fn (Builder $query) => $query->where('name', 'like', $search))
-                    ->orWhereHas('vehicle', fn (Builder $query) => $query
-                        ->where('brand', 'like', $search)
-                        ->orWhere('model', 'like', $search)
-                        ->orWhere('plates', 'like', $search)
-                        ->orWhere('vin', 'like', $search));
-            });
         }
 
         return $query;
@@ -185,13 +155,13 @@ class PortfolioBalanceService
      * @param  array<int, string>  $allocationLastDates
      * @return array<string, mixed>
      */
-    private function loanRow(Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $upcomingEnd, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function loanRow(Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodEnd, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
     {
         $installmentRows = $loan->installments
-            ->map(fn ($installment) => $this->installmentRow($installment, $loan, $cutoff, $upcomingEnd, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn ($installment) => $this->installmentRow($installment, $loan, $cutoff, $periodEnd, $allocationAmounts, $allocationCounts, $allocationLastDates))
             ->values();
 
-        $pendingRows = $installmentRows->filter(fn (array $row) => $row['pending_cents'] > 0 && ! $row['is_excluded']);
+        $pendingRows = $installmentRows->filter(fn (array $row) => $row['pending_cents'] > 0 && ! $row['is_excluded'] && $row['is_in_scope']);
         $overdueRows = $pendingRows->filter(fn (array $row) => $row['is_overdue']);
         $todayRows = $pendingRows->filter(fn (array $row) => $row['is_due_today']);
         $upcomingRows = $pendingRows->filter(fn (array $row) => $row['is_upcoming']);
@@ -263,7 +233,7 @@ class PortfolioBalanceService
      * @param  array<int, string>  $allocationLastDates
      * @return array<string, mixed>
      */
-    private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $upcomingEnd, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodEnd, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
     {
         $contractCents = $this->operationalCents($installment);
         $hasAllocations = ($allocationCounts[$installment->id] ?? 0) > 0;
@@ -277,7 +247,8 @@ class PortfolioBalanceService
         $lateDays = $dueDate->lt($cutoff) ? (int) $dueDate->diffInDays($cutoff) : 0;
         $isOverdue = ! $isExcluded && $dueDate->lt($cutoff) && $pendingCents > 0;
         $isDueToday = ! $isExcluded && $dueDate->equalTo($cutoff) && $pendingCents > 0;
-        $isUpcoming = ! $isExcluded && $dueDate->gt($cutoff) && $dueDate->lte($upcomingEnd) && $pendingCents > 0;
+        $isUpcoming = ! $isExcluded && $dueDate->gt($cutoff) && $dueDate->lte($periodEnd) && $pendingCents > 0;
+        $isInScope = ! $isExcluded && $dueDate->lte($periodEnd);
         $inconsistencies = [];
 
         if ($rawPendingCents < 0) {
@@ -307,6 +278,7 @@ class PortfolioBalanceService
             'status' => $this->installmentState($isExcluded, $pendingCents, $appliedCents, $isOverdue, $isDueToday, $dueDate, $cutoff, (string) $installment->status),
             'last_payment_date' => $allocationLastDates[$installment->id] ?? null,
             'is_excluded' => $isExcluded,
+            'is_in_scope' => $isInScope,
             'is_overdue' => $isOverdue,
             'is_due_today' => $isDueToday,
             'is_upcoming' => $isUpcoming,
@@ -324,6 +296,7 @@ class PortfolioBalanceService
             ->flatMap(function (array $loanRow) {
                 return collect($loanRow['installments'])
                     ->filter(fn (array $installment) => $installment['pending_cents'] > 0 && ! $installment['is_excluded'])
+                    ->filter(fn (array $installment) => $installment['is_in_scope'])
                     ->map(fn (array $installment) => [
                         'loan_id' => $loanRow['loan_id'],
                         'loan_public_id' => $loanRow['loan_public_id'],
@@ -576,13 +549,4 @@ class PortfolioBalanceService
         return CarbonImmutable::parse($date ?: CarbonImmutable::now('America/Merida')->toDateString(), 'America/Merida')->startOfDay();
     }
 
-    private function upcomingEnd(CarbonImmutable $cutoff, string $range): CarbonImmutable
-    {
-        return match ($range) {
-            '7' => $cutoff->addDays(7),
-            '15' => $cutoff->addDays(15),
-            'month' => $cutoff->endOfMonth(),
-            default => $cutoff->addDays(30),
-        };
-    }
 }

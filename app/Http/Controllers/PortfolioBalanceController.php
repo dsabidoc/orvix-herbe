@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Domain\Portfolio\PortfolioBalanceService;
 use App\Models\AuditEvent;
-use App\Models\Investor;
 use App\Models\Operator;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -38,7 +37,6 @@ class PortfolioBalanceController extends Controller
             'loanRows' => $loanRows,
             'selectedLoan' => $selectedLoan,
             'operators' => $this->operators($request),
-            'investors' => $this->investors($request),
             'filters' => $filters,
         ]);
     }
@@ -149,25 +147,12 @@ class PortfolioBalanceController extends Controller
     private function filters(Request $request): array
     {
         $validated = $request->validate([
-            'cutoff_date' => ['nullable', 'date'],
-            'mode' => ['nullable', 'in:complete,overdue,current,due_today,upcoming'],
             'operator_id' => ['nullable'],
-            'investor_id' => ['nullable', 'exists:investors,id'],
-            'q' => ['nullable', 'string', 'max:120'],
-            'loan_status' => ['nullable', 'string', 'max:40'],
-            'overdue_presence' => ['nullable', 'in:with,without'],
-            'late_range' => ['nullable', 'in:0,1-7,8-30,31-60,61-90,90+'],
-            'upcoming_range' => ['nullable', 'in:7,15,30,month'],
-            'payment_day' => ['nullable', 'integer', 'min:1', 'max:31'],
-            'overdue_min' => ['nullable', 'numeric', 'min:0'],
-            'overdue_max' => ['nullable', 'numeric', 'min:0'],
-            'sort' => ['nullable', 'in:operator,client,next_due,overdue_count,max_late_days,overdue_balance,pending_balance'],
-            'direction' => ['nullable', 'in:asc,desc'],
         ]);
 
-        $validated['cutoff_date'] ??= CarbonImmutable::now('America/Merida')->toDateString();
-        $validated['mode'] ??= 'complete';
-        $validated['upcoming_range'] ??= '30';
+        $validated['cutoff_date'] = CarbonImmutable::now('America/Merida')->toDateString();
+        $validated['mode'] = 'complete';
+        $validated['upcoming_range'] = 'month';
         $validated['per_page'] = (int) $request->integer('per_page', 15);
 
         return $validated;
@@ -203,18 +188,6 @@ class PortfolioBalanceController extends Controller
             ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->whereKey($request->user()->operatorProfile?->id))
             ->orderBy('name')
             ->get();
-    }
-
-    /**
-     * @return Collection<int, Investor>
-     */
-    private function investors(Request $request): Collection
-    {
-        if ($request->user()->hasRole('operador-cartera')) {
-            return collect();
-        }
-
-        return Investor::query()->where('status', 'active')->orderBy('name')->get();
     }
 
     /**
