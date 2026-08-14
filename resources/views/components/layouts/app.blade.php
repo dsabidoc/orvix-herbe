@@ -40,6 +40,7 @@
                                         ['Todas', 'loans.index'],
                                         ['Saldos', 'portfolio-balances.index'],
                                         ['Cobranza', 'collections.index'],
+                                        ['Facturas', 'invoice-portfolio.index'],
                                     ],
                                 ],
                                 ['Cortes', 'cuts.index', 'receipt'],

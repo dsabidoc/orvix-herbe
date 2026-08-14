@@ -6,6 +6,7 @@ use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvestorController;
+use App\Http\Controllers\InvoicePortfolioController;
 use App\Http\Controllers\LoanApplicationController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\LoanCreationController;
@@ -35,6 +36,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/prestamos', [LoanController::class, 'index'])->name('loans.index');
     Route::get('/cartera-y-saldos', [PortfolioBalanceController::class, 'index'])->name('portfolio-balances.index');
     Route::get('/cartera-y-saldos/exportar', [PortfolioBalanceController::class, 'export'])->name('portfolio-balances.export');
+    Route::get('/carteras/facturas', InvoicePortfolioController::class)->name('invoice-portfolio.index');
     Route::get('/prestamos/nuevo/crear', [LoanCreationController::class, 'create'])->name('loans.create');
     Route::post('/prestamos/nuevo/restaurar', [LoanCreationController::class, 'restoreCreate'])->name('loans.create.restore');
     Route::post('/prestamos/nuevo/cotizar-redondeo', [LoanCreationController::class, 'quote'])->name('loans.quote-rounded');
