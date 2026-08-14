@@ -78,6 +78,39 @@ class OrvixWorkflowTest extends TestCase
             ->assertSee('NUEVO OPERADOR');
     }
 
+    public function test_loan_quote_validates_optional_phone_fields_have_ten_digits(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->from(route('loans.create'))
+            ->post(route('loans.quote-rounded'), [
+                'operator_id' => $operator->id,
+                'first_name' => 'Cliente',
+                'last_name' => 'Con Telefono Mal',
+                'phone' => '999123456',
+                'email' => '',
+                'capital' => '100000',
+                'rate_type' => 'monthly',
+                'rate_value' => '2',
+                'administration_fee' => '0',
+                'term_months' => '12',
+                'start_date' => '2026-08-14',
+                'first_payment_date' => '2026-09-14',
+                'payment_day' => '14',
+                'calculation_method' => 'rounded',
+                'vat_enabled' => '0',
+                'interest_calculation_method' => 'fixed_principal',
+                'guarantor_name' => 'Aval Existente',
+                'guarantor_phone' => '99912345678',
+            ])
+            ->assertRedirect(route('loans.create'))
+            ->assertSessionHasErrors(['phone', 'guarantor_phone']);
+    }
+
     public function test_existing_active_user_can_be_linked_when_creating_investor_profile(): void
     {
         $this->seed(DatabaseSeeder::class);

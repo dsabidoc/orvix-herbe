@@ -102,6 +102,7 @@ class LoanController extends Controller
         return view('loans.edit', [
             'loan' => $loan->load(['client', 'operator', 'vehicle', 'installments', 'movements']),
             'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
+            'guarantors' => $this->guarantorOptions(),
             'canEditConditions' => $this->canEditConditions($loan),
         ]);
     }
@@ -248,7 +249,7 @@ class LoanController extends Controller
         $data = $request->validate([
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
-            'phone' => ['nullable', 'string', 'max:40'],
+            'phone' => ['nullable', 'regex:/^\d{10}$/'],
             'email' => ['nullable', 'email', 'max:160'],
             'operator_id' => ['required', 'exists:operators,id'],
             'brand' => ['nullable', 'string', 'max:80'],
@@ -268,9 +269,12 @@ class LoanController extends Controller
             'first_payment_date' => ['required', 'date'],
             'guarantor_name' => ['nullable', 'string', 'max:180'],
             'guarantor_address' => ['nullable', 'string', 'max:1000'],
-            'guarantor_phone' => ['nullable', 'string', 'max:40'],
+            'guarantor_phone' => ['nullable', 'regex:/^\d{10}$/'],
             'delinquency_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'delinquency_grace_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+        ], [
+            'phone.regex' => 'El celular del cliente debe tener exactamente 10 digitos.',
+            'guarantor_phone.regex' => 'El celular del aval debe tener exactamente 10 digitos.',
         ]);
 
         $newMonthlyRate = number_format($this->monthlyRate((float) $data['rate_value'], $data['rate_type']), 6, '.', '');
@@ -489,6 +493,18 @@ class LoanController extends Controller
         $vin = Str::upper(trim((string) $vin));
 
         return $vin === '' ? null : $vin;
+    }
+
+    private function guarantorOptions()
+    {
+        return Loan::query()
+            ->whereNotNull('guarantor_name')
+            ->where('guarantor_name', '!=', '')
+            ->select('guarantor_name', 'guarantor_address', 'guarantor_phone')
+            ->distinct()
+            ->orderBy('guarantor_name')
+            ->limit(500)
+            ->get();
     }
 
     /**

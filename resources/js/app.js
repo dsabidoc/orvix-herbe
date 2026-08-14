@@ -363,22 +363,42 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    document.querySelectorAll('[data-client-prefill]').forEach((select) => {
-        select.addEventListener('change', () => {
-            let clients = {};
+    const parseJsonDataset = (element, key, fallback = {}) => {
+        try {
+            return JSON.parse(element.dataset[key] || JSON.stringify(fallback));
+        } catch {
+            return fallback;
+        }
+    };
 
-            try {
-                clients = JSON.parse(select.dataset.clients || '{}');
-            } catch {
-                clients = {};
-            }
+    const normalizeLookup = (value) => String(value || '').trim().toLocaleUpperCase('es-MX');
 
-            const client = clients[select.value] || {};
-            const form = select.closest('form');
+    document.querySelectorAll('[data-client-prefill], [data-client-search]').forEach((element) => {
+        const syncClient = () => {
+            const clients = parseJsonDataset(element, 'clients');
+            const form = element.closest('form');
 
             if (!(form instanceof HTMLFormElement)) {
                 return;
             }
+
+            let clientId = '';
+
+            if (element instanceof HTMLSelectElement) {
+                clientId = element.value;
+            } else if (element instanceof HTMLInputElement) {
+                const typed = normalizeLookup(element.value);
+                const match = Object.entries(clients).find(([, client]) => normalizeLookup(client.display) === typed);
+                clientId = match ? match[0] : '';
+
+                const hiddenClientId = form.querySelector('[data-client-id]');
+
+                if (hiddenClientId instanceof HTMLInputElement) {
+                    hiddenClientId.value = clientId;
+                }
+            }
+
+            const client = clients[clientId] || {};
 
             form.querySelectorAll('[data-client-field]').forEach((field) => {
                 if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) {
@@ -389,8 +409,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (value !== '') {
                     field.value = value;
-                } else if (!select.value) {
+                } else if (!clientId && element instanceof HTMLSelectElement) {
                     field.value = '';
+                }
+            });
+        };
+
+        element.addEventListener('change', syncClient);
+    });
+
+    document.querySelectorAll('[data-guarantor-search]').forEach((input) => {
+        input.addEventListener('change', () => {
+            const guarantors = parseJsonDataset(input, 'guarantors', []);
+            const typed = normalizeLookup(input.value);
+            const guarantor = guarantors.find((option) => normalizeLookup(option.display) === typed);
+            const form = input.closest('form');
+
+            if (!guarantor || !(form instanceof HTMLFormElement)) {
+                return;
+            }
+
+            form.querySelectorAll('[data-guarantor-field]').forEach((field) => {
+                if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
+                    return;
+                }
+
+                const value = guarantor[field.dataset.guarantorField] || '';
+
+                if (value !== '') {
+                    field.value = value;
                 }
             });
         });

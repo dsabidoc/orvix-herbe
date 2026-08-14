@@ -1,3 +1,12 @@
+@php
+    $guarantorPrefill = $guarantors->values()->map(fn ($loan) => [
+        'display' => trim($loan->guarantor_name).($loan->guarantor_phone ? ' · '.$loan->guarantor_phone : ''),
+        'name' => $loan->guarantor_name,
+        'address' => $loan->guarantor_address,
+        'phone' => $loan->guarantor_phone,
+    ]);
+@endphp
+
 <x-layouts.app title="Editar prestamo {{ $loan->folio }}">
     <form class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" method="POST" action="{{ route('loans.update', $loan) }}">
         @csrf
@@ -16,14 +25,19 @@
                     <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_name" placeholder="Nombre requerido" value="{{ old('first_name', $loan->client->first_name) }}" required>
                     <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="last_name" placeholder="Apellidos opcional" value="{{ old('last_name', $loan->client->last_name) }}">
                 </div>
-                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Celular opcional" value="{{ old('phone', $loan->client->phone) }}">
+                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Celular opcional (10 digitos)" value="{{ old('phone', $loan->client->phone) }}" inputmode="numeric" minlength="10" maxlength="10" pattern="[0-9]{10}">
                 <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" placeholder="Correo opcional" type="email" value="{{ old('email', $loan->client->email) }}">
                 <div class="border-t border-slate-100 pt-4">
                     <h4 class="font-bold text-slate-950">Aval</h4>
                     <div class="mt-3 space-y-3">
-                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_name" placeholder="Nombre completo aval" value="{{ old('guarantor_name', $loan->guarantor_name) }}">
-                        <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_address" rows="2" placeholder="Direccion aval">{{ old('guarantor_address', $loan->guarantor_address) }}</textarea>
-                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_phone" placeholder="Celular aval" value="{{ old('guarantor_phone', $loan->guarantor_phone) }}">
+                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_name" placeholder="Nombre completo aval o busca existente" value="{{ old('guarantor_name', $loan->guarantor_name) }}" list="loan-guarantor-options" data-guarantor-search data-guarantor-field="name" data-guarantors='@json($guarantorPrefill)' autocomplete="off">
+                        <datalist id="loan-guarantor-options">
+                            @foreach ($guarantorPrefill as $guarantor)
+                                <option value="{{ $guarantor['display'] }}"></option>
+                            @endforeach
+                        </datalist>
+                        <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_address" rows="2" placeholder="Direccion aval" data-guarantor-field="address">{{ old('guarantor_address', $loan->guarantor_address) }}</textarea>
+                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_phone" placeholder="Celular aval opcional (10 digitos)" value="{{ old('guarantor_phone', $loan->guarantor_phone) }}" inputmode="numeric" minlength="10" maxlength="10" pattern="[0-9]{10}" data-guarantor-field="phone">
                     </div>
                 </div>
                 <div>

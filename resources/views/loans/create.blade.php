@@ -5,11 +5,18 @@
     $defaultPaymentDay = old('payment_day', \Carbon\CarbonImmutable::parse($defaultFirstPaymentDate)->day);
     $clientPrefill = $clients->mapWithKeys(fn ($client) => [
         $client->id => [
+            'display' => trim($client->first_name.' '.$client->last_name).($client->phone ? ' · '.$client->phone : ''),
             'first_name' => $client->first_name,
             'last_name' => $client->last_name,
             'phone' => $client->phone,
             'email' => $client->email,
         ],
+    ]);
+    $guarantorPrefill = $guarantors->values()->map(fn ($loan) => [
+        'display' => trim($loan->guarantor_name).($loan->guarantor_phone ? ' · '.$loan->guarantor_phone : ''),
+        'name' => $loan->guarantor_name,
+        'address' => $loan->guarantor_address,
+        'phone' => $loan->guarantor_phone,
     ]);
 @endphp
 
@@ -38,20 +45,21 @@
 
                 <section class="space-y-4">
                     <h3 class="font-bold text-slate-950">Cliente</h3>
-                    <div>
-                        <label class="text-sm font-semibold text-slate-700">Cliente existente</label>
-                        <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="client_id" data-client-prefill data-clients='@json($clientPrefill)'>
-                            <option value="">Crear cliente basico</option>
-                            @foreach ($clients as $client)
-                                <option value="{{ $client->id }}" @selected((string) old('client_id') === (string) $client->id)>{{ $client->first_name }} {{ $client->last_name }} · {{ $client->phone }}</option>
-                            @endforeach
-                        </select>
+                    <input name="client_id" type="hidden" value="{{ old('client_id') }}" data-client-id>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="block text-sm font-semibold text-slate-700">Nombre / buscar cliente
+                            <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_name" placeholder="Empieza a escribir nombre o celular" value="{{ old('first_name') }}" list="loan-client-options" data-client-search data-client-field="first_name" data-clients='@json($clientPrefill)' autocomplete="off">
+                        </label>
+                        <label class="block text-sm font-semibold text-slate-700">Apellidos
+                            <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="last_name" placeholder="Apellidos opcional" value="{{ old('last_name') }}" data-client-field="last_name">
+                        </label>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="first_name" placeholder="Nombre requerido" value="{{ old('first_name') }}" data-client-field="first_name">
-                        <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" name="last_name" placeholder="Apellidos opcional" value="{{ old('last_name') }}" data-client-field="last_name">
-                    </div>
-                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Celular opcional" value="{{ old('phone') }}" data-client-field="phone">
+                    <datalist id="loan-client-options">
+                        @foreach ($clientPrefill as $client)
+                            <option value="{{ $client['display'] }}"></option>
+                        @endforeach
+                    </datalist>
+                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Celular opcional (10 digitos)" value="{{ old('phone') }}" inputmode="numeric" minlength="10" maxlength="10" pattern="[0-9]{10}" data-client-field="phone">
                     <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" placeholder="Correo opcional" type="email" value="{{ old('email') }}" data-client-field="email">
                 </section>
 
@@ -68,9 +76,14 @@
 
                 <section class="space-y-4">
                     <h3 class="font-bold text-slate-950">Aval</h3>
-                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_name" placeholder="Nombre completo aval" value="{{ old('guarantor_name') }}">
-                    <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_address" rows="2" placeholder="Direccion aval">{{ old('guarantor_address') }}</textarea>
-                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_phone" placeholder="Celular aval" value="{{ old('guarantor_phone') }}">
+                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_name" placeholder="Nombre completo aval o busca existente" value="{{ old('guarantor_name') }}" list="loan-guarantor-options" data-guarantor-search data-guarantor-field="name" data-guarantors='@json($guarantorPrefill)' autocomplete="off">
+                    <datalist id="loan-guarantor-options">
+                        @foreach ($guarantorPrefill as $guarantor)
+                            <option value="{{ $guarantor['display'] }}"></option>
+                        @endforeach
+                    </datalist>
+                    <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_address" rows="2" placeholder="Direccion aval" data-guarantor-field="address">{{ old('guarantor_address') }}</textarea>
+                    <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="guarantor_phone" placeholder="Celular aval opcional (10 digitos)" value="{{ old('guarantor_phone') }}" inputmode="numeric" minlength="10" maxlength="10" pattern="[0-9]{10}" data-guarantor-field="phone">
                 </section>
 
                 <section class="space-y-4">

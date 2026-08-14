@@ -39,6 +39,7 @@ class LoanCreationController extends Controller
 
         return view('loans.create', [
             'clients' => Client::query()->orderBy('last_name')->orderBy('first_name')->get(),
+            'guarantors' => $this->guarantorOptions(),
             'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
             'investors' => Investor::availableForFunding()->get(),
             'terms' => $this->roundedTerms(),
@@ -63,7 +64,7 @@ class LoanCreationController extends Controller
                 'client_id' => ['nullable', 'exists:clients,id'],
                 'first_name' => ['required_without:client_id', 'nullable', 'string', 'max:120'],
                 'last_name' => ['nullable', 'string', 'max:120'],
-                'phone' => ['nullable', 'string', 'max:40'],
+                'phone' => ['nullable', 'regex:/^\d{10}$/'],
                 'email' => ['nullable', 'email', 'max:160'],
                 'operator_id' => ['required', 'exists:operators,id'],
                 'capital' => ['required', 'numeric', 'min:1'],
@@ -81,7 +82,7 @@ class LoanCreationController extends Controller
                 'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
                 'guarantor_name' => ['nullable', 'string', 'max:180'],
                 'guarantor_address' => ['nullable', 'string', 'max:1000'],
-                'guarantor_phone' => ['nullable', 'string', 'max:40'],
+                'guarantor_phone' => ['nullable', 'regex:/^\d{10}$/'],
                 'delinquency_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
                 'delinquency_grace_days' => ['nullable', 'integer', 'min:0', 'max:365'],
                 'brand' => ['nullable', 'string', 'max:80'],
@@ -99,6 +100,8 @@ class LoanCreationController extends Controller
             ],
             [
                 'first_name.required_without' => 'Captura el nombre del cliente o selecciona un cliente existente.',
+                'phone.regex' => 'El celular del cliente debe tener exactamente 10 digitos.',
+                'guarantor_phone.regex' => 'El celular del aval debe tener exactamente 10 digitos.',
                 'operator_id.required' => 'Selecciona el operador del prestamo.',
                 'capital.required' => 'Captura el capital del prestamo.',
                 'rate_type.required' => 'Selecciona si la tasa es mensual o anual.',
@@ -493,7 +496,7 @@ class LoanCreationController extends Controller
             'client_id' => ['nullable', 'exists:clients,id'],
             'first_name' => ['required_without:client_id', 'nullable', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
-            'phone' => ['nullable', 'string', 'max:40'],
+            'phone' => ['nullable', 'regex:/^\d{10}$/'],
             'email' => ['nullable', 'email', 'max:160'],
             'operator_id' => ['required', 'exists:operators,id'],
             'capital' => ['required', 'numeric', 'min:1'],
@@ -509,7 +512,7 @@ class LoanCreationController extends Controller
             'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
             'guarantor_name' => ['nullable', 'string', 'max:180'],
             'guarantor_address' => ['nullable', 'string', 'max:1000'],
-            'guarantor_phone' => ['nullable', 'string', 'max:40'],
+            'guarantor_phone' => ['nullable', 'regex:/^\d{10}$/'],
             'delinquency_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'delinquency_grace_days' => ['nullable', 'integer', 'min:0', 'max:365'],
             'brand' => ['nullable', 'string', 'max:80'],
@@ -526,6 +529,10 @@ class LoanCreationController extends Controller
             'invoice_original_name' => ['nullable', 'string', 'max:255'],
             'invoice_mime_type' => ['nullable', 'string', 'max:120'],
             'invoice_size' => ['nullable', 'integer', 'min:0'],
+        ], [
+            'first_name.required_without' => 'Captura el nombre del cliente o selecciona un cliente existente.',
+            'phone.regex' => 'El celular del cliente debe tener exactamente 10 digitos.',
+            'guarantor_phone.regex' => 'El celular del aval debe tener exactamente 10 digitos.',
         ]);
 
         $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
@@ -703,6 +710,18 @@ class LoanCreationController extends Controller
     private function roundedTerms(): array
     {
         return [6, 12, 18, 24, 36, 48];
+    }
+
+    private function guarantorOptions()
+    {
+        return Loan::query()
+            ->whereNotNull('guarantor_name')
+            ->where('guarantor_name', '!=', '')
+            ->select('guarantor_name', 'guarantor_address', 'guarantor_phone')
+            ->distinct()
+            ->orderBy('guarantor_name')
+            ->limit(500)
+            ->get();
     }
 
     private function ensureVinHasNoActiveLoan(?string $vin): void
