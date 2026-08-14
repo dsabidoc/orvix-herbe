@@ -148,6 +148,25 @@ class PortfolioBalanceServiceTest extends TestCase
         $this->assertSame([220000, 220000], $rows->pluck('overdue_cents')->all());
     }
 
+    public function test_detail_rows_are_ordered_by_loan_start_date_oldest_first(): void
+    {
+        [$admin, $operator] = $this->admin();
+        $newLoan = $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-08-01', 'amount' => '1000.00'],
+        ], $operator);
+        $oldLoan = $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-08-01', 'amount' => '1000.00'],
+        ], $operator);
+
+        $newLoan->forceFill(['start_date' => '2026-01-10', 'folio' => 'NEW-100126-01'])->save();
+        $oldLoan->forceFill(['start_date' => '2024-01-10', 'folio' => 'OLD-100124-01'])->save();
+
+        $report = $this->service->build(['cutoff_date' => '2026-08-10'], $admin);
+
+        $this->assertSame([$oldLoan->id, $newLoan->id], $report['detail_rows']->pluck('loan_id')->all());
+        $this->assertSame(['OLD-100124-01', 'NEW-100126-01'], $report['detail_rows']->pluck('folio')->all());
+    }
+
     /**
      * @return array{0: User, 1: Operator, 2: User}
      */

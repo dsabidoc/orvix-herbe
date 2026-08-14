@@ -202,6 +202,7 @@ class PortfolioBalanceService
             'vehicle_id' => $loan->vehicle_id,
             'vehicle_name' => trim(($loan->vehicle?->brand ? $loan->vehicle->brand.' ' : '').($loan->vehicle?->model ?? 'Sin vehiculo').' '.($loan->vehicle?->year ?? '')),
             'vehicle_identifier' => $loan->vehicle?->plates ?: $loan->vehicle?->vin,
+            'start_date_sort' => $loan->start_date?->toDateString() ?? '9999-12-31',
             'term_months' => (int) $loan->term_months,
             'payment_day' => (int) $loan->payment_day,
             'next_installment_number' => $nextInstallment['number'] ?? null,
@@ -308,6 +309,7 @@ class PortfolioBalanceService
                         'client_name' => $loanRow['client_name'],
                         'vehicle_name' => $loanRow['vehicle_name'],
                         'vehicle_identifier' => $loanRow['vehicle_identifier'],
+                        'loan_start_date_sort' => $loanRow['start_date_sort'],
                         'payment_day' => $loanRow['payment_day'],
                         'term_months' => $loanRow['term_months'],
                         'installment_number' => $installment['number'],
@@ -321,7 +323,7 @@ class PortfolioBalanceService
                         'overdue_cents' => $loanRow['overdue_cents'],
                     ]);
             })
-            ->sort(fn (array $a, array $b) => ($a['due_day'] <=> $b['due_day'])
+            ->sort(fn (array $a, array $b) => strcmp($a['loan_start_date_sort'], $b['loan_start_date_sort'])
                 ?: strnatcasecmp($a['vehicle_name'], $b['vehicle_name'])
                 ?: strcmp($a['due_date_sort'], $b['due_date_sort'])
                 ?: ($a['installment_number'] <=> $b['installment_number']))
