@@ -308,6 +308,7 @@ class PortfolioBalanceService
                         'client_name' => $loanRow['client_name'],
                         'vehicle_name' => $loanRow['vehicle_name'],
                         'vehicle_identifier' => $loanRow['vehicle_identifier'],
+                        'payment_day' => $loanRow['payment_day'],
                         'term_months' => $loanRow['term_months'],
                         'installment_number' => $installment['number'],
                         'payment_progress' => $installment['progress'],

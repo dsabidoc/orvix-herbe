@@ -96,24 +96,22 @@ class PortfolioBalanceController extends Controller
             fputcsv($handle, []);
             fputcsv($handle, ['Detalle de cartera']);
             fputcsv($handle, [
-                'Auto',
-                'Numero de pagos',
+                'Modelo con dia / folio',
+                'Num. pagos',
                 'Pago',
                 'Fecha pagare',
                 'Dias de atraso',
-                'Mens vencida',
                 'Suma vencidas',
                 'Cliente',
             ]);
 
             foreach ($report['detail_rows'] as $row) {
                 fputcsv($handle, [
-                    trim($row['vehicle_name'].($row['vehicle_identifier'] ? ' '.$row['vehicle_identifier'] : '')),
+                    $row['vehicle_name'].' · Dia '.$row['payment_day'].' · '.$row['folio'],
                     $row['payment_progress'],
                     Money::decimal($row['payment_cents']),
                     $row['due_date'] ?? '-',
                     $row['late_days'].' dias',
-                    $row['overdue_installments_count'],
                     Money::decimal($row['overdue_cents']),
                     $row['client_name'],
                 ]);

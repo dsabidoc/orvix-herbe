@@ -156,8 +156,8 @@
                 <article class="p-4">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <p class="font-semibold text-slate-950">{{ $row['vehicle_name'] }}</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ $row['vehicle_identifier'] ?: '-' }}</p>
+                            <p class="font-semibold text-slate-950">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</p>
+                            <p class="mt-1 text-xs text-slate-500">{{ $row['folio'] }}</p>
                         </div>
                         <p class="shrink-0 text-right font-bold text-red-700">{{ $money($row['overdue_cents']) }}</p>
                     </div>
@@ -179,8 +179,8 @@
                             <dd class="font-semibold">{{ $row['late_days'] }} dias</dd>
                         </div>
                         <div>
-                            <dt class="text-slate-500">Mens vencida</dt>
-                            <dd class="font-semibold">{{ $row['overdue_installments_count'] }}</dd>
+                            <dt class="text-slate-500">Suma vencidas</dt>
+                            <dd class="font-semibold text-red-700">{{ $money($row['overdue_cents']) }}</dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Cliente</dt>
@@ -195,23 +195,21 @@
         <div class="hidden w-full overflow-x-auto md:block">
             <table class="w-full table-fixed text-left text-xs xl:text-sm">
                 <colgroup>
-                    <col class="w-[22%]">
-                    <col class="w-[11%]">
-                    <col class="w-[12%]">
-                    <col class="w-[12%]">
-                    <col class="w-[11%]">
+                    <col class="w-[26%]">
                     <col class="w-[10%]">
                     <col class="w-[12%]">
-                    <col class="w-[10%]">
+                    <col class="w-[12%]">
+                    <col class="w-[11%]">
+                    <col class="w-[14%]">
+                    <col class="w-[15%]">
                 </colgroup>
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
-                        <th class="px-3 py-3">Auto</th>
+                        <th class="px-3 py-3">Modelo / dia</th>
                         <th class="px-3 py-3">Num. pagos</th>
                         <th class="px-3 py-3 text-right">Pago</th>
                         <th class="px-3 py-3">Fecha pagare</th>
                         <th class="px-3 py-3 text-right">Dias atraso</th>
-                        <th class="px-3 py-3 text-right">Mens vencida</th>
                         <th class="px-3 py-3 text-right">Suma vencidas</th>
                         <th class="px-3 py-3">Cliente</th>
                     </tr>
@@ -220,20 +218,19 @@
                     @forelse ($loanRows as $row)
                         <tr class="hover:bg-slate-50">
                             <td class="px-3 py-3">
-                                {{ $row['vehicle_name'] }}
-                                <p class="text-xs text-slate-500">{{ $row['vehicle_identifier'] ?: '-' }}</p>
+                                <p class="font-semibold">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</p>
+                                <p class="text-xs text-slate-500">{{ $row['folio'] }}</p>
                             </td>
                             <td class="px-3 py-3 font-semibold">{{ $row['payment_progress'] }}</td>
                             <td class="px-3 py-3 text-right font-semibold">{{ $money($row['payment_cents']) }}</td>
                             <td class="px-3 py-3">{{ $row['due_date'] ?? '-' }}</td>
                             <td class="px-3 py-3 text-right">{{ $row['late_days'] }} dias</td>
-                            <td class="px-3 py-3 text-right">{{ $row['overdue_installments_count'] }}</td>
                             <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($row['overdue_cents']) }}</td>
                             <td class="px-3 py-3 font-semibold text-[#0f766e]">{{ $row['client_name'] }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td class="px-5 py-8 text-center text-slate-500" colspan="8">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
+                            <td class="px-5 py-8 text-center text-slate-500" colspan="7">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -296,23 +293,21 @@
             <h3 class="mb-2 text-sm font-bold text-slate-950">Detalle de cartera</h3>
             <table class="cut-print-table w-full text-left text-sm">
                 <colgroup>
-                    <col style="width: 25%">
-                    <col style="width: 8%">
+                    <col style="width: 28%">
+                    <col style="width: 9%">
                     <col style="width: 12%">
                     <col style="width: 12%">
                     <col style="width: 11%">
-                    <col style="width: 10%">
-                    <col style="width: 12%">
-                    <col style="width: 10%">
+                    <col style="width: 13%">
+                    <col style="width: 15%">
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Auto</th>
-                        <th>Numero de pagos</th>
+                        <th>Modelo / dia</th>
+                        <th>Num. pagos</th>
                         <th class="text-right">Pago</th>
                         <th>Fecha pagare</th>
                         <th class="text-right">Dias de atraso</th>
-                        <th class="text-right">Mens vencida</th>
                         <th class="text-right">Suma vencidas</th>
                         <th>Cliente</th>
                     </tr>
@@ -320,18 +315,17 @@
                 <tbody>
                     @forelse ($report['detail_rows'] as $row)
                         <tr>
-                            <td>{{ $row['vehicle_name'] }} {{ $row['vehicle_identifier'] ? '· '.$row['vehicle_identifier'] : '' }}</td>
+                            <td>{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}<br><span class="text-[10px] text-slate-500">{{ $row['folio'] }}</span></td>
                             <td>{{ $row['payment_progress'] }}</td>
                             <td class="text-right">{{ $money($row['payment_cents']) }}</td>
                             <td>{{ $row['due_date'] ?? '-' }}</td>
                             <td class="text-right">{{ $row['late_days'] }} dias</td>
-                            <td class="text-right">{{ $row['overdue_installments_count'] }}</td>
                             <td class="text-right">{{ $money($row['overdue_cents']) }}</td>
                             <td>{{ $row['client_name'] }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
+                            <td colspan="7">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
                         </tr>
                     @endforelse
                 </tbody>
