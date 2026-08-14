@@ -10,6 +10,7 @@ use App\Models\Operator;
 use App\Models\WeeklyCut;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -152,7 +153,7 @@ class CollectionController extends Controller
         $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
         $movement = CollectionMovement::query()->create([
             'public_id' => (string) Str::ulid(),
-            'folio' => 'MOV-'.$registeredAt->format('ymd').'-'.str_pad((string) (CollectionMovement::query()->count() + 1), 4, '0', STR_PAD_LEFT),
+            'folio' => $this->nextMovementFolio($registeredAt),
             'idempotency_key' => sha1('installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents)),
             'loan_id' => $installment->loan_id,
             'target_installment_id' => $installment->id,
@@ -252,7 +253,7 @@ class CollectionController extends Controller
             $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
             $movement = CollectionMovement::query()->create([
                 'public_id' => (string) Str::ulid(),
-                'folio' => 'MOV-'.$registeredAt->format('ymd').'-'.str_pad((string) (CollectionMovement::query()->count() + 1), 4, '0', STR_PAD_LEFT),
+                'folio' => $this->nextMovementFolio($registeredAt),
                 'idempotency_key' => sha1('bulk-installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents)),
                 'loan_id' => $installment->loan_id,
                 'target_installment_id' => $installment->id,
@@ -299,6 +300,25 @@ class CollectionController extends Controller
         }
 
         return $request->filled('operator_id') ? (int) $request->input('operator_id') : null;
+    }
+
+    private function nextMovementFolio(CarbonInterface $registeredAt): string
+    {
+        $prefix = 'MOV-'.$registeredAt->format('ymd').'-';
+        $maxSequence = CollectionMovement::query()
+            ->where('folio', 'like', $prefix.'%')
+            ->pluck('folio')
+            ->reduce(function (int $max, string $folio) use ($prefix): int {
+                $sequence = preg_replace('/\D+/', '', substr($folio, strlen($prefix)));
+
+                return $sequence === '' ? $max : max($max, (int) $sequence);
+            }, 0);
+
+        do {
+            $folio = $prefix.str_pad((string) (++$maxSequence), 4, '0', STR_PAD_LEFT);
+        } while (CollectionMovement::query()->where('folio', $folio)->exists());
+
+        return $folio;
     }
 
     private function capitalAdvanceAmountCents(Installment $installment): int
