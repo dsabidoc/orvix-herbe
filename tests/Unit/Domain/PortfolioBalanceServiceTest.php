@@ -148,23 +148,27 @@ class PortfolioBalanceServiceTest extends TestCase
         $this->assertSame([220000, 220000], $rows->pluck('overdue_cents')->all());
     }
 
-    public function test_detail_rows_are_ordered_by_loan_start_date_oldest_first(): void
+    public function test_detail_rows_are_ordered_by_payment_day_then_start_date_oldest_first(): void
     {
         [$admin, $operator] = $this->admin();
-        $newLoan = $this->loanWithInstallments([
+        $dayOneNewLoan = $this->loanWithInstallments([
             ['number' => 1, 'due_date' => '2026-08-01', 'amount' => '1000.00'],
         ], $operator);
-        $oldLoan = $this->loanWithInstallments([
+        $dayOneOldLoan = $this->loanWithInstallments([
             ['number' => 1, 'due_date' => '2026-08-01', 'amount' => '1000.00'],
+        ], $operator);
+        $dayTwoOlderLoan = $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-08-02', 'amount' => '1000.00'],
         ], $operator);
 
-        $newLoan->forceFill(['start_date' => '2026-01-10', 'folio' => 'NEW-100126-01'])->save();
-        $oldLoan->forceFill(['start_date' => '2024-01-10', 'folio' => 'OLD-100124-01'])->save();
+        $dayOneNewLoan->forceFill(['start_date' => '2026-01-10', 'payment_day' => 1, 'folio' => 'NEW-100126-01'])->save();
+        $dayOneOldLoan->forceFill(['start_date' => '2024-01-10', 'payment_day' => 1, 'folio' => 'OLD-100124-01'])->save();
+        $dayTwoOlderLoan->forceFill(['start_date' => '2023-01-10', 'payment_day' => 2, 'folio' => 'DAY2-100123-01'])->save();
 
         $report = $this->service->build(['cutoff_date' => '2026-08-10'], $admin);
 
-        $this->assertSame([$oldLoan->id, $newLoan->id], $report['detail_rows']->pluck('loan_id')->all());
-        $this->assertSame(['OLD-100124-01', 'NEW-100126-01'], $report['detail_rows']->pluck('folio')->all());
+        $this->assertSame([$dayOneOldLoan->id, $dayOneNewLoan->id, $dayTwoOlderLoan->id], $report['detail_rows']->pluck('loan_id')->all());
+        $this->assertSame(['OLD-100124-01', 'NEW-100126-01', 'DAY2-100123-01'], $report['detail_rows']->pluck('folio')->all());
     }
 
     /**

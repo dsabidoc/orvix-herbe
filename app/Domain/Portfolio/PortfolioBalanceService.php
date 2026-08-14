@@ -323,7 +323,8 @@ class PortfolioBalanceService
                         'overdue_cents' => $loanRow['overdue_cents'],
                     ]);
             })
-            ->sort(fn (array $a, array $b) => strcmp($a['loan_start_date_sort'], $b['loan_start_date_sort'])
+            ->sort(fn (array $a, array $b) => ($a['payment_day'] <=> $b['payment_day'])
+                ?: strcmp($a['loan_start_date_sort'], $b['loan_start_date_sort'])
                 ?: strnatcasecmp($a['vehicle_name'], $b['vehicle_name'])
                 ?: strcmp($a['due_date_sort'], $b['due_date_sort'])
                 ?: ($a['installment_number'] <=> $b['installment_number']))
