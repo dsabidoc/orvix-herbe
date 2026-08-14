@@ -171,6 +171,24 @@ class PortfolioBalanceServiceTest extends TestCase
         $this->assertSame(['OLD-100124-01', 'NEW-100126-01', 'DAY2-100123-01'], $report['detail_rows']->pluck('folio')->all());
     }
 
+    public function test_operator_summary_counts_loans_not_visible_installment_rows(): void
+    {
+        [$admin, $operator] = $this->admin();
+        $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-08-01', 'amount' => '1000.00'],
+            ['number' => 2, 'due_date' => '2026-08-05', 'amount' => '1000.00'],
+        ], $operator);
+        $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-08-10', 'amount' => '1000.00'],
+        ], $operator);
+
+        $report = $this->service->build(['cutoff_date' => '2026-08-10'], $admin);
+        $operatorRow = $report['operator_rows']->firstWhere('operator_id', $operator->id);
+
+        $this->assertSame(2, $operatorRow['loans_count']);
+        $this->assertSame(3, $report['detail_rows']->count());
+    }
+
     /**
      * @return array{0: User, 1: Operator, 2: User}
      */

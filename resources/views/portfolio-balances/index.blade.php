@@ -66,16 +66,8 @@
                             <dd class="font-semibold text-red-700">{{ $money($operatorRow['overdue_cents']) }}</dd>
                         </div>
                         <div>
-                            <dt class="text-slate-500">Saldo total</dt>
-                            <dd class="font-semibold">{{ $money($operatorRow['pending_cents']) }}</dd>
-                        </div>
-                        <div>
                             <dt class="text-slate-500">Max atraso</dt>
                             <dd class="font-semibold">{{ $operatorRow['max_late_days'] }} dias</dd>
-                        </div>
-                        <div>
-                            <dt class="text-slate-500">Proximo</dt>
-                            <dd class="font-semibold">{{ $operatorRow['next_due_date'] ? CarbonImmutable::parse($operatorRow['next_due_date'])->format('d/m/Y') : '-' }}</dd>
                         </div>
                     </dl>
                     <a class="mt-4 inline-flex rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" href="{{ route('portfolio-balances.index', array_merge($filterQuery, ['operator_id' => $operatorRow['operator_id'] ?? 'none'])) }}">Ver detalle</a>
@@ -87,13 +79,12 @@
         <div class="hidden w-full overflow-x-auto md:block">
             <table class="w-full table-fixed text-left text-xs xl:text-sm">
                 <colgroup>
+                    <col class="w-[18%]">
+                    <col class="w-[13%]">
+                    <col class="w-[12%]">
                     <col class="w-[16%]">
-                    <col class="w-[10%]">
-                    <col class="w-[12%]">
                     <col class="w-[15%]">
-                    <col class="w-[14%]">
                     <col class="w-[12%]">
-                    <col class="w-[10%]">
                     <col class="w-[11%]">
                 </colgroup>
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">
@@ -101,9 +92,8 @@
                         <th class="px-3 py-3">Operador</th>
                         <th class="px-3 py-3 text-right">Clientes / prestamos</th>
                         <th class="px-3 py-3 text-right">Pagares</th>
-                        <th class="px-3 py-3 text-right">Saldos</th>
+                        <th class="px-3 py-3 text-right">Saldo vencido</th>
                         <th class="px-3 py-3 text-right">Atraso</th>
-                        <th class="px-3 py-3">Proximo</th>
                         <th class="px-3 py-3">Estado</th>
                         <th class="px-3 py-3"></th>
                     </tr>
@@ -122,13 +112,11 @@
                             </td>
                             <td class="px-3 py-3 text-right">
                                 <p class="font-semibold text-red-700">{{ $money($operatorRow['overdue_cents']) }}</p>
-                                <p class="text-xs text-slate-500">{{ $money($operatorRow['pending_cents']) }} total</p>
                             </td>
                             <td class="px-3 py-3 text-right">
                                 <p class="font-semibold">{{ $operatorRow['max_late_days'] }} dias</p>
                                 <p class="text-xs text-slate-500">{{ $operatorRow['vehicles_with_overdue_count'] }} vehiculos</p>
                             </td>
-                            <td class="px-3 py-3">{{ $operatorRow['next_due_date'] ? CarbonImmutable::parse($operatorRow['next_due_date'])->format('d/m/Y') : '-' }}</td>
                             <td class="px-3 py-3">
                                 <span class="{{ $operatorRow['collection_state']['class'] }} inline-flex rounded px-2 py-1 text-xs font-bold">{{ $operatorRow['collection_state']['label'] }}</span>
                             </td>
@@ -138,7 +126,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td class="px-5 py-8 text-center text-slate-500" colspan="8">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
+                            <td class="px-5 py-8 text-center text-slate-500" colspan="7">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -259,9 +247,7 @@
                         <th class="text-right">Pagares vencidos</th>
                         <th class="text-right">Vehiculos atraso</th>
                         <th class="text-right">Saldo vencido</th>
-                        <th class="text-right">Saldo total</th>
                         <th class="text-right">Max atraso</th>
-                        <th>Proximo</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
@@ -275,14 +261,12 @@
                             <td class="text-right">{{ $operatorRow['overdue_installments_count'] }}</td>
                             <td class="text-right">{{ $operatorRow['vehicles_with_overdue_count'] }}</td>
                             <td class="text-right">{{ $money($operatorRow['overdue_cents']) }}</td>
-                            <td class="text-right">{{ $money($operatorRow['pending_cents']) }}</td>
                             <td class="text-right">{{ $operatorRow['max_late_days'] }} dias</td>
-                            <td>{{ $operatorRow['next_due_date'] ? CarbonImmutable::parse($operatorRow['next_due_date'])->format('d/m/Y') : '-' }}</td>
                             <td>{{ $operatorRow['collection_state']['label'] }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
+                            <td colspan="9">No se encontraron registros para la fecha de corte y filtros seleccionados.</td>
                         </tr>
                     @endforelse
                 </tbody>

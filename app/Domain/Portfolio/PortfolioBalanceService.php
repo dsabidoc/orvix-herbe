@@ -51,7 +51,7 @@ class PortfolioBalanceService
             'upcoming_end' => $periodEnd,
             'loan_rows' => $loanRows,
             'detail_rows' => $detailRows,
-            'operator_rows' => $this->operatorRows($loanRows),
+            'operator_rows' => $this->operatorRows($loanRows, $loans),
             'kpis' => $this->kpis($loanRows),
             'filters' => $filters,
         ];
@@ -432,9 +432,13 @@ class PortfolioBalanceService
      * @param  Collection<int, array<string, mixed>>  $loanRows
      * @return Collection<int, array<string, mixed>>
      */
-    private function operatorRows(Collection $loanRows): Collection
+    private function operatorRows(Collection $loanRows, Collection $loans): Collection
     {
-        return $loanRows->groupBy('operator_key')->map(function (Collection $rows) {
+        $loanCountsByOperator = $loans
+            ->groupBy(fn (Loan $loan) => $loan->operator_id ? (string) $loan->operator_id : 'none')
+            ->map(fn (Collection $loans) => $loans->count());
+
+        return $loanRows->groupBy('operator_key')->map(function (Collection $rows) use ($loanCountsByOperator) {
             $first = $rows->first();
             $maxLateDays = (int) $rows->max('max_late_days');
             $overdueCents = (int) $rows->sum('overdue_cents');
@@ -444,7 +448,7 @@ class PortfolioBalanceService
                 'operator_id' => $first['operator_id'],
                 'operator_name' => $first['operator_name'],
                 'clients_count' => $rows->pluck('client_id')->unique()->count(),
-                'loans_count' => $rows->count(),
+                'loans_count' => $loanCountsByOperator[$first['operator_key']] ?? $rows->pluck('loan_id')->unique()->count(),
                 'pending_installments_count' => (int) $rows->sum('pending_installments_count'),
                 'overdue_installments_count' => (int) $rows->sum('overdue_installments_count'),
                 'vehicles_with_overdue_count' => $rows->filter(fn (array $row) => $row['overdue_installments_count'] > 0)->count(),
@@ -476,9 +480,7 @@ class PortfolioBalanceService
             ['title' => 'Clientes vencidos', 'value' => (string) $loanRows->where('overdue_installments_count', '>', 0)->pluck('client_id')->unique()->count(), 'caption' => 'Clientes con atraso', 'color' => 'red'],
             ['title' => 'Vehiculos vencidos', 'value' => (string) $loanRows->where('overdue_installments_count', '>', 0)->count(), 'caption' => 'Prestamos con atraso', 'color' => 'orange'],
             ['title' => 'Saldo vencido', 'value' => Money::mxn(Money::decimal($overdueCents)), 'caption' => 'Pendiente vencido', 'color' => 'red'],
-            ['title' => 'Saldo total', 'value' => Money::mxn(Money::decimal($pendingCents)), 'caption' => 'Pendiente total', 'color' => 'green'],
             ['title' => 'Vence hoy', 'value' => Money::mxn(Money::decimal((int) $loanRows->sum('due_today_cents'))), 'caption' => 'Fecha de corte', 'color' => 'yellow'],
-            ['title' => 'Proximo', 'value' => Money::mxn(Money::decimal((int) $loanRows->sum('upcoming_cents'))), 'caption' => 'Rango seleccionado', 'color' => 'orange'],
             ['title' => '% cartera vencida', 'value' => number_format($percent, 2).'%', 'caption' => 'Vencido / total pendiente', 'color' => $percent > 0 ? 'red' : 'green'],
         ];
     }

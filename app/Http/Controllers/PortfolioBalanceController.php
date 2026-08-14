@@ -71,9 +71,7 @@ class PortfolioBalanceController extends Controller
                 'Pagares vencidos',
                 'Vehiculos con atraso',
                 'Saldo vencido',
-                'Saldo total',
                 'Max atraso',
-                'Proximo',
                 'Estado',
             ]);
 
@@ -86,9 +84,7 @@ class PortfolioBalanceController extends Controller
                     $operatorRow['overdue_installments_count'],
                     $operatorRow['vehicles_with_overdue_count'],
                     Money::decimal($operatorRow['overdue_cents']),
-                    Money::decimal($operatorRow['pending_cents']),
                     $operatorRow['max_late_days'].' dias',
-                    $operatorRow['next_due_date'] ? CarbonImmutable::parse($operatorRow['next_due_date'])->format('d/m/Y') : '-',
                     $operatorRow['collection_state']['label'],
                 ]);
             }

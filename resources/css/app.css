@@ -67,18 +67,25 @@
     .print-sheet {
         border: 0 !important;
         box-shadow: none !important;
+        color: #000 !important;
         width: 100% !important;
         max-width: 7.6in !important;
         page-break-inside: auto !important;
     }
 
+    .print-sheet * {
+        color: #000 !important;
+    }
+
     .print-sheet h3 {
         font-size: 12px !important;
+        font-weight: 800 !important;
     }
 
     .print-sheet p {
         font-size: 10px !important;
         line-height: 1.25 !important;
+        color: #111 !important;
     }
 
     .cut-print-table {
@@ -91,6 +98,8 @@
 
     .cut-print-table thead {
         display: table-header-group;
+        background: #e5e7eb !important;
+        color: #000 !important;
     }
 
     .cut-print-table tr {
@@ -100,9 +109,16 @@
 
     .cut-print-table th,
     .cut-print-table td {
+        border-color: #4b5563 !important;
+        color: #000 !important;
+        font-weight: 600 !important;
         padding: 5px 6px !important;
         vertical-align: top !important;
         word-break: break-word !important;
+    }
+
+    .cut-print-table th {
+        font-weight: 800 !important;
     }
 
     .cut-print-table .check-column {
