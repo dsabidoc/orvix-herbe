@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
+use App\Models\Operator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class InvoicePortfolioController extends Controller
@@ -16,9 +17,11 @@ class InvoicePortfolioController extends Controller
 
         $filters = $request->validate([
             'holder' => ['nullable', 'in:caja,recepcion,operador,sin_ubicacion'],
+            'operator_id' => ['nullable'],
         ]);
 
         $query = $this->query($request, $filters)
+            ->orderBy('loans.payment_day')
             ->orderByRaw('COALESCE(loans.first_payment_date, loans.start_date) asc')
             ->orderBy('loans.folio');
 
@@ -27,6 +30,7 @@ class InvoicePortfolioController extends Controller
             'printRows' => $query->get(),
             'filters' => $filters,
             'holderOptions' => $this->holderOptions(),
+            'operators' => $this->operators($request),
         ]);
     }
 
@@ -38,6 +42,10 @@ class InvoicePortfolioController extends Controller
 
         if ($request->user()->hasRole('operador-cartera')) {
             $query->where('operator_id', $request->user()->operatorProfile?->id);
+        } elseif (($filters['operator_id'] ?? null) === 'none') {
+            $query->whereNull('operator_id');
+        } elseif (! empty($filters['operator_id'])) {
+            $query->where('operator_id', (int) $filters['operator_id']);
         }
 
         match ($filters['holder'] ?? null) {
@@ -64,6 +72,25 @@ class InvoicePortfolioController extends Controller
                 || $user->can('loans.view-assigned'),
             403
         );
+
+        if ($user->hasRole('operador-cartera') && $request->filled('operator_id')) {
+            abort_unless((string) $user->operatorProfile?->id === $request->string('operator_id')->toString(), 403);
+        }
+    }
+
+    /**
+     * @return Collection<int, Operator>
+     */
+    private function operators(Request $request): Collection
+    {
+        if ($request->user()->hasRole('operador-cartera')) {
+            return collect([$request->user()->operatorProfile])->filter()->values();
+        }
+
+        return Operator::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
     }
 
     /**

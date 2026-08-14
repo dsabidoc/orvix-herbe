@@ -293,7 +293,7 @@ class PortfolioBalanceService
      */
     private function detailRows(Collection $loanRows): Collection
     {
-        return $loanRows
+        $rows = $loanRows
             ->flatMap(function (array $loanRow) {
                 return collect($loanRow['installments'])
                     ->filter(fn (array $installment) => $installment['pending_cents'] > 0 && ! $installment['is_excluded'])
@@ -321,6 +321,7 @@ class PortfolioBalanceService
                         'late_days' => $installment['late_days'],
                         'overdue_installments_count' => $loanRow['overdue_installments_count'],
                         'overdue_cents' => $loanRow['overdue_cents'],
+                        'visible_sum_cents' => 0,
                     ]);
             })
             ->sort(fn (array $a, array $b) => ($a['payment_day'] <=> $b['payment_day'])
@@ -328,6 +329,17 @@ class PortfolioBalanceService
                 ?: strnatcasecmp($a['vehicle_name'], $b['vehicle_name'])
                 ?: strcmp($a['due_date_sort'], $b['due_date_sort'])
                 ?: ($a['installment_number'] <=> $b['installment_number']))
+            ->values();
+
+        $runningTotals = [];
+
+        return $rows
+            ->map(function (array $row) use (&$runningTotals) {
+                $runningTotals[$row['loan_id']] = ($runningTotals[$row['loan_id']] ?? 0) + $row['payment_cents'];
+                $row['visible_sum_cents'] = $runningTotals[$row['loan_id']];
+
+                return $row;
+            })
             ->values();
     }
 

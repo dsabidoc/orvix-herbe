@@ -18,6 +18,9 @@
 
     $vehicleTitle = fn ($loan) => trim(($loan->vehicle?->model ?: 'Vehiculo').' · Dia '.$loan->payment_day);
     $clientName = fn ($loan) => trim(($loan->client?->first_name ?? '').' '.($loan->client?->last_name ?? '')) ?: 'Sin cliente';
+    $selectedOperator = (($filters['operator_id'] ?? '') === 'none')
+        ? 'Sin operador asignado'
+        : $operators->firstWhere('id', (int) ($filters['operator_id'] ?? 0))?->name;
 @endphp
 
 <x-layouts.app title="Facturas">
@@ -30,7 +33,19 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET" action="{{ route('invoice-portfolio.index') }}">
-        <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+        <div class="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
+                    <option value="">Todos</option>
+                    @unless(auth()->user()->hasRole('operador-cartera'))
+                        <option value="none" @selected(($filters['operator_id'] ?? '') === 'none')>Sin operador asignado</option>
+                    @endunless
+                    @foreach ($operators as $operator)
+                        <option value="{{ $operator->id }}" @selected((string) ($filters['operator_id'] ?? '') === (string) $operator->id)>{{ $operator->name }}</option>
+                    @endforeach
+                </select>
+            </div>
             <div>
                 <label class="text-sm font-semibold text-slate-700" for="holder">Ubicacion de factura</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="holder" name="holder">
@@ -111,7 +126,7 @@
         <div class="mb-3">
             <p class="text-[10px] text-slate-500">Fecha de exportacion: {{ CarbonImmutable::now('America/Merida')->format('d/m/Y H:i') }}</p>
             <h3 class="mt-1 text-base font-bold text-slate-950">Listado de facturas</h3>
-            <p class="text-xs text-slate-600">Ubicacion: {{ $holderOptions[$filters['holder'] ?? ''] ?? 'Todas las ubicaciones' }}</p>
+            <p class="text-xs text-slate-600">Operador: {{ $selectedOperator ?: 'Todos' }} · Ubicacion: {{ $holderOptions[$filters['holder'] ?? ''] ?? 'Todas las ubicaciones' }}</p>
         </div>
 
         <table class="cut-print-table w-full text-left text-sm">

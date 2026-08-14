@@ -108,7 +108,7 @@ class PortfolioBalanceController extends Controller
                     Money::decimal($row['payment_cents']),
                     $row['due_date'] ?? '-',
                     $row['late_days'].' dias',
-                    Money::decimal($row['overdue_cents']),
+                    Money::decimal($row['visible_sum_cents']),
                     $row['client_name'],
                 ]);
             }

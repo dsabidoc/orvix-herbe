@@ -146,6 +146,7 @@ class PortfolioBalanceServiceTest extends TestCase
         $this->assertCount(2, $rows);
         $this->assertSame(['5/7', '6/7'], $rows->pluck('payment_progress')->all());
         $this->assertSame([220000, 220000], $rows->pluck('overdue_cents')->all());
+        $this->assertSame([100000, 220000], $rows->pluck('visible_sum_cents')->all());
     }
 
     public function test_detail_rows_are_ordered_by_payment_day_then_start_date_oldest_first(): void

@@ -147,7 +147,7 @@
                             <p class="font-semibold text-slate-950">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ $row['folio'] }}</p>
                         </div>
-                        <p class="shrink-0 text-right font-bold text-red-700">{{ $money($row['overdue_cents']) }}</p>
+                        <p class="shrink-0 text-right font-bold text-red-700">{{ $money($row['visible_sum_cents']) }}</p>
                     </div>
                     <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
                         <div>
@@ -168,7 +168,7 @@
                         </div>
                         <div>
                             <dt class="text-slate-500">Suma vencidas</dt>
-                            <dd class="font-semibold text-red-700">{{ $money($row['overdue_cents']) }}</dd>
+                            <dd class="font-semibold text-red-700">{{ $money($row['visible_sum_cents']) }}</dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Cliente</dt>
@@ -213,7 +213,7 @@
                             <td class="px-3 py-3 text-right font-semibold">{{ $money($row['payment_cents']) }}</td>
                             <td class="px-3 py-3">{{ $row['due_date'] ?? '-' }}</td>
                             <td class="px-3 py-3 text-right">{{ $row['late_days'] }} dias</td>
-                            <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($row['overdue_cents']) }}</td>
+                            <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($row['visible_sum_cents']) }}</td>
                             <td class="px-3 py-3 font-semibold text-[#0f766e]">{{ $row['client_name'] }}</td>
                         </tr>
                     @empty
@@ -304,7 +304,7 @@
                             <td class="text-right">{{ $money($row['payment_cents']) }}</td>
                             <td>{{ $row['due_date'] ?? '-' }}</td>
                             <td class="text-right">{{ $row['late_days'] }} dias</td>
-                            <td class="text-right">{{ $money($row['overdue_cents']) }}</td>
+                            <td class="text-right">{{ $money($row['visible_sum_cents']) }}</td>
                             <td>{{ $row['client_name'] }}</td>
                         </tr>
                     @empty
