@@ -67,7 +67,7 @@ class OrvixWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('operators', [
             'user_id' => $operatorUser->id,
-            'name' => 'Nuevo Operador',
+            'name' => 'NUEVO OPERADOR',
             'email' => 'nuevo.operador@orvix.test',
             'status' => 'active',
         ]);
@@ -75,7 +75,7 @@ class OrvixWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('loans.create'))
             ->assertOk()
-            ->assertSee('Nuevo Operador');
+            ->assertSee('NUEVO OPERADOR');
     }
 
     public function test_existing_active_user_can_be_linked_when_creating_investor_profile(): void
@@ -111,7 +111,7 @@ class OrvixWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('investors', [
             'user_id' => $investorUser->id,
-            'name' => 'Usuario Operador Inversionista',
+            'name' => 'USUARIO OPERADOR INVERSIONISTA',
             'email' => 'usuario.operador.inversionista@orvix.test',
             'initial_capital' => '250000.00',
             'available_capital' => '250000.00',
@@ -199,7 +199,7 @@ class OrvixWorkflowTest extends TestCase
         $this->assertDatabaseHas('investors', [
             'id' => $investor->id,
             'user_id' => $user->id,
-            'name' => 'Maria Gabriela Ramirez Redondo',
+            'name' => 'MARIA GABRIELA RAMIREZ REDONDO',
             'status' => 'active',
             'initial_capital' => '123000.00',
             'available_capital' => '123000.00',
@@ -226,9 +226,10 @@ class OrvixWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->put(route('investors.update', $investor), [
                 'initial_capital' => '125000',
+                'available_capital' => '125000',
             ])
             ->assertRedirect()
-            ->assertSessionHas('status', 'Capital inicial actualizado.');
+            ->assertSessionHas('status', 'Capital del inversionista actualizado.');
 
         $investor->refresh();
 
@@ -236,7 +237,7 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame(12500000, Money::cents($investor->available_capital));
         $this->assertDatabaseHas('investor_capital_movements', [
             'investor_id' => $investor->id,
-            'type' => 'initial_capital_adjusted',
+            'type' => 'available_capital_adjusted',
             'amount' => '25000',
         ]);
     }
@@ -825,7 +826,7 @@ class OrvixWorkflowTest extends TestCase
             ])
             ->assertRedirect(route('loans.create'))
             ->assertSessionHasErrors('capital')
-            ->assertSessionHasInput('first_name', 'Cliente Minimo');
+            ->assertSessionHasInput('first_name', 'CLIENTE MINIMO');
     }
 
     public function test_admin_can_create_loan_with_minimum_client_and_conditions(): void
@@ -856,10 +857,10 @@ class OrvixWorkflowTest extends TestCase
             ->assertRedirect();
 
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Minimo'))
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE MINIMO'))
             ->firstOrFail();
 
-        $this->assertMatchesRegularExpression('/^[A-Z]\d{6}\d{2}$/', $loan->folio);
+        $this->assertMatchesRegularExpression('/^[A-Z]{3}-\d{6}-\d{2}$/', $loan->folio);
         $this->assertSame('outstanding_balance', $loan->interest_calculation_method);
         $this->assertSame(0.02, (float) $loan->monthly_rate);
         $this->assertSame('Sin marca', $loan->vehicle->brand);
@@ -895,7 +896,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertRedirect();
 
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Sin Inversionista'))
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE SIN INVERSIONISTA'))
             ->firstOrFail();
 
         $this->assertSame(0, $loan->investments()->count());
@@ -950,7 +951,7 @@ class OrvixWorkflowTest extends TestCase
                 'calculation_method' => 'rounded',
             ])
             ->assertRedirect(route('loans.create'))
-            ->assertSessionHasInput('first_name', 'Cliente Regreso')
+            ->assertSessionHasInput('first_name', 'CLIENTE REGRESO')
             ->assertSessionHasInput('capital', '123000');
     }
 
@@ -977,7 +978,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertRedirect();
 
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Pago Masivo'))
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE PAGO MASIVO'))
             ->with(['installments' => fn ($query) => $query->orderBy('number')])
             ->firstOrFail();
 
@@ -1041,7 +1042,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertRedirect();
 
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Capital Negativo'))
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE CAPITAL NEGATIVO'))
             ->firstOrFail();
 
         $this->assertDatabaseHas('investments', [
@@ -1080,7 +1081,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertRedirect();
 
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Desasignar Inversionista'))
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE DESASIGNAR INVERSIONISTA'))
             ->firstOrFail();
 
         $this->assertSame($availableBeforeCents - 8000000, Money::cents($investor->fresh()->available_capital));
@@ -1124,7 +1125,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertRedirect();
 
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Retorno Tardio'))
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE RETORNO TARDIO'))
             ->with(['installments' => fn ($query) => $query->orderBy('number')])
             ->firstOrFail();
         $installment = $loan->installments->first();
@@ -1199,7 +1200,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertRedirect();
 
         $loan = Loan::query()
-            ->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Interes Compartido'))
+            ->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE INTERES COMPARTIDO'))
             ->firstOrFail();
 
         $this->actingAs($admin)
@@ -1308,9 +1309,9 @@ class OrvixWorkflowTest extends TestCase
         $this->assertDatabaseHas('documents', [
             'loan_id' => $loan->id,
             'client_id' => $loan->client_id,
-            'original_name' => 'Factura actualizada.pdf',
+            'original_name' => 'FACTURA ACTUALIZADA.pdf',
             'disk' => 'local',
-            'notes' => 'Escaneo nuevo del expediente',
+            'notes' => 'ESCANEO NUEVO DEL EXPEDIENTE',
         ]);
     }
 
@@ -1489,7 +1490,7 @@ class OrvixWorkflowTest extends TestCase
 
         $target->refresh();
 
-        $this->assertSame('Adriana Expedientes', $target->name);
+        $this->assertSame('ADRIANA EXPEDIENTES', $target->name);
         $this->assertSame('adriana.edita@orvix.test', $target->email);
         $this->assertTrue(Hash::check('NuevaClave123', $target->password));
         $this->assertTrue($target->force_password_change);
@@ -1833,7 +1834,7 @@ class OrvixWorkflowTest extends TestCase
             ])
             ->assertSessionHas('status');
 
-        $loan = Loan::query()->whereHas('client', fn ($query) => $query->where('first_name', 'Cliente Corte'))->firstOrFail();
+        $loan = Loan::query()->whereHas('client', fn ($query) => $query->where('first_name', 'CLIENTE CORTE'))->firstOrFail();
         $disbursement = FundDisbursement::query()->where('loan_id', $loan->id)->firstOrFail();
 
         $this->assertSame($cut->id, $disbursement->weekly_cut_id);
