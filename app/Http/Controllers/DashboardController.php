@@ -32,6 +32,7 @@ class DashboardController extends Controller
         $periodStart = $periodType === 'year' ? $periodDate->startOfYear() : $periodDate->startOfMonth();
         $periodEnd = $periodType === 'year' ? $periodDate->endOfYear() : $periodDate->endOfMonth();
         $loanIds = $this->visibleLoanQuery($request)->pluck('id');
+        $activeLoansCount = $loanIds->count();
         $collectableLoanIds = $this->visibleLoanQuery($request)->where('is_frozen', false)->pluck('id');
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
         $settleTodayCents = Loan::query()
@@ -89,6 +90,7 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'kpis' => [
+                ['title' => 'Total de prestamos activos', 'value' => number_format($activeLoansCount), 'caption' => 'Prestamos activos filtrados', 'cents' => 0, 'color' => 'green', 'chartable' => false],
                 ['title' => 'Total a liquidar hoy', 'value' => Money::mxn(Money::decimal((int) $settleTodayCents)), 'caption' => 'Capital futuro e intereses vigentes', 'cents' => (int) $settleTodayCents, 'color' => 'blue'],
                 ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => $periodType === 'year' ? 'Abono e interes anual' : 'Abono e interes mensual', 'cents' => (int) $expectedPeriodCents, 'color' => 'yellow'],
                 ['title' => 'Total vencidos', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Abono e interes vencido', 'cents' => (int) $overdueCents, 'color' => 'red'],

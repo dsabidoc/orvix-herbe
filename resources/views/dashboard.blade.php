@@ -9,12 +9,13 @@
         'green' => ['card' => 'border-emerald-200 bg-emerald-50/80', 'label' => 'text-emerald-700', 'dot' => '#10b981', 'track' => 'bg-emerald-100', 'bar' => 'bg-emerald-500'],
         'red' => ['card' => 'border-red-200 bg-red-50/80', 'label' => 'text-red-700', 'dot' => '#ef4444', 'track' => 'bg-red-100', 'bar' => 'bg-red-500'],
     ];
-    $chartDisplayTotal = collect($kpis)->sum('cents');
+    $chartKpis = collect($kpis)->filter(fn ($kpi) => $kpi['chartable'] ?? true)->values();
+    $chartDisplayTotal = $chartKpis->sum('cents');
     $chartTotal = max(1, $chartDisplayTotal);
     $chartCursor = 0;
     $chartStops = [];
 
-    foreach ($kpis as $kpi) {
+    foreach ($chartKpis as $kpi) {
         $percent = $kpi['cents'] / $chartTotal * 100;
         $color = $kpiStyles[$kpi['color']]['dot'];
         $chartStops[] = "{$color} {$chartCursor}% ".($chartCursor + $percent).'%';
@@ -90,7 +91,7 @@
         </form>
     </section>
 
-    <div class="grid gap-4 md:grid-cols-3">
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         @foreach ($kpis as $kpi)
             @php
                 $kpiStyle = $kpiStyles[$kpi['color']];
@@ -121,7 +122,7 @@
                 </div>
             </div>
             <div class="space-y-4">
-                @foreach ($kpis as $kpi)
+                @foreach ($chartKpis as $kpi)
                     @php
                         $style = $kpiStyles[$kpi['color']];
                         $percent = round($kpi['cents'] / $chartTotal * 100);
