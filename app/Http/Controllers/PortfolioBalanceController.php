@@ -97,7 +97,7 @@ class PortfolioBalanceController extends Controller
             fputcsv($handle, ['Detalle de cartera']);
             fputcsv($handle, [
                 'Modelo con dia / folio',
-                'Num. pagos',
+                'Num. pagare',
                 'Pago',
                 'Fecha pagare',
                 'Dias de atraso',

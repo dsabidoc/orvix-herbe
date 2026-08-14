@@ -163,7 +163,7 @@
                     </div>
                     <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
                         <div>
-                            <dt class="text-slate-500">Numero de pagos</dt>
+                            <dt class="text-slate-500">Num. pagare</dt>
                             <dd class="font-semibold">{{ $row['payment_progress'] }}</dd>
                         </div>
                         <div>
@@ -206,7 +206,7 @@
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
                         <th class="px-3 py-3">Modelo / dia</th>
-                        <th class="px-3 py-3">Num. pagos</th>
+                        <th class="px-3 py-3">Num. pagare</th>
                         <th class="px-3 py-3 text-right">Pago</th>
                         <th class="px-3 py-3">Fecha pagare</th>
                         <th class="px-3 py-3 text-right">Dias atraso</th>
@@ -304,7 +304,7 @@
                 <thead>
                     <tr>
                         <th>Modelo / dia</th>
-                        <th>Num. pagos</th>
+                        <th>Num. pagare</th>
                         <th class="text-right">Pago</th>
                         <th>Fecha pagare</th>
                         <th class="text-right">Dias de atraso</th>
