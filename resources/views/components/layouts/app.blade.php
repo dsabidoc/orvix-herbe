@@ -138,6 +138,7 @@
                                     <a class="{{ request()->routeIs('settings.users') ? 'text-[#0f766e]' : 'text-slate-600' }} flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.users') }}"><span class="size-1.5 rounded-full bg-[#0d9488]"></span>Usuarios</a>
                                     <a class="{{ request()->routeIs('settings.roles') ? 'text-[#0f766e]' : 'text-slate-600' }} flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.roles') }}"><span class="size-1.5 rounded-full bg-[#0d9488]"></span>Roles</a>
                                     <a class="{{ request()->routeIs('settings.permissions') ? 'text-[#0f766e]' : 'text-slate-600' }} flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.permissions') }}"><span class="size-1.5 rounded-full bg-[#0d9488]"></span>Permisos</a>
+                                    <a class="{{ request()->routeIs('settings.client-merge') ? 'text-[#0f766e]' : 'text-slate-600' }} flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.client-merge') }}"><span class="size-1.5 rounded-full bg-[#0d9488]"></span>Unificar clientes</a>
                                 </div>
                             </details>
                         @endcan
@@ -211,6 +212,7 @@
                                     <a class="{{ request()->routeIs('settings.users') ? 'text-[#0f766e]' : 'text-slate-600' }} block rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.users') }}">Usuarios</a>
                                     <a class="{{ request()->routeIs('settings.roles') ? 'text-[#0f766e]' : 'text-slate-600' }} block rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.roles') }}">Roles</a>
                                     <a class="{{ request()->routeIs('settings.permissions') ? 'text-[#0f766e]' : 'text-slate-600' }} block rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.permissions') }}">Permisos</a>
+                                    <a class="{{ request()->routeIs('settings.client-merge') ? 'text-[#0f766e]' : 'text-slate-600' }} block rounded-md px-3 py-2 hover:bg-slate-100" href="{{ route('settings.client-merge') }}">Unificar clientes</a>
                                 </div>
                             </details>
                         @endcan

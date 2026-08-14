@@ -2,8 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditEvent;
+use App\Models\Client;
+use App\Models\Document;
+use App\Models\FundDisbursement;
+use App\Models\Loan;
+use App\Models\LoanApplication;
 use App\Models\Operator;
+use App\Models\Simulation;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +60,114 @@ class SettingsController extends Controller
         return view('settings.permissions', [
             'permissions' => Permission::query()->orderBy('name')->get(),
         ]);
+    }
+
+    public function clientMerge(Request $request): View
+    {
+        abort_unless($request->user()->can('settings.manage'), 403);
+
+        $query = Client::query()
+            ->with('operator')
+            ->withCount(['loans', 'loanApplications', 'vehicles', 'documents'])
+            ->where('status', '!=', 'merged');
+
+        if ($request->filled('q')) {
+            $search = '%'.$request->string('q')->toString().'%';
+            $query->where(fn ($query) => $query
+                ->where('first_name', 'like', $search)
+                ->orWhere('last_name', 'like', $search)
+                ->orWhere('phone', 'like', $search)
+                ->orWhere('email', 'like', $search));
+        }
+
+        return view('settings.client-merge', [
+            'clients' => $query
+                ->orderBy('last_name')
+                ->orderBy('first_name')
+                ->paginate(40)
+                ->withQueryString(),
+        ]);
+    }
+
+    public function mergeClients(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->can('settings.manage'), 403);
+
+        $data = $request->validate([
+            'primary_client_id' => ['required', 'exists:clients,id'],
+            'duplicate_client_ids' => ['required', 'array', 'min:1'],
+            'duplicate_client_ids.*' => ['integer', 'exists:clients,id'],
+        ], [
+            'primary_client_id.required' => 'Selecciona el cliente principal.',
+            'duplicate_client_ids.required' => 'Selecciona al menos un cliente duplicado para unificar.',
+        ]);
+
+        $duplicateIds = collect($data['duplicate_client_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $primaryId = (int) $data['primary_client_id'];
+
+        if ($duplicateIds->contains($primaryId)) {
+            return back()
+                ->withErrors(['duplicate_client_ids' => 'El cliente principal no puede estar tambien como duplicado.'])
+                ->withInput();
+        }
+
+        if (Client::query()->whereKey($primaryId)->where('status', 'merged')->exists()) {
+            return back()
+                ->withErrors(['primary_client_id' => 'El cliente principal no puede ser un cliente ya fusionado.'])
+                ->withInput();
+        }
+
+        DB::transaction(function () use ($primaryId, $duplicateIds, $request): void {
+            $primary = Client::query()->lockForUpdate()->findOrFail($primaryId);
+            $duplicates = Client::query()
+                ->whereIn('id', $duplicateIds)
+                ->where('status', '!=', 'merged')
+                ->lockForUpdate()
+                ->get();
+
+            $before = [
+                'primary' => $this->clientAuditSnapshot($primary),
+                'duplicates' => $duplicates->map(fn (Client $client) => $this->clientAuditSnapshot($client))->values()->all(),
+            ];
+
+            foreach ($duplicates as $duplicate) {
+                Loan::query()->where('client_id', $duplicate->id)->update(['client_id' => $primary->id]);
+                LoanApplication::query()->where('client_id', $duplicate->id)->update(['client_id' => $primary->id]);
+                Vehicle::query()->where('client_id', $duplicate->id)->update(['client_id' => $primary->id]);
+                Document::query()->where('client_id', $duplicate->id)->update(['client_id' => $primary->id]);
+                Simulation::query()->where('client_id', $duplicate->id)->update(['client_id' => $primary->id]);
+                FundDisbursement::query()->where('client_id', $duplicate->id)->update(['client_id' => $primary->id]);
+
+                $this->fillMissingClientData($primary, $duplicate);
+
+                $duplicate->update([
+                    'status' => 'merged',
+                    'notes' => trim(($duplicate->notes ? $duplicate->notes."\n\n" : '').'Unificado con cliente '.$primary->first_name.' '.$primary->last_name.' el '.now('America/Merida')->format('d/m/Y H:i').'.'),
+                ]);
+            }
+
+            $primary->save();
+
+            AuditEvent::query()->create([
+                'user_id' => $request->user()->id,
+                'action' => 'clients.merged',
+                'auditable_type' => Client::class,
+                'auditable_id' => $primary->id,
+                'before' => $before,
+                'after' => [
+                    'primary' => $this->clientAuditSnapshot($primary->refresh()),
+                    'merged_client_ids' => $duplicates->pluck('id')->values()->all(),
+                ],
+                'reason' => 'Unificacion manual de clientes duplicados desde configuracion.',
+            ]);
+        });
+
+        return redirect()
+            ->route('settings.client-merge', ['q' => $request->input('q')])
+            ->with('status', 'Clientes unificados. Los prestamos y expedientes ahora apuntan al cliente principal.');
     }
 
     public function storeUser(Request $request): RedirectResponse
@@ -207,5 +323,36 @@ class SettingsController extends Controller
         ]);
 
         $operator->save();
+    }
+
+    private function fillMissingClientData(Client $primary, Client $duplicate): void
+    {
+        foreach (['operator_id', 'phone', 'alternate_phone', 'email', 'curp', 'rfc', 'identification_type', 'identification_last4'] as $field) {
+            if (blank($primary->{$field}) && filled($duplicate->{$field})) {
+                $primary->{$field} = $duplicate->{$field};
+            }
+        }
+
+        if (blank($primary->address) && filled($duplicate->address)) {
+            $primary->address = $duplicate->address;
+        }
+
+        $mergeNote = 'Fusionado con '.$duplicate->first_name.' '.$duplicate->last_name.' (#'.$duplicate->id.').';
+        $primary->notes = trim(($primary->notes ? $primary->notes."\n" : '').$mergeNote);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function clientAuditSnapshot(Client $client): array
+    {
+        return [
+            'id' => $client->id,
+            'public_id' => $client->public_id,
+            'name' => trim($client->first_name.' '.$client->last_name),
+            'phone' => $client->phone,
+            'email' => $client->email,
+            'status' => $client->status,
+        ];
     }
 }

@@ -56,8 +56,23 @@ class Client extends Model
         return $this->hasMany(Loan::class);
     }
 
+    public function loanApplications(): HasMany
+    {
+        return $this->hasMany(LoanApplication::class);
+    }
+
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function simulations(): HasMany
+    {
+        return $this->hasMany(Simulation::class);
+    }
+
+    public function fundDisbursements(): HasMany
+    {
+        return $this->hasMany(FundDisbursement::class);
     }
 }

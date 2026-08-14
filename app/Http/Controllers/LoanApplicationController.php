@@ -51,6 +51,7 @@ class LoanApplicationController extends Controller
 
         return view('applications.create', [
             'clients' => Client::query()
+                ->where('status', '!=', 'merged')
                 ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
                 ->orderBy('last_name')
                 ->get(),

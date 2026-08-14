@@ -92,6 +92,7 @@ final class StatusLabels
             'watchlist' => 'En observacion',
             'inactive' => 'Inactivo',
             'blocked' => 'Bloqueado',
+            'merged' => 'Fusionado',
         ][$status] ?? self::fallback($status);
     }
 

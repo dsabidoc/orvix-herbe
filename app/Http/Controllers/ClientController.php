@@ -17,7 +17,8 @@ class ClientController extends Controller
     {
         $query = Client::query()
             ->with('operator')
-            ->withCount(['loans', 'loans as active_loans_count' => fn ($query) => $query->where('status', 'active')]);
+            ->withCount(['loans', 'loans as active_loans_count' => fn ($query) => $query->where('status', 'active')])
+            ->where('status', '!=', 'merged');
 
         if ($request->user()->hasRole('operador-cartera')) {
             $query->where('operator_id', $request->user()->operatorProfile?->id);
@@ -123,6 +124,7 @@ class ClientController extends Controller
     private function indexKpis(Request $request): array
     {
         $clientScope = Client::query()
+            ->where('status', '!=', 'merged')
             ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id));
         $activeLoans = Loan::query()
             ->where('status', 'active')

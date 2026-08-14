@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domain\Loans\LoanSettlementService;
+use App\Models\Client;
 use App\Models\CollectionMovement;
 use App\Models\Document;
 use App\Models\FundDisbursement;
@@ -15,6 +16,7 @@ use App\Models\Operator;
 use App\Models\OperatorLedgerEntry;
 use App\Models\Simulation;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Models\WeeklyCut;
 use App\Models\WeeklyCutItem;
 use App\Support\Money;
@@ -109,6 +111,95 @@ class OrvixWorkflowTest extends TestCase
             ])
             ->assertRedirect(route('loans.create'))
             ->assertSessionHasErrors(['phone', 'guarantor_phone']);
+    }
+
+    public function test_admin_can_merge_duplicate_clients_without_deleting_them(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $operator = Operator::query()->firstOrFail();
+        $primary = Client::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'operator_id' => $operator->id,
+            'first_name' => 'Darwin Ramon',
+            'last_name' => 'Cervera Duran',
+            'phone' => '9997069555',
+            'email' => null,
+            'status' => 'active',
+        ]);
+        $duplicate = Client::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'operator_id' => $operator->id,
+            'first_name' => 'Darwin Ramon',
+            'last_name' => 'Cervera Duran',
+            'phone' => '9997069556',
+            'email' => 'darwin.duplicado@orvix.test',
+            'status' => 'active',
+        ]);
+        $vehicle = Vehicle::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'client_id' => $duplicate->id,
+            'brand' => 'NISSAN',
+            'model' => 'MARCH',
+            'status' => 'financed',
+        ]);
+        $loan = Loan::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'folio' => 'DAR-140826-98',
+            'client_id' => $duplicate->id,
+            'operator_id' => $operator->id,
+            'vehicle_id' => $vehicle->id,
+            'capital' => '100000.00',
+            'monthly_rate' => '0.020000',
+            'term_months' => 12,
+            'contract_total' => '124000.00',
+            'start_date' => '2026-08-14',
+            'payment_day' => 14,
+            'status' => 'active',
+        ]);
+        $application = LoanApplication::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'folio' => 'SOL-TEST',
+            'client_id' => $duplicate->id,
+            'operator_id' => $operator->id,
+            'requested_capital' => '100000.00',
+            'monthly_rate' => '0.020000',
+            'term_months' => 12,
+            'payment_day' => 14,
+            'status' => 'submitted',
+        ]);
+        $document = Document::query()->create([
+            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'loan_id' => $loan->id,
+            'client_id' => $duplicate->id,
+            'original_name' => 'factura.pdf',
+            'disk' => 'private',
+            'path' => 'documents/factura.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1200,
+            'status' => 'delivered',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('settings.client-merge.store'), [
+                'primary_client_id' => $primary->id,
+                'duplicate_client_ids' => [$duplicate->id],
+            ])
+            ->assertRedirect(route('settings.client-merge'));
+
+        $this->assertDatabaseHas('clients', [
+            'id' => $duplicate->id,
+            'status' => 'merged',
+        ]);
+        $this->assertDatabaseHas('loans', ['id' => $loan->id, 'client_id' => $primary->id]);
+        $this->assertDatabaseHas('vehicles', ['id' => $vehicle->id, 'client_id' => $primary->id]);
+        $this->assertDatabaseHas('documents', ['id' => $document->id, 'client_id' => $primary->id]);
+        $this->assertDatabaseHas('loan_applications', ['id' => $application->id, 'client_id' => $primary->id]);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'clients.merged',
+            'auditable_id' => $primary->id,
+        ]);
     }
 
     public function test_existing_active_user_can_be_linked_when_creating_investor_profile(): void

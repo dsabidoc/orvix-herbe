@@ -38,7 +38,7 @@ class LoanCreationController extends Controller
             : null;
 
         return view('loans.create', [
-            'clients' => Client::query()->orderBy('last_name')->orderBy('first_name')->get(),
+            'clients' => Client::query()->where('status', '!=', 'merged')->orderBy('last_name')->orderBy('first_name')->get(),
             'guarantors' => $this->guarantorOptions(),
             'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
             'investors' => Investor::availableForFunding()->get(),
