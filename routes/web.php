@@ -51,6 +51,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/prestamos/{loan}/reactivar', [LoanController::class, 'unfreeze'])->name('loans.unfreeze');
     Route::post('/prestamos/{loan}/factura', [LoanController::class, 'storeInvoice'])->name('loans.invoice.store');
     Route::post('/prestamos/{loan}/factura/mover', [LoanController::class, 'moveInvoice'])->name('loans.invoice.move');
+    Route::delete('/prestamos/{loan}/factura', [LoanController::class, 'destroyInvoice'])->name('loans.invoice.destroy');
     Route::post('/prestamos/{loan}/inversionistas', [LoanInvestmentController::class, 'store'])->name('loans.investments.store');
     Route::post('/prestamos/{loan}/liquidar', [LoanSettlementController::class, 'store'])->name('loans.settle');
     Route::post('/prestamos/{loan}/expediente', [DocumentController::class, 'store'])->name('documents.store');
@@ -82,6 +83,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/cortes/{cut}/cerrar', [WeeklyCutController::class, 'close'])->name('cuts.close');
     Route::post('/cortes/{cut}/reabrir', [WeeklyCutController::class, 'reopen'])->name('cuts.reopen');
     Route::post('/cortes/{cut}/liquidar-saldo', [WeeklyCutController::class, 'settleBalance'])->name('cuts.settle-balance');
+    Route::delete('/cortes/{cut}', [WeeklyCutController::class, 'destroy'])->name('cuts.destroy');
 
     Route::get('/clientes', [ClientController::class, 'index'])->name('clients.index');
     Route::get('/clientes/nuevo', [ClientController::class, 'create'])->name('clients.create');

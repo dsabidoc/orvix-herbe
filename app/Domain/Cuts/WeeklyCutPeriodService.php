@@ -17,6 +17,13 @@ use Illuminate\Support\Str;
 class WeeklyCutPeriodService
 {
     public const TIMEZONE = 'America/Merida';
+    public const REPORTABLE_MOVEMENT_STATUSES = ['reported', 'applied'];
+
+    public static function isReportableMovement(?CollectionMovement $movement): bool
+    {
+        return $movement !== null
+            && in_array($movement->confirmation_status, self::REPORTABLE_MOVEMENT_STATUSES, true);
+    }
 
     /**
      * @return array{start:CarbonImmutable,end:CarbonImmutable,settlement:CarbonImmutable}
@@ -85,6 +92,47 @@ class WeeklyCutPeriodService
         });
     }
 
+    public function createCutForOperator(Operator|int $operator, ?int $userId = null, ?CarbonInterface $cutDate = null): WeeklyCut
+    {
+        $operatorId = $operator instanceof Operator ? $operator->id : $operator;
+        $date = CarbonImmutable::instance($cutDate ?? now(self::TIMEZONE))->timezone(self::TIMEZONE);
+        $dayStart = $date->startOfDay();
+        $dayEnd = $date->endOfDay();
+
+        return DB::transaction(function () use ($operatorId, $userId, $dayStart, $dayEnd) {
+            $cut = WeeklyCut::query()->create([
+                'public_id' => (string) Str::ulid(),
+                'operator_id' => $operatorId,
+                'submitted_by' => $userId,
+                'period_starts_on' => $dayStart->toDateString(),
+                'period_ends_on' => $dayStart->toDateString(),
+                'settlement_on' => $dayStart->toDateString(),
+                'expected_total' => Money::decimal($this->expectedCents($operatorId, $dayStart, $dayEnd)),
+                'reported_total' => '0.00',
+                'received_total' => '0.00',
+                'confirmed_total' => '0.00',
+                'difference_total' => '0.00',
+                'previous_balance' => Money::decimal($this->latestOperatorBalance($operatorId)),
+                'status' => 'forming',
+                'submitted_at' => now(self::TIMEZONE),
+            ]);
+
+            AuditEvent::query()->create([
+                'user_id' => $userId,
+                'action' => 'weekly_cut.created',
+                'auditable_type' => WeeklyCut::class,
+                'auditable_id' => $cut->id,
+                'after' => [
+                    'operator_id' => $operatorId,
+                    'cut_date' => $cut->period_starts_on->toDateString(),
+                    'submitted_at' => $cut->submitted_at?->toDateTimeString(),
+                ],
+            ]);
+
+            return $cut;
+        });
+    }
+
     public function attachMovement(CollectionMovement $movement, ?int $userId = null): WeeklyCut
     {
         return DB::transaction(function () use ($movement, $userId) {
@@ -93,6 +141,7 @@ class WeeklyCutPeriodService
             $cut = $this->openCutForOperator($movement->operator_id, $userId ?? $movement->registered_by, $registeredAt);
 
             abort_if($cut->status === 'closed', 422, 'No se pueden registrar cobros en un corte cerrado.');
+            abort_unless(self::isReportableMovement($movement), 422, 'Solo los cobros pagados vigentes pueden agregarse al corte.');
 
             if ($movement->weekly_cut_id && $movement->weekly_cut_id !== $cut->id) {
                 return $movement->weeklyCut()->firstOrFail();
@@ -142,6 +191,7 @@ class WeeklyCutPeriodService
 
             abort_if($cut->status === 'closed', 422, 'No se pueden registrar cobros en un corte cerrado.');
             abort_if($cut->operator_id !== $movement->operator_id, 422, 'El cobro no pertenece al operador de este corte.');
+            abort_unless(self::isReportableMovement($movement), 422, 'Solo los cobros pagados vigentes pueden agregarse al corte.');
 
             $registeredAt = $movement->registered_at ?? $movement->created_at ?? now(self::TIMEZONE);
 
@@ -195,7 +245,7 @@ class WeeklyCutPeriodService
         $periodStart = CarbonImmutable::parse($cut->period_starts_on, self::TIMEZONE)->startOfDay();
         $periodEnd = CarbonImmutable::parse($cut->period_ends_on, self::TIMEZONE)->endOfDay();
         $reportedCents = $cut->items
-            ->filter(fn (WeeklyCutItem $item) => $item->movement && $item->movement->confirmation_status !== 'voided')
+            ->filter(fn (WeeklyCutItem $item) => self::isReportableMovement($item->movement))
             ->sum(fn (WeeklyCutItem $item) => Money::cents($item->reported_amount));
         $receivedCents = Money::cents($cut->received_total);
         $confirmedCents = $receivedCents;

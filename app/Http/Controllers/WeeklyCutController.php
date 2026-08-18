@@ -39,20 +39,28 @@ class WeeklyCutController extends Controller
             abort(403);
         }
 
+        $cut = app(WeeklyCutPeriodService::class)->refreshTotals($cut)->load([
+            'operator',
+            'submittedBy',
+            'confirmedBy',
+            'items.movement.registeredBy',
+            'items.movement.targetInstallment',
+            'items.movement.loan.client',
+            'items.movement.loan.vehicle',
+            'fundDisbursements.loan.client',
+            'fundDisbursements.loan.vehicle',
+            'fundDisbursements.registeredBy',
+            'ledgerEntries',
+        ]);
+        $cut->setRelation(
+            'items',
+            $cut->items
+                ->filter(fn ($item) => WeeklyCutPeriodService::isReportableMovement($item->movement))
+                ->values(),
+        );
+
         return view('cuts.show', [
-            'cut' => app(WeeklyCutPeriodService::class)->refreshTotals($cut)->load([
-                'operator',
-                'submittedBy',
-                'confirmedBy',
-                'items.movement.registeredBy',
-                'items.movement.targetInstallment',
-                'items.movement.loan.client',
-                'items.movement.loan.vehicle',
-                'fundDisbursements.loan.client',
-                'fundDisbursements.loan.vehicle',
-                'fundDisbursements.registeredBy',
-                'ledgerEntries',
-            ]),
+            'cut' => $cut,
             'overdueInstallments' => $this->overdueInstallmentsForCut($cut),
         ]);
     }
@@ -76,7 +84,7 @@ class WeeklyCutController extends Controller
                     return back()->with('warning', 'No hay operadores activos para generar cortes.');
                 }
 
-                return redirect()->route('cuts.index')->with('status', 'Se generaron '.$createdCuts->count().' corte(s) semanal(es).');
+                return redirect()->route('cuts.index')->with('status', 'Se generaron '.$createdCuts->count().' corte(s).');
             }
         }
 
@@ -90,25 +98,32 @@ class WeeklyCutController extends Controller
         $cut = $this->createWeeklyCutForOperator($operator, $request, $cutPeriodService, $cutDate);
 
         if (! $cut) {
-            return back()->with('warning', 'No se pudo abrir el corte semanal.');
+            return back()->with('warning', 'No se pudo generar el corte.');
         }
 
-        return redirect()->route('cuts.show', $cut)->with('status', 'Corte semanal enviado.');
+        if ($cut->status === 'closed') {
+            return redirect()
+                ->route('cuts.show', $cut)
+                ->with('warning', 'Ese corte ya esta cerrado. No se pueden agregar cobros nuevos a un corte cerrado.');
+        }
+
+        return redirect()->route('cuts.show', $cut)->with('status', 'Corte generado.');
     }
 
     private function createWeeklyCutForOperator(Operator $operator, Request $request, WeeklyCutPeriodService $cutPeriodService, ?string $cutDate = null): ?WeeklyCut
     {
         $date = CarbonImmutable::parse($cutDate ?: now('America/Merida')->toDateString(), 'America/Merida');
-        $cut = $cutPeriodService->openCutForOperator($operator, $request->user()->id, $date);
+        $cut = $cutPeriodService->createCutForOperator($operator, $request->user()->id, $date);
         $dayStart = $date->startOfDay();
         $dayEnd = $date->endOfDay();
 
         CollectionMovement::query()
             ->where('operator_id', $operator->id)
             ->whereNull('weekly_cut_id')
+            ->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES)
             ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$dayStart, $dayEnd])
             ->get()
-            ->each(fn (CollectionMovement $movement) => $cutPeriodService->attachMovement($movement, $request->user()->id));
+            ->each(fn (CollectionMovement $movement) => $cutPeriodService->attachMovementToCut($movement, $cut, $request->user()->id));
 
         return $cutPeriodService->refreshTotals($cut);
     }
@@ -119,6 +134,7 @@ class WeeklyCutController extends Controller
 
         $data = $request->validate([
             'received_total' => ['required', 'numeric', 'min:0'],
+            'received_on' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -130,8 +146,9 @@ class WeeklyCutController extends Controller
             $previousBalanceCents = Money::cents($cut->previous_balance);
             $differenceCents = $receivedCents - $reportedCents;
             $balanceAfterCents = $previousBalanceCents + $receivedCents - $reportedCents;
+            $receivedAt = CarbonImmutable::parse($data['received_on'], 'America/Merida')->endOfDay();
 
-            foreach ($cut->items()->with('movement')->get() as $item) {
+            foreach ($cut->items()->with('movement')->whereHas('movement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES))->get() as $item) {
                 if ($item->movement->confirmation_status === 'reported') {
                     try {
                         $service->confirm($item->movement, $request->user()->id);
@@ -158,7 +175,7 @@ class WeeklyCutController extends Controller
                 'difference_total' => Money::decimal($differenceCents),
                 'accumulated_balance' => Money::decimal($balanceAfterCents),
                 'status' => $differenceCents === 0 ? 'balanced' : ($receivedCents > 0 ? 'partially_received' : 'with_difference'),
-                'confirmed_at' => now('America/Merida'),
+                'confirmed_at' => $receivedAt,
                 'balance_settled_at' => $balanceAfterCents === 0 ? $cut->balance_settled_at : null,
                 'balance_settled_by' => $balanceAfterCents === 0 ? $cut->balance_settled_by : null,
             ]);
@@ -173,7 +190,7 @@ class WeeklyCutController extends Controller
                 'balance_before' => Money::decimal($previousBalanceCents),
                 'balance_after' => Money::decimal($balanceAfterCents),
                 'idempotency_key' => sha1('cut|'.$cut->id.'|'.$receivedCents),
-                'reason' => $data['reason'] ?? 'Confirmacion de corte semanal',
+                'reason' => $data['reason'] ?? 'Confirmacion de corte',
             ]);
 
             AuditEvent::query()->create([
@@ -184,6 +201,7 @@ class WeeklyCutController extends Controller
                 'after' => [
                     'reported_total' => $cut->reported_total,
                     'received_total' => Money::decimal($receivedCents),
+                    'received_on' => $receivedAt->toDateString(),
                     'difference_total' => Money::decimal($differenceCents),
                 ],
             ]);
@@ -227,7 +245,7 @@ class WeeklyCutController extends Controller
                 'balance_before' => Money::decimal($balanceBeforeCents),
                 'balance_after' => Money::decimal($balanceAfterCents),
                 'idempotency_key' => sha1('settle-cut|'.$cut->id.'|'.$request->user()->id.'|'.$amountCents.'|'.$data['settled_on'].'|'.now('America/Merida')->timestamp),
-                'reason' => $data['reason'] ?? 'Liquidacion de saldo pendiente de corte semanal',
+                'reason' => $data['reason'] ?? 'Liquidacion de saldo pendiente de corte',
                 'settled_at' => CarbonImmutable::parse($data['settled_on'], 'America/Merida')->endOfDay(),
                 'settled_by' => $request->user()->id,
             ]);
@@ -303,6 +321,59 @@ class WeeklyCutController extends Controller
         });
 
         return redirect()->route('cuts.show', $cut)->with('status', 'Corte reabierto.');
+    }
+
+    public function destroy(Request $request, WeeklyCut $cut): RedirectResponse
+    {
+        abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
+
+        DB::transaction(function () use ($cut, $request): void {
+            $cut = WeeklyCut::query()
+                ->with(['items', 'fundDisbursements', 'ledgerEntries'])
+                ->whereKey($cut->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $before = $cut->only([
+                'public_id',
+                'operator_id',
+                'period_starts_on',
+                'period_ends_on',
+                'settlement_on',
+                'reported_total',
+                'received_total',
+                'confirmed_total',
+                'difference_total',
+                'status',
+            ]);
+
+            CollectionMovement::query()
+                ->where('weekly_cut_id', $cut->id)
+                ->update(['weekly_cut_id' => null]);
+
+            CollectionMovement::query()
+                ->where('origin_weekly_cut_id', $cut->id)
+                ->update(['origin_weekly_cut_id' => null]);
+
+            $cut->fundDisbursements()->update(['weekly_cut_id' => null]);
+            $cut->ledgerEntries()->update(['weekly_cut_id' => null]);
+            $cut->items()->delete();
+            $cut->delete();
+
+            AuditEvent::query()->create([
+                'user_id' => $request->user()->id,
+                'action' => 'weekly_cut.deleted',
+                'auditable_type' => WeeklyCut::class,
+                'auditable_id' => $cut->id,
+                'before' => $before,
+                'after' => [
+                    'deleted_at' => now('America/Merida')->toDateTimeString(),
+                    'movements_detached' => true,
+                ],
+            ]);
+        });
+
+        return redirect()->route('cuts.index')->with('status', 'Corte eliminado. Los cobros y movimientos relacionados se conservaron sin corte asignado.');
     }
 
     private function overdueInstallmentsForCut(WeeklyCut $cut)

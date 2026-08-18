@@ -129,10 +129,12 @@ class ClientController extends Controller
         $activeLoans = Loan::query()
             ->where('status', 'active')
             ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id));
+        $loanScope = Loan::query()
+            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id));
 
         return [
             ['title' => 'Clientes', 'value' => number_format((clone $clientScope)->count()), 'caption' => 'Total en cartera visible', 'color' => 'blue'],
-            ['title' => 'Clientes con prestamos', 'value' => number_format((clone $clientScope)->has('loans')->count()), 'caption' => 'Con al menos un credito', 'color' => 'green'],
+            ['title' => 'Prestamos', 'value' => number_format($loanScope->count()), 'caption' => 'Creditos totales visibles', 'color' => 'green'],
             ['title' => 'Prestamos activos', 'value' => number_format($activeLoans->count()), 'caption' => 'Creditos vivos', 'color' => 'orange'],
         ];
     }

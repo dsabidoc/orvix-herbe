@@ -203,7 +203,7 @@
 
         <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div class="border-b border-slate-200 px-5 py-4">
-                <h3 class="font-bold text-slate-950">Cortes semanales</h3>
+                <h3 class="font-bold text-slate-950">Cortes</h3>
                 <p class="mt-1 text-sm text-slate-500">Reportado por operador contra efectivo recibido.</p>
             </div>
             <div class="divide-y divide-slate-100">
@@ -212,7 +212,7 @@
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <p class="font-semibold text-slate-950">{{ $cut->operator->name }}</p>
-                                <p class="mt-1 text-sm text-slate-500">{{ $cut->period_starts_on->format('d/m') }} - {{ $cut->period_ends_on->format('d/m/Y') }}</p>
+                                <p class="mt-1 text-sm text-slate-500">{{ $cut->period_starts_on->format('d/m/Y') }} · {{ ($cut->submitted_at ?? $cut->created_at)->format('H:i') }}</p>
                             </div>
                             <span class="rounded bg-[#e6f7f4] px-2 py-1 text-xs font-bold uppercase text-[#0f766e]">{{ StatusLabels::cut($cut->status) }}</span>
                         </div>
@@ -282,6 +282,10 @@
                                         @foreach ($loan->installments as $installment)
                                             @php
                                                 $isOverdue = $installment->due_date->toDateString() < now('America/Merida')->toDateString();
+                                                $graceLimit = $installment->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
+                                                $delinquencyCents = ((float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < now('America/Merida')->toDateString())
+                                                    ? (int) round(Money::cents($installment->contract_amount) * ((float) $loan->delinquency_rate / 100))
+                                                    : 0;
                                             @endphp
                                             <tr class="{{ $isOverdue ? 'bg-red-50/40' : '' }}">
                                                 <td class="px-4 py-3 font-semibold">{{ $installment->number }}</td>
@@ -300,6 +304,8 @@
                                                         <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
                                                         <input name="operator_surcharge_amount" type="hidden" value="0">
                                                         <input name="external_concepts_amount" type="hidden" value="0">
+                                                        <input name="additional_charge_amount" type="hidden" value="0">
+                                                        <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($delinquencyCents) }}">
                                                         <button class="rounded-md bg-[#0d9488] px-3 py-2 text-xs font-bold text-white" type="submit">Pagado</button>
                                                     </form>
                                                 </td>

@@ -12,6 +12,7 @@
             str_contains($normalized, 'caja') => 'Caja',
             str_contains($normalized, 'recepcion') => 'Recepcion',
             str_contains($normalized, 'operador') => 'Operador',
+            str_contains($normalized, 'tramite') => 'En tramite',
             default => $holder,
         };
     };
@@ -33,7 +34,11 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET" action="{{ route('invoice-portfolio.index') }}">
-        <div class="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">
+        <div class="grid gap-3 lg:grid-cols-[1.3fr_1fr_1fr_1fr_auto_auto] lg:items-end">
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="q">Buscar</label>
+                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="q" name="q" type="search" value="{{ $filters['q'] ?? '' }}" placeholder="Cliente, folio, placas o num. de serie">
+            </div>
             <div>
                 <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
@@ -43,6 +48,14 @@
                     @endunless
                     @foreach ($operators as $operator)
                         <option value="{{ $operator->id }}" @selected((string) ($filters['operator_id'] ?? '') === (string) $operator->id)>{{ $operator->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="invoice_status">Archivo</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="invoice_status" name="invoice_status">
+                    @foreach ($invoiceStatusOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(($filters['invoice_status'] ?? '') === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
             </div>
@@ -65,6 +78,9 @@
             <p class="mt-1 text-sm text-slate-500">Filtra por Caja, Recepcion u Operador para imprimir la relacion correspondiente.</p>
         </div>
 
+        <div class="border-b border-slate-200 px-5 py-3">
+            @include('partials.table-pagination', ['paginator' => $rows])
+        </div>
         <div class="hidden overflow-x-auto lg:block">
             <table class="w-full text-left text-sm">
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">
@@ -126,7 +142,7 @@
         <div class="mb-3">
             <p class="text-[10px] text-slate-500">Fecha de exportacion: {{ CarbonImmutable::now('America/Merida')->format('d/m/Y H:i') }}</p>
             <h3 class="mt-1 text-base font-bold text-slate-950">Listado de facturas</h3>
-            <p class="text-xs text-slate-600">Operador: {{ $selectedOperator ?: 'Todos' }} · Ubicacion: {{ $holderOptions[$filters['holder'] ?? ''] ?? 'Todas las ubicaciones' }}</p>
+            <p class="text-xs text-slate-600">Operador: {{ $selectedOperator ?: 'Todos' }} · Ubicacion: {{ $holderOptions[$filters['holder'] ?? ''] ?? 'Todas las ubicaciones' }} · Archivo: {{ $invoiceStatusOptions[$filters['invoice_status'] ?? ''] ?? 'Todos' }}</p>
         </div>
 
         <table class="cut-print-table w-full text-left text-sm">

@@ -19,6 +19,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -109,6 +110,7 @@ class LoanController extends Controller
 
     public function storeNote(Request $request, Loan $loan): RedirectResponse
     {
+        abort_unless($this->canManageLoanDetails($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
@@ -126,7 +128,7 @@ class LoanController extends Controller
 
     public function freeze(Request $request, Loan $loan): RedirectResponse
     {
-        abort_unless($request->user()->can('loans.formalize') || $request->user()->can('payments.confirm'), 403);
+        abort_unless($this->canManageLoanDetails($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
@@ -151,7 +153,7 @@ class LoanController extends Controller
 
     public function unfreeze(Request $request, Loan $loan): RedirectResponse
     {
-        abort_unless($request->user()->can('loans.formalize') || $request->user()->can('payments.confirm'), 403);
+        abort_unless($this->canManageLoanDetails($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
         $loan->update([
@@ -172,10 +174,11 @@ class LoanController extends Controller
 
     public function storeInvoice(Request $request, Loan $loan): RedirectResponse
     {
+        abort_unless($this->canManageInvoice($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
-            'holder' => ['required', 'in:Caja,Recepcion,Operador'],
+            'holder' => ['required', 'in:Caja,Recepcion,Operador,En tramite'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'file' => ['required', 'file', 'mimes:pdf', 'max:102400'],
         ]);
@@ -217,11 +220,11 @@ class LoanController extends Controller
 
     public function moveInvoice(Request $request, Loan $loan): RedirectResponse
     {
-        abort_unless($request->user()->can('loans.formalize') || $request->user()->can('payments.confirm'), 403);
+        abort_unless($this->canManageInvoice($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
-            'to_holder' => ['required', 'in:Caja,Recepcion,Operador'],
+            'to_holder' => ['required', 'in:Caja,Recepcion,Operador,En tramite'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -239,6 +242,49 @@ class LoanController extends Controller
         ]);
 
         return back()->with('status', 'Ubicacion fisica de factura actualizada.');
+    }
+
+    public function destroyInvoice(Request $request, Loan $loan): RedirectResponse
+    {
+        abort_unless($this->canManageInvoice($request), 403);
+        $this->authorizeLoanAccess($request, $loan);
+
+        $document = $loan->invoiceDocument;
+        $previousHolder = $loan->invoice_holder;
+
+        if (! $document) {
+            $loan->update([
+                'invoice_document_id' => null,
+                'invoice_holder' => null,
+            ]);
+
+            return back()->with('status', 'La factura quedo lista para cargar un nuevo archivo.');
+        }
+
+        DB::transaction(function () use ($document, $loan, $previousHolder, $request): void {
+            $loan->update([
+                'invoice_document_id' => null,
+                'invoice_holder' => null,
+            ]);
+
+            LoanInvoiceMovement::query()->create([
+                'loan_id' => $loan->id,
+                'document_id' => $document->id,
+                'from_holder' => $previousHolder,
+                'to_holder' => 'Eliminada',
+                'moved_by' => $request->user()->id,
+                'moved_at' => now('America/Merida'),
+                'notes' => 'Factura PDF eliminada para reemplazo.',
+            ]);
+
+            if ($document->disk && $document->path) {
+                Storage::disk($document->disk)->delete($document->path);
+            }
+
+            $document->delete();
+        });
+
+        return back()->with('status', 'Factura eliminada. Ya puedes cargar un nuevo archivo.');
     }
 
     public function update(Request $request, Loan $loan, LoanScheduleCalculator $calculator): RedirectResponse
@@ -395,7 +441,7 @@ class LoanController extends Controller
 
     public function destroy(Request $request, Loan $loan, LoanDeletionService $deletionService): RedirectResponse
     {
-        abort_unless($request->user()->can('loans.formalize') && ! $request->user()->hasRole('operador-cartera'), 403);
+        abort_unless($request->user()->can('loans.formalize') && ! $this->isProviderUser($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
         try {
@@ -428,6 +474,23 @@ class LoanController extends Controller
     {
         return ! $loan->installments()->where('applied_amount', '>', 0)->exists()
             && ! $loan->movements()->exists();
+    }
+
+    private function canManageLoanDetails(Request $request): bool
+    {
+        return ! $this->isProviderUser($request)
+            && ($request->user()->can('loans.formalize') || $request->user()->can('payments.confirm'));
+    }
+
+    private function canManageInvoice(Request $request): bool
+    {
+        return ! $this->isProviderUser($request)
+            && ($request->user()->can('loans.formalize') || $request->user()->can('payments.confirm') || $request->user()->can('documents.manage'));
+    }
+
+    private function isProviderUser(Request $request): bool
+    {
+        return $request->user()->hasRole('operador-cartera') || $request->user()->hasRole('proveedor');
     }
 
     private function financialConditionsChanged(Loan $loan, array $data, string $newMonthlyRate): bool

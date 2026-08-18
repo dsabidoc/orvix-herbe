@@ -20,6 +20,7 @@ class LoanScheduleCalculator
      *     first_payment_date?:string,
      *     payment_day:int,
      *     interest_calculation_method?:'fixed_principal'|'outstanding_balance',
+     *     calculation_method?:'regular'|'rounded'|'interest_only',
      *     rounding_increment?:int,
      *     rounding_adjustment?:'first'|'second'|'last',
      *     first_due_rule?:'next_payment_day'|'following_month'
@@ -38,6 +39,7 @@ class LoanScheduleCalculator
         $interestCalculationMethod = $input['interest_calculation_method'] ?? 'fixed_principal';
         $vatEnabled = filter_var($input['vat_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN);
         $vatRate = $vatEnabled ? 0.16 : 0.0;
+        $calculationMethod = $input['calculation_method'] ?? 'regular';
 
         if ($capital->isLessThanOrEqualTo(0)) {
             throw new InvalidArgumentException('El capital debe ser mayor a cero.');
@@ -69,6 +71,20 @@ class LoanScheduleCalculator
 
         $capitalCents = $this->decimalToCents($capital);
         $administrationFeeCents = $this->decimalToCents($administrationFee);
+
+        if ($calculationMethod === 'interest_only') {
+            return $this->calculateInterestOnly(
+                capitalCents: $capitalCents,
+                monthlyRate: $monthlyRate->toFloat(),
+                administrationFeeCents: $administrationFeeCents,
+                vatRate: $vatRate,
+                termMonths: $termMonths,
+                paymentDay: $paymentDay,
+                startDate: CarbonImmutable::parse($input['start_date']),
+                firstPaymentDate: isset($input['first_payment_date']) ? CarbonImmutable::parse($input['first_payment_date']) : null,
+                firstDueRule: $firstDueRule,
+            );
+        }
 
         if ($interestCalculationMethod === 'outstanding_balance') {
             return $this->calculateOutstandingBalance(
@@ -216,6 +232,53 @@ class LoanScheduleCalculator
             interestCents: $interestCents,
             contractTotalCents: array_sum(array_column($installments, 'amount_cents')),
             baseInstallmentCents: $basePaymentCents,
+            installments: $installments,
+        );
+    }
+
+    private function calculateInterestOnly(
+        int $capitalCents,
+        float $monthlyRate,
+        int $administrationFeeCents,
+        float $vatRate,
+        int $termMonths,
+        int $paymentDay,
+        CarbonImmutable $startDate,
+        ?CarbonImmutable $firstPaymentDate,
+        string $firstDueRule,
+    ): LoanSchedule {
+        $dueDate = $firstPaymentDate ?: $this->firstDueDate($startDate, $paymentDay, $firstDueRule);
+        $interestCents = (int) round($capitalCents * $monthlyRate);
+        $interestVatCents = (int) round(($interestCents + $administrationFeeCents) * $vatRate);
+        $amountCents = $interestCents + $interestVatCents + $administrationFeeCents;
+        $installments = [];
+
+        for ($number = 1; $number <= $termMonths; $number++) {
+            $installments[] = [
+                'number' => $number,
+                'due_date' => $dueDate->toDateString(),
+                'amount_cents' => $amountCents,
+                'amount' => LoanSchedule::formatCents($amountCents),
+                'principal_cents' => 0,
+                'principal' => LoanSchedule::formatCents(0),
+                'administration_fee_cents' => $administrationFeeCents,
+                'administration_fee' => LoanSchedule::formatCents($administrationFeeCents),
+                'interest_cents' => $interestCents,
+                'interest' => LoanSchedule::formatCents($interestCents),
+                'interest_vat_cents' => $interestVatCents,
+                'interest_vat' => LoanSchedule::formatCents($interestVatCents),
+                'balance_cents' => $capitalCents,
+                'balance' => LoanSchedule::formatCents($capitalCents),
+            ];
+
+            $dueDate = $this->nextDueDate($dueDate, $paymentDay);
+        }
+
+        return new LoanSchedule(
+            capitalCents: $capitalCents,
+            interestCents: ($interestCents + $interestVatCents) * $termMonths,
+            contractTotalCents: $capitalCents + ($amountCents * $termMonths),
+            baseInstallmentCents: $amountCents,
             installments: $installments,
         );
     }

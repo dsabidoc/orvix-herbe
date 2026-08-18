@@ -15,7 +15,7 @@
                         <th class="px-5 py-3">Operador</th>
                         <th class="px-5 py-3">Contacto</th>
                         <th class="px-5 py-3 text-right">Clientes</th>
-                        <th class="px-5 py-3 text-right">Prestamos</th>
+                        <th class="px-5 py-3 text-right">Prestamos activos</th>
                         <th class="px-5 py-3">Estado</th>
                     </tr>
                 </thead>

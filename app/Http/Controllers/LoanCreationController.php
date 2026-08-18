@@ -90,8 +90,9 @@ class LoanCreationController extends Controller
                 'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
                 'plates' => ['nullable', 'string', 'max:40'],
                 'vin' => ['nullable', 'string', 'size:17'],
+                'calculation_method' => ['nullable', 'in:regular,rounded,interest_only'],
                 'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
-                'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador'],
+                'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador,En tramite'],
                 'documents.*' => ['nullable', 'file', 'max:10240'],
                 'investors' => ['nullable', 'array', 'max:8'],
                 'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
@@ -139,6 +140,7 @@ class LoanCreationController extends Controller
         $loan = $formalizer->create($client, [
             'operator_id' => $data['operator_id'],
             'vehicle_id' => $vehicle->id,
+            'calculation_method' => $data['calculation_method'] ?? 'regular',
             'capital' => $data['capital'],
             'monthly_rate' => $monthlyRate,
             'administration_fee' => $administrationFee,
@@ -232,7 +234,7 @@ class LoanCreationController extends Controller
         $data['monthly_rate'] = number_format($this->monthlyRate((float) $data['rate_value'], $data['rate_type']), 6, '.', '');
         $data['first_payment_date'] = $data['first_payment_date'] ?? $data['start_date'];
 
-        if (($data['calculation_method'] ?? 'regular') === 'regular') {
+        if (($data['calculation_method'] ?? 'regular') !== 'rounded') {
             if ($allocator->hasParticipants($data['investors'] ?? [])) {
                 $allocator->participants($data['investors'], Money::cents($data['capital']), allowEmpty: true);
             }
@@ -244,6 +246,7 @@ class LoanCreationController extends Controller
                 return $formalizer->create($client, [
                     'operator_id' => $data['operator_id'] ?? $client->operator_id,
                     'vehicle_id' => $vehicle?->id,
+                    'calculation_method' => $data['calculation_method'] ?? 'regular',
                     'capital' => $data['capital'],
                     'monthly_rate' => $data['monthly_rate'],
                     'administration_fee' => number_format((float) ($data['administration_fee'] ?? 0), 2, '.', ''),
@@ -520,11 +523,11 @@ class LoanCreationController extends Controller
             'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
             'plates' => ['nullable', 'string', 'max:40'],
             'vin' => ['nullable', 'string', 'size:17'],
-            'calculation_method' => ['required', 'in:regular,rounded'],
+            'calculation_method' => ['required', 'in:regular,rounded,interest_only'],
             'vat_enabled' => ['nullable', 'boolean'],
             'interest_calculation_method' => ['required', 'in:fixed_principal,outstanding_balance'],
             'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
-            'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador'],
+            'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador,En tramite'],
             'invoice_temp_path' => ['nullable', 'string', 'max:500'],
             'invoice_original_name' => ['nullable', 'string', 'max:255'],
             'invoice_mime_type' => ['nullable', 'string', 'max:120'],
@@ -553,6 +556,7 @@ class LoanCreationController extends Controller
             'administration_fee' => $data['administration_fee'] ?? '0.00',
             'vat_enabled' => $data['vat_enabled'] ?? true,
             'interest_calculation_method' => $data['interest_calculation_method'] ?? 'fixed_principal',
+            'calculation_method' => $data['calculation_method'] ?? 'regular',
             'term_months' => (int) $data['term_months'],
             'start_date' => $data['start_date'],
             'first_payment_date' => $data['first_payment_date'],
@@ -564,6 +568,8 @@ class LoanCreationController extends Controller
         $collectionTotalCents = (int) collect($schedule->installments)->sum('administration_fee_cents');
         $interestTotalCents = (int) collect($schedule->installments)->sum('interest_cents');
         $interestVatTotalCents = (int) collect($schedule->installments)->sum('interest_vat_cents');
+
+        $isInterestOnly = ($data['calculation_method'] ?? 'regular') === 'interest_only';
 
         return [
             'input' => [
@@ -580,8 +586,10 @@ class LoanCreationController extends Controller
             'options' => [
                 'regular' => [
                     'key' => 'regular',
-                    'name' => 'Opcion regular',
-                    'description' => 'Calendario regular segun condiciones capturadas',
+                    'name' => $isInterestOnly ? 'Opcion solo interes' : 'Opcion regular',
+                    'description' => $isInterestOnly
+                        ? 'Interes mensual sobre capital vigente; los abonos reducen intereses futuros'
+                        : 'Calendario regular segun condiciones capturadas',
                     'rounding_multiple' => null,
                     'first_payment' => $schedule->installments[0]['amount'] ?? '0.00',
                     'regular_payment' => $schedule->baseInstallment(),
@@ -709,7 +717,7 @@ class LoanCreationController extends Controller
      */
     private function roundedTerms(): array
     {
-        return [6, 12, 18, 24, 36, 48];
+        return [6, 12, 18, 24, 30, 36, 48];
     }
 
     private function guarantorOptions()

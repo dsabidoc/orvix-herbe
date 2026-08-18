@@ -7,10 +7,18 @@
     </div>
 
     <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <form class="grid gap-3 md:grid-cols-[1fr_auto]" method="GET" action="{{ route('settings.client-merge') }}">
+        <form class="grid gap-3 md:grid-cols-[1fr_220px_auto]" method="GET" action="{{ route('settings.client-merge') }}">
             <label class="text-sm font-semibold text-slate-700">
                 Buscar cliente
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="q" placeholder="Nombre, celular o correo" value="{{ request('q') }}">
+            </label>
+            <label class="text-sm font-semibold text-slate-700">
+                Orden
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="sort">
+                    <option value="az" @selected(($sort ?? request('sort', 'az')) === 'az')>A-Z</option>
+                    <option value="za" @selected(($sort ?? request('sort')) === 'za')>Z-A</option>
+                    <option value="recientes" @selected(($sort ?? request('sort')) === 'recientes')>Mas recientes</option>
+                </select>
             </label>
             <button class="self-end rounded-md bg-[#0d9488] px-5 py-2 text-sm font-bold text-white">Buscar</button>
         </form>
@@ -19,8 +27,12 @@
     <form class="mt-5" method="POST" action="{{ route('settings.client-merge.store') }}" data-client-merge-form>
         @csrf
         <input name="q" type="hidden" value="{{ request('q') }}">
+        <input name="sort" type="hidden" value="{{ $sort ?? request('sort') }}">
 
         <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 px-5 py-3">
+                @include('partials.table-pagination', ['paginator' => $clients])
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[920px] text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500">

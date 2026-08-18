@@ -125,6 +125,7 @@ class CollectionController extends Controller
             'payment_effect' => ['nullable', 'in:normal,no_investors,capital_advance'],
             'notes' => ['nullable', 'string', 'max:500'],
             'return_to' => ['nullable', 'string', 'max:20'],
+            'return_month' => ['nullable', 'date_format:Y-m'],
             'cut_id' => ['nullable', 'exists:weekly_cuts,id'],
         ]);
 
@@ -138,6 +139,9 @@ class CollectionController extends Controller
         $contractAmountCents = $paymentEffect === 'capital_advance'
             ? $this->capitalAdvanceAmountCents($installment)
             : Money::cents($data['contract_amount']);
+        $delinquencyAmountCents = $paymentEffect === 'capital_advance'
+            ? 0
+            : $this->calculatedDelinquencyCents($installment, $data['operated_on']);
 
         abort_if($contractAmountCents <= 0, 422, 'Esta letra no tiene abono a capital disponible.');
 
@@ -151,10 +155,11 @@ class CollectionController extends Controller
         }
 
         $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
+        $movementPublicId = (string) Str::ulid();
         $movement = CollectionMovement::query()->create([
-            'public_id' => (string) Str::ulid(),
+            'public_id' => $movementPublicId,
             'folio' => $this->nextMovementFolio($registeredAt),
-            'idempotency_key' => sha1('installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents)),
+            'idempotency_key' => sha1('installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents).'|'.$movementPublicId),
             'loan_id' => $installment->loan_id,
             'target_installment_id' => $installment->id,
             'operator_id' => $installment->loan->operator_id,
@@ -165,7 +170,7 @@ class CollectionController extends Controller
             'operator_surcharge_amount' => Money::decimal(Money::cents($data['operator_surcharge_amount'] ?? 0)),
             'external_concepts_amount' => Money::decimal(Money::cents($data['external_concepts_amount'] ?? 0)),
             'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
-            'delinquency_amount' => Money::decimal(Money::cents($data['delinquency_amount'] ?? 0)),
+            'delinquency_amount' => Money::decimal($delinquencyAmountCents),
             'affects_investors' => $paymentEffect !== 'no_investors',
             'origin_weekly_cut_id' => $selectedCut?->id,
             'type' => $movementType,
@@ -194,7 +199,10 @@ class CollectionController extends Controller
             'loan' => route('loans.show', $installment->loan),
             'dashboard' => route('dashboard'),
             'cut' => route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id'])),
-            default => route('collections.index', ['month' => $installment->due_date->format('Y-m'), 'operator_id' => $installment->loan->operator_id]),
+            default => route('collections.index', [
+                'month' => $data['return_month'] ?? now('America/Merida')->format('Y-m'),
+                'operator_id' => $installment->loan->operator_id,
+            ]),
         };
 
         return redirect($route)->with('status', $this->shouldApplyImmediately($request) ? 'Letra marcada como pagada y aplicada al calendario.' : (($data['return_to'] ?? null) === 'cut' ? 'Letra marcada como pagada y agregada a este corte.' : 'Letra marcada como pagada; aparecera cuando se genere el corte de esa fecha.'));
@@ -245,16 +253,20 @@ class CollectionController extends Controller
             $contractAmountCents = $paymentEffect === 'capital_advance'
                 ? $this->capitalAdvanceAmountCents($installment)
                 : Money::cents($installment->remaining_amount);
+            $delinquencyAmountCents = $paymentEffect === 'capital_advance'
+                ? 0
+                : $this->calculatedDelinquencyCents($installment, $data['operated_on']);
 
             if ($contractAmountCents <= 0) {
                 continue;
             }
 
             $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
+            $movementPublicId = (string) Str::ulid();
             $movement = CollectionMovement::query()->create([
-                'public_id' => (string) Str::ulid(),
+                'public_id' => $movementPublicId,
                 'folio' => $this->nextMovementFolio($registeredAt),
-                'idempotency_key' => sha1('bulk-installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents)),
+                'idempotency_key' => sha1('bulk-installment|'.$installment->id.'|'.$data['operated_on'].'|'.$paymentEffect.'|'.Money::decimal($contractAmountCents).'|'.$movementPublicId),
                 'loan_id' => $installment->loan_id,
                 'target_installment_id' => $installment->id,
                 'operator_id' => $installment->loan->operator_id,
@@ -265,7 +277,7 @@ class CollectionController extends Controller
                 'operator_surcharge_amount' => '0.00',
                 'external_concepts_amount' => '0.00',
                 'additional_charge_amount' => '0.00',
-                'delinquency_amount' => '0.00',
+                'delinquency_amount' => Money::decimal($delinquencyAmountCents),
                 'affects_investors' => $paymentEffect !== 'no_investors',
                 'type' => $movementType,
                 'payment_method' => 'cash',
@@ -333,6 +345,26 @@ class CollectionController extends Controller
         $ratio = min(1, $remainingCents / $operationalCents);
 
         return min($remainingCents, (int) round(Money::cents($installment->principal_amount) * $ratio));
+    }
+
+    private function calculatedDelinquencyCents(Installment $installment, string $operatedOn): int
+    {
+        $rate = (float) ($installment->loan->delinquency_rate ?? 0);
+
+        if ($rate <= 0) {
+            return 0;
+        }
+
+        $graceLimit = $installment->due_date
+            ->copy()
+            ->addDays((int) ($installment->loan->delinquency_grace_days ?? 0))
+            ->toDateString();
+
+        if ($graceLimit >= CarbonImmutable::parse($operatedOn, WeeklyCutPeriodService::TIMEZONE)->toDateString()) {
+            return 0;
+        }
+
+        return (int) round(Money::cents($installment->contract_amount) * ($rate / 100));
     }
 
     private function isCapitalAdvanceEligible(Installment $installment): bool

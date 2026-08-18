@@ -26,7 +26,7 @@
         @if ($weeklyCut ?? null)
             <input name="weekly_cut_id" type="hidden" value="{{ $weeklyCut->id }}">
             <div class="mb-5 rounded-md border border-[#99f6e4] bg-[#e6f7f4] px-4 py-3 text-sm text-[#0f766e]">
-                Prestamo ligado al corte de {{ $weeklyCut->operator->name }} · {{ $weeklyCut->period_starts_on->format('d/m/Y') }} - {{ $weeklyCut->period_ends_on->format('d/m/Y') }}.
+                Prestamo ligado al corte de {{ $weeklyCut->operator->name }} · {{ $weeklyCut->period_starts_on->format('d/m/Y') }}.
             </div>
         @endif
         <div class="grid gap-8 xl:grid-cols-2">
@@ -101,6 +101,7 @@
                             <option value="Recepcion" @selected(old('invoice_holder', 'Recepcion') === 'Recepcion')>Recepcion</option>
                             <option value="Caja" @selected(old('invoice_holder') === 'Caja')>Caja</option>
                             <option value="Operador" @selected(old('invoice_holder') === 'Operador')>Operador</option>
+                            <option value="En tramite" @selected(old('invoice_holder') === 'En tramite')>En tramite</option>
                         </select>
                     </label>
                     <p class="-mt-2 text-xs text-slate-500">Opcional, PDF menor a 100 MB.</p>
@@ -113,7 +114,7 @@
                     <label class="block text-sm font-semibold text-slate-700">Capital requerido
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="capital" placeholder="Ej. 100000" type="number" step="0.01" value="{{ old('capital') }}" required>
                     </label>
-                    <label class="block text-sm font-semibold text-slate-700">Meses
+                    <label class="block text-sm font-semibold text-slate-700" data-term-months-wrapper>Meses
                         <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="term_months" required>
                             <option value="">Meses</option>
                             @foreach ($terms as $term)
@@ -158,11 +159,15 @@
                     <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="disbursement_notes" rows="2" placeholder="Opcional">{{ old('disbursement_notes') }}</textarea>
                 </label>
                 <label class="block text-sm font-semibold text-slate-700">Metodo de prestamo
-                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method">
+                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method" data-loan-calculation-method>
                         <option value="rounded" @selected(old('calculation_method', 'rounded') === 'rounded')>Prestamo con redondeo</option>
                         <option value="regular" @selected(old('calculation_method') === 'regular')>Prestamo regular</option>
+                        <option value="interest_only" @selected(old('calculation_method') === 'interest_only')>Prestamo de solo interes</option>
                     </select>
                 </label>
+                <p class="-mt-2 hidden rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800" data-interest-only-help>
+                    Sin plazo determinado: se proyectan pagos mensuales de interes sobre el capital vivo. Puedes abonar capital durante la vida del prestamo.
+                </p>
                 <label class="block text-sm font-semibold text-slate-700">IVA
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="vat_enabled" required>
                         <option value="0" @selected(old('vat_enabled', '0') === '0')>Sin IVA</option>

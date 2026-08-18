@@ -11,6 +11,7 @@ use App\Models\InvestorCapitalMovement;
 use App\Models\PaymentAllocation;
 use App\Models\WeeklyCutItem;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -35,6 +36,10 @@ class PaymentApplicationService
 
             if ($movement->type === 'settlement') {
                 throw new RuntimeException('La liquidacion se aplica desde el boton Liquidar credito para calcular solo capital futuro e interes del mes corriente.');
+            }
+
+            if ($movement->type === 'advance' && ($movement->loan->calculation_method ?? 'regular') === 'interest_only') {
+                return $this->applyInterestOnlyCapitalAdvance($movement, $confirmedByUserId);
             }
 
             $remainingCents = Money::cents($movement->contract_amount);
@@ -156,6 +161,10 @@ class PaymentApplicationService
             if ($movement->confirmation_status === 'applied') {
                 $this->reverseInvestorReturns($movement, $reversedByUserId);
 
+                if ($movement->type === 'advance' && ($movement->loan->calculation_method ?? 'regular') === 'interest_only') {
+                    return $this->reverseInterestOnlyCapitalAdvance($movement, $reversedByUserId);
+                }
+
                 foreach ($movement->allocations as $allocation) {
                     $installment = $allocation->installment()->lockForUpdate()->firstOrFail();
                     $allocationCents = Money::cents($allocation->amount);
@@ -211,6 +220,159 @@ class PaymentApplicationService
     private function statusForCoveredInstallment(string $movementType): string
     {
         return in_array($movementType, ['advance', 'capital_advance'], true) ? 'advanced' : 'confirmed';
+    }
+
+    private function applyInterestOnlyCapitalAdvance(CollectionMovement $movement, int $confirmedByUserId): CollectionMovement
+    {
+        $loan = $movement->loan()->with('installments')->lockForUpdate()->firstOrFail();
+        $advanceCents = Money::cents($movement->contract_amount);
+
+        if ($advanceCents <= 0) {
+            throw new RuntimeException('El abono a capital debe ser mayor a cero.');
+        }
+
+        $anchor = $loan->installments()
+            ->where('remaining_amount', '>', 0)
+            ->orderBy('number')
+            ->lockForUpdate()
+            ->first();
+
+        if (! $anchor) {
+            throw new RuntimeException('Este prestamo no tiene letras pendientes para aplicar el abono.');
+        }
+
+        $currentCapitalCents = $this->interestOnlyCurrentCapitalCents($loan);
+
+        if ($advanceCents > $currentCapitalCents) {
+            throw new RuntimeException('El abono a capital excede el capital vivo del prestamo.');
+        }
+
+        PaymentAllocation::query()->create([
+            'collection_movement_id' => $movement->id,
+            'installment_id' => $anchor->id,
+            'amount' => Money::decimal($advanceCents),
+        ]);
+
+        if ($movement->affects_investors) {
+            $this->investorReturnRecorder->record($loan, $anchor, $advanceCents, 0, $movement, $confirmedByUserId);
+        }
+
+        $this->refreshInterestOnlyFutureInstallments($loan, max(0, $currentCapitalCents - $advanceCents), $movement->operated_on);
+
+        $movement->update([
+            'confirmation_status' => 'applied',
+            'confirmed_by' => $confirmedByUserId,
+            'confirmed_at' => now('America/Merida'),
+        ]);
+
+        if ($movement->weekly_cut_id) {
+            $this->cutPeriodService->refreshTotals($movement->weeklyCut()->first());
+        }
+
+        AuditEvent::query()->create([
+            'user_id' => $confirmedByUserId,
+            'action' => 'collection_movement.interest_only_capital_advance_confirmed',
+            'auditable_type' => CollectionMovement::class,
+            'auditable_id' => $movement->id,
+            'after' => [
+                'folio' => $movement->folio,
+                'loan_id' => $loan->id,
+                'capital_before' => Money::decimal($currentCapitalCents),
+                'capital_after' => Money::decimal(max(0, $currentCapitalCents - $advanceCents)),
+            ],
+            'related_idempotency_key' => $movement->idempotency_key,
+        ]);
+
+        return $movement->fresh(['loan.client', 'allocations.installment']);
+    }
+
+    private function reverseInterestOnlyCapitalAdvance(CollectionMovement $movement, int $reversedByUserId): CollectionMovement
+    {
+        $loan = $movement->loan()->with('installments')->lockForUpdate()->firstOrFail();
+        $advanceCents = $movement->allocations->sum(fn ($allocation) => Money::cents($allocation->amount));
+        $currentCapitalCents = $this->interestOnlyCurrentCapitalCents($loan);
+        $cut = $movement->weeklyCut;
+
+        $this->refreshInterestOnlyFutureInstallments($loan, min(Money::cents($loan->capital), $currentCapitalCents + $advanceCents), $movement->operated_on);
+
+        $movement->allocations()->delete();
+        WeeklyCutItem::query()
+            ->where('collection_movement_id', $movement->id)
+            ->delete();
+
+        $movement->update([
+            'confirmation_status' => 'reversed',
+            'weekly_cut_id' => null,
+            'origin_weekly_cut_id' => null,
+            'notes' => trim((string) $movement->notes."\nRevertido por administracion el ".now('America/Merida')->format('d/m/Y H:i')),
+        ]);
+
+        if ($cut) {
+            $this->cutPeriodService->refreshTotals($cut);
+        }
+
+        AuditEvent::query()->create([
+            'user_id' => $reversedByUserId,
+            'action' => 'collection_movement.interest_only_capital_advance_reversed',
+            'auditable_type' => CollectionMovement::class,
+            'auditable_id' => $movement->id,
+            'after' => [
+                'folio' => $movement->folio,
+                'loan_id' => $loan->id,
+                'capital_before' => Money::decimal($currentCapitalCents),
+                'capital_after' => Money::decimal(min(Money::cents($loan->capital), $currentCapitalCents + $advanceCents)),
+            ],
+            'related_idempotency_key' => $movement->idempotency_key,
+        ]);
+
+        return $movement->fresh(['loan.client']);
+    }
+
+    private function interestOnlyCurrentCapitalCents($loan): int
+    {
+        $openInstallment = $loan->installments()
+            ->where('remaining_amount', '>', 0)
+            ->orderBy('number')
+            ->first();
+
+        return Money::cents($openInstallment?->capital_balance ?? $loan->capital);
+    }
+
+    private function refreshInterestOnlyFutureInstallments($loan, int $capitalCents, $effectiveOn): void
+    {
+        $effectiveDate = CarbonImmutable::parse($effectiveOn, 'America/Merida')->toDateString();
+        $interestCents = (int) round($capitalCents * (float) $loan->monthly_rate);
+        $administrationFeeCents = Money::cents($loan->administration_fee ?? 0);
+        $vatRate = $loan->vat_enabled ? 0.16 : 0.0;
+        $interestVatCents = (int) round(($interestCents + $administrationFeeCents) * $vatRate);
+        $contractCents = $capitalCents > 0 ? $interestCents + $interestVatCents + $administrationFeeCents : 0;
+        $operationalCents = $capitalCents > 0 ? $interestCents : 0;
+
+        $loan->installments()
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->orderBy('number')
+            ->lockForUpdate()
+            ->get()
+            ->each(function ($installment) use ($effectiveDate, $capitalCents, $interestCents, $interestVatCents, $contractCents, $operationalCents) {
+                $updates = [
+                    'capital_balance' => Money::decimal($capitalCents),
+                ];
+
+                if ($installment->due_date->toDateString() > $effectiveDate) {
+                    $updates += [
+                        'contract_amount' => Money::decimal($contractCents),
+                        'principal_amount' => '0.00',
+                        'interest_amount' => Money::decimal($interestCents),
+                        'interest_vat_amount' => Money::decimal($interestVatCents),
+                        'applied_amount' => '0.00',
+                        'remaining_amount' => Money::decimal($operationalCents),
+                        'status' => $capitalCents > 0 ? 'upcoming' : 'advanced',
+                    ];
+                }
+
+                $installment->update($updates);
+            });
     }
 
     /**

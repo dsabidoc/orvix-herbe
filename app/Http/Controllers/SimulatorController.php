@@ -43,7 +43,7 @@ class SimulatorController extends Controller
         if ($request->filled('capital')) {
             $data = $request->validate([
                 'client_name' => ['required', 'string', 'max:180'],
-                'calculation_method' => ['nullable', 'in:regular,rounded'],
+                'calculation_method' => ['nullable', 'in:regular,rounded,interest_only'],
                 'operator_id' => ['required', 'exists:operators,id'],
                 'capital' => ['required', 'numeric', 'min:1'],
                 'rate_type' => ['required', 'in:monthly,annual'],
@@ -131,7 +131,7 @@ class SimulatorController extends Controller
             'openingFeeAmount' => Money::decimal($openingFeeCents),
             'contractTotalWithFee' => $contractTotalWithFee,
             'simulation' => $simulation,
-            'interestCalculationLabel' => $this->interestCalculationLabel($input['interest_calculation_method']),
+            'interestCalculationLabel' => $input['calculation_method'] === 'interest_only' ? 'Solo interes sobre capital vigente' : $this->interestCalculationLabel($input['interest_calculation_method']),
         ]);
     }
 

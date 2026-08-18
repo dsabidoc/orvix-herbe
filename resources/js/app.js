@@ -115,6 +115,93 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    const moneyFieldNames = new Set([
+        'additional_charge_amount',
+        'administration_fee',
+        'amount',
+        'available_capital',
+        'capital',
+        'capital_amount',
+        'contract_amount',
+        'delinquency_amount',
+        'external_concepts_amount',
+        'generated_interest',
+        'initial_capital',
+        'opening_fee_value',
+        'operator_surcharge_amount',
+        'payment_amount',
+        'received_total',
+        'requested_capital',
+        'returned_capital',
+    ]);
+    const normalizeMoney = (value) => String(value || '').replace(/,/g, '').replace(/[^\d.-]/g, '');
+    const formatMoney = (value) => {
+        const normalized = normalizeMoney(value);
+
+        if (normalized === '' || normalized === '-' || normalized === '.') {
+            return normalized;
+        }
+
+        const [integerPart, decimalPart] = normalized.split('.');
+        const sign = integerPart.startsWith('-') ? '-' : '';
+        const digits = integerPart.replace('-', '');
+        const formattedInteger = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+        return `${sign}${formattedInteger}${decimalPart !== undefined ? `.${decimalPart.slice(0, 6)}` : ''}`;
+    };
+    const fieldBaseName = (name) => {
+        const match = name.match(/(?:^|\[)([^\[\]]+)\]?$/);
+
+        return match ? match[1] : name;
+    };
+
+    document.querySelectorAll('input').forEach((input) => {
+        if (!(input instanceof HTMLInputElement) || input.type === 'file') {
+            return;
+        }
+
+        const isMoneyInput = input.hasAttribute('data-money-input') || moneyFieldNames.has(fieldBaseName(input.name || ''));
+
+        if (!isMoneyInput) {
+            return;
+        }
+
+        if (input.type === 'number') {
+            input.type = 'text';
+        }
+
+        input.inputMode = 'decimal';
+        input.value = formatMoney(input.value);
+
+        input.addEventListener('focus', () => {
+            input.value = normalizeMoney(input.value);
+        });
+
+        input.addEventListener('blur', () => {
+            input.value = formatMoney(input.value);
+        });
+    });
+
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+
+        form.querySelectorAll('input').forEach((input) => {
+            if (!(input instanceof HTMLInputElement) || input.type === 'file') {
+                return;
+            }
+
+            const isMoneyInput = input.hasAttribute('data-money-input') || moneyFieldNames.has(fieldBaseName(input.name || ''));
+
+            if (isMoneyInput) {
+                input.value = normalizeMoney(input.value);
+            }
+        });
+    }, { capture: true });
+
     document.querySelectorAll('[data-sync-payment-day-source]').forEach((input) => {
         input.addEventListener('change', () => {
             if (!(input instanceof HTMLInputElement) || !input.value) {
@@ -162,6 +249,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 disbursementInput.value = input.value;
             }
         });
+    });
+
+    document.querySelectorAll('[data-loan-calculation-method]').forEach((select) => {
+        const form = select.closest('form');
+        const rateType = form?.querySelector('select[name="rate_type"]');
+        const rateValue = form?.querySelector('input[name="rate_value"]');
+        const termMonths = form?.querySelector('select[name="term_months"], input[name="term_months"]');
+        const interestMethod = form?.querySelector('select[name="interest_calculation_method"]');
+        const help = form?.querySelector('[data-interest-only-help]');
+        const termWrapper = form?.querySelector('[data-term-months-wrapper]');
+
+        const refreshInterestOnlyFields = () => {
+            const isInterestOnly = select instanceof HTMLSelectElement && select.value === 'interest_only';
+
+            if (help instanceof HTMLElement) {
+                help.classList.toggle('hidden', !isInterestOnly);
+            }
+
+            if (termWrapper instanceof HTMLElement) {
+                termWrapper.classList.toggle('opacity-70', isInterestOnly);
+            }
+
+            if (!isInterestOnly) {
+                return;
+            }
+
+            if (rateType instanceof HTMLSelectElement) {
+                rateType.value = 'monthly';
+            }
+
+            if (rateValue instanceof HTMLInputElement && (rateValue.value === '' || rateValue.value === '2' || rateValue.value === '2.00')) {
+                rateValue.value = '3';
+            }
+
+            if (termMonths instanceof HTMLSelectElement || termMonths instanceof HTMLInputElement) {
+                termMonths.value = '48';
+            }
+
+            if (interestMethod instanceof HTMLSelectElement) {
+                interestMethod.value = 'outstanding_balance';
+            }
+        };
+
+        select.addEventListener('change', refreshInterestOnlyFields);
+        refreshInterestOnlyFields();
     });
 
     const bulkPaymentForm = document.querySelector('[data-bulk-payment-form]');

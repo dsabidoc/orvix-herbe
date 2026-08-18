@@ -281,7 +281,7 @@
                         <h3 class="mt-1 text-lg font-bold text-slate-950">¿Marcar esta letra como pagada?</h3>
                     </div>
                     <div class="space-y-4 px-5 py-4">
-                        <p class="text-sm leading-6 text-slate-600">El pago quedará en el corte semanal como <strong>por confirmar</strong>. El saldo contractual se aplicará hasta que administración confirme la recepción.</p>
+                        <p class="text-sm leading-6 text-slate-600">El pago quedará disponible para el siguiente corte como <strong>por confirmar</strong>. El saldo contractual se aplicará hasta que administración confirme la recepción.</p>
                         <div>
                             <label class="text-sm font-semibold text-slate-700" for="confirm-paid-date">Fecha de pago</label>
                             <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-date" type="date" value="{{ now('America/Merida')->toDateString() }}">

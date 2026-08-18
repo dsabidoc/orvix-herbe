@@ -80,12 +80,17 @@ class SettingsController extends Controller
                 ->orWhere('email', 'like', $search));
         }
 
+        $sort = $request->string('sort', 'az')->toString();
+
+        match ($sort) {
+            'za' => $query->orderByDesc('first_name')->orderByDesc('last_name')->orderByDesc('id'),
+            'recientes' => $query->orderByDesc('created_at')->orderByDesc('id'),
+            default => $query->orderBy('first_name')->orderBy('last_name')->orderBy('id'),
+        };
+
         return view('settings.client-merge', [
-            'clients' => $query
-                ->orderBy('last_name')
-                ->orderBy('first_name')
-                ->paginate(40)
-                ->withQueryString(),
+            'clients' => $query->paginate(40)->withQueryString(),
+            'sort' => $sort,
         ]);
     }
 
@@ -166,7 +171,7 @@ class SettingsController extends Controller
         });
 
         return redirect()
-            ->route('settings.client-merge', ['q' => $request->input('q')])
+            ->route('settings.client-merge', ['q' => $request->input('q'), 'sort' => $request->input('sort')])
             ->with('status', 'Clientes unificados. Los prestamos y expedientes ahora apuntan al cliente principal.');
     }
 

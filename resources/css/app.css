@@ -54,7 +54,7 @@
 
     body {
         background: #fff !important;
-        color: #111827 !important;
+        color: #000 !important;
         font-size: 10px !important;
     }
 
@@ -85,7 +85,46 @@
     .print-sheet p {
         font-size: 10px !important;
         line-height: 1.25 !important;
-        color: #111 !important;
+        color: #000 !important;
+    }
+
+    .print-only.cut-print-summary {
+        display: block !important;
+        color: #000 !important;
+    }
+
+    .cut-print-summary-title {
+        margin: 0 0 8px !important;
+        color: #000 !important;
+    }
+
+    .cut-print-summary dl {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 8px 12px !important;
+        margin: 0 !important;
+        color: #000 !important;
+    }
+
+    .cut-print-summary div {
+        border: 1px solid #000 !important;
+        padding: 6px 8px !important;
+        break-inside: avoid !important;
+        color: #000 !important;
+    }
+
+    .cut-print-summary dt {
+        color: #000 !important;
+        font-size: 8px !important;
+        font-weight: 800 !important;
+        text-transform: uppercase !important;
+    }
+
+    .cut-print-summary dd {
+        color: #000 !important;
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        margin: 2px 0 0 !important;
     }
 
     .cut-print-table {
@@ -133,7 +172,7 @@
     }
 
     a {
-        color: #111827 !important;
+        color: #000 !important;
         text-decoration: none !important;
     }
 }

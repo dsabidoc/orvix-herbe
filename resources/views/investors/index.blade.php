@@ -28,6 +28,9 @@
     </div>
 
     <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-200 px-5 py-3">
+            @include('partials.table-pagination', ['paginator' => $investors])
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full min-w-[920px] text-left text-sm">
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">

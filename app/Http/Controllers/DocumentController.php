@@ -48,6 +48,7 @@ class DocumentController extends Controller
 
     public function store(Request $request, Loan $loan): RedirectResponse
     {
+        abort_unless($this->canManageDocuments($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
@@ -93,6 +94,7 @@ class DocumentController extends Controller
 
     public function destroy(Request $request, Document $document): RedirectResponse
     {
+        abort_unless($this->canManageDocuments($request), 403);
         $this->authorizeDocumentAccess($request, $document);
 
         $disk = $this->disk($document);
@@ -111,6 +113,12 @@ class DocumentController extends Controller
         if ($request->user()->hasRole('operador-cartera') && $loan->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
+    }
+
+    private function canManageDocuments(Request $request): bool
+    {
+        return ! ($request->user()->hasRole('operador-cartera') || $request->user()->hasRole('proveedor'))
+            && ($request->user()->can('documents.manage') || $request->user()->can('loans.formalize') || $request->user()->can('payments.confirm'));
     }
 
     private function authorizeDocumentAccess(Request $request, Document $document): void

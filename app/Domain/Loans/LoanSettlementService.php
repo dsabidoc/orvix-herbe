@@ -24,8 +24,53 @@ class LoanSettlementService
         $monthStart = $settledOn->startOfMonth();
         $monthEnd = $settledOn->endOfMonth();
         $rows = [];
+        $unpaidInstallments = $loan->installments()->where('remaining_amount', '>', 0)->orderBy('number')->get();
 
-        foreach ($loan->installments()->where('remaining_amount', '>', 0)->orderBy('number')->get() as $installment) {
+        if (($loan->calculation_method ?? 'regular') === 'interest_only') {
+            $anchor = $unpaidInstallments->first();
+            $capitalCents = Money::cents($anchor?->capital_balance ?? $loan->capital);
+
+            foreach ($unpaidInstallments as $installment) {
+                $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
+
+                if ($dueDate->gt($monthEnd)) {
+                    continue;
+                }
+
+                $components = $this->remainingComponents($installment);
+                $bucket = $dueDate->lt($monthStart) ? 'overdue' : 'current_month';
+
+                $rows[] = [
+                    'installment_id' => $installment->id,
+                    'number' => (int) $installment->number,
+                    'due_date' => $dueDate->toDateString(),
+                    'bucket' => $bucket,
+                    'amount_cents' => $components['interest_cents'],
+                    'principal_cents' => 0,
+                    'interest_cents' => $components['interest_cents'],
+                ];
+            }
+
+            if ($anchor && $capitalCents > 0) {
+                $rows[] = [
+                    'installment_id' => $anchor->id,
+                    'number' => (int) $anchor->number,
+                    'due_date' => CarbonImmutable::parse($anchor->due_date, 'America/Merida')->toDateString(),
+                    'bucket' => 'capital_return',
+                    'amount_cents' => $capitalCents,
+                    'principal_cents' => $capitalCents,
+                    'interest_cents' => 0,
+                ];
+            }
+
+            return [
+                'settled_on' => $settledOn->toDateString(),
+                'total_cents' => array_sum(array_column($rows, 'amount_cents')),
+                'rows' => $rows,
+            ];
+        }
+
+        foreach ($unpaidInstallments as $installment) {
             $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
             $components = $this->remainingComponents($installment);
             $bucket = 'future';

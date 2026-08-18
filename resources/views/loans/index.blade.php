@@ -26,6 +26,9 @@
     </form>
 
     <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-200 px-5 py-3">
+            @include('partials.table-pagination', ['paginator' => $loans])
+        </div>
         <table class="hidden w-full text-left text-sm lg:table">
             <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>

@@ -19,10 +19,12 @@
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Metodo</label>
-                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method" required>
+                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="calculation_method" data-loan-calculation-method required>
                         <option value="regular" @selected(($input['calculation_method'] ?? 'regular') === 'regular')>Prestamo regular</option>
                         <option value="rounded" @selected(($input['calculation_method'] ?? 'regular') === 'rounded')>Prestamo con redondeo</option>
+                        <option value="interest_only" @selected(($input['calculation_method'] ?? 'regular') === 'interest_only')>Prestamo de solo interes</option>
                     </select>
+                    <p class="mt-1 hidden text-xs text-slate-500" data-interest-only-help>Sin plazo determinado: se proyectan mensualidades de interes sobre el capital vivo, y los abonos reducen intereses futuros.</p>
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700">Operador</label>
@@ -78,7 +80,7 @@
                     <label class="text-sm font-semibold text-slate-700">Valor comision</label>
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="opening_fee_value" type="number" step="0.01" value="{{ $input['opening_fee_value'] }}">
                 </div>
-                <div>
+                <div data-term-months-wrapper>
                     <label class="text-sm font-semibold text-slate-700">Meses</label>
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="term_months" type="number" value="{{ $input['term_months'] }}" required>
                 </div>
@@ -139,6 +141,9 @@
                         <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Simulacion de prestamo</p>
                         <h3 class="mt-1 text-xl font-bold text-slate-950">{{ $input['client_name'] }}</h3>
                         <p class="mt-1 text-sm text-slate-500">{{ $interestCalculationLabel }} · {{ ucfirst($input['rate_type']) }} {{ number_format((float) $input['rate_value'], 2) }}% · {{ ($input['vat_enabled'] ?? '1') === '1' ? 'Con IVA' : 'Sin IVA' }}</p>
+                        @if (($input['calculation_method'] ?? 'regular') === 'interest_only')
+                            <p class="mt-1 text-sm text-slate-500">Sin plazo determinado; la tabla es una proyeccion y se recalcula cuando se abona a capital.</p>
+                        @endif
                     </div>
                     <button class="simulator-actions rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" onclick="window.print()">Descargar / imprimir</button>
                 </div>
@@ -160,7 +165,7 @@
                         <dd class="mt-1 font-bold">{{ Money::mxn($openingFeeAmount) }}</dd>
                     </div>
                     <div class="rounded-md bg-slate-50 p-3">
-                        <dt class="text-sm text-slate-500">Contrato</dt>
+                        <dt class="text-sm text-slate-500">{{ ($input['calculation_method'] ?? 'regular') === 'interest_only' ? 'Proyeccion' : 'Contrato' }}</dt>
                         <dd class="mt-1 font-bold">{{ Money::mxn($contractTotalWithFee) }}</dd>
                     </div>
                 </dl>

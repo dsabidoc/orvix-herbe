@@ -21,7 +21,10 @@ class OperatorController extends Controller
 
         $operators = Operator::query()
             ->with(['user.roles'])
-            ->withCount(['loans', 'clients'])
+            ->withCount([
+                'clients as clients_count' => fn ($query) => $query->where('status', '!=', 'merged'),
+                'loans as loans_count' => fn ($query) => $query->where('status', 'active'),
+            ])
             ->orderBy('name')
             ->get();
 

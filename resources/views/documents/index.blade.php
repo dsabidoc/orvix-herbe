@@ -19,6 +19,9 @@
             <p class="mt-1 text-sm text-slate-500">Documentos cargados en los prestamos visibles para tu usuario.</p>
         </div>
 
+        <div class="border-b border-slate-200 px-5 py-3">
+            @include('partials.table-pagination', ['paginator' => $documents])
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
                 <thead class="bg-slate-50 text-xs uppercase text-slate-500">

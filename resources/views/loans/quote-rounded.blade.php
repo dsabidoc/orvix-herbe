@@ -6,8 +6,21 @@
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Vista previa de prestamo</p>
-                    <h3 class="mt-1 text-xl font-bold text-slate-950">{{ ($data['calculation_method'] ?? 'regular') === 'rounded' ? 'Comparar opciones con redondeo' : 'Confirmar prestamo regular' }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">{{ ($data['calculation_method'] ?? 'regular') === 'rounded' ? 'Ambas opciones cobran el mismo total. Solo cambia el primer pago y el importe uniforme de los pagos restantes.' : 'Revisa el calendario y asigna inversionistas antes de crear el prestamo.' }}</p>
+                    @php
+                        $previewMethod = $data['calculation_method'] ?? 'regular';
+                        $previewTitle = match ($previewMethod) {
+                            'rounded' => 'Comparar opciones con redondeo',
+                            'interest_only' => 'Confirmar prestamo de solo interes',
+                            default => 'Confirmar prestamo regular',
+                        };
+                        $previewCopy = match ($previewMethod) {
+                            'rounded' => 'Ambas opciones cobran el mismo total. Solo cambia el primer pago y el importe uniforme de los pagos restantes.',
+                            'interest_only' => 'Se proyecta una corrida mensual de intereses sobre el capital vivo; los abonos reducen el capital y recalculan intereses futuros.',
+                            default => 'Revisa el calendario y asigna inversionistas antes de crear el prestamo.',
+                        };
+                    @endphp
+                    <h3 class="mt-1 text-xl font-bold text-slate-950">{{ $previewTitle }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">{{ $previewCopy }}</p>
                 </div>
                 <form method="POST" action="{{ route('loans.create.restore') }}">
                     @csrf

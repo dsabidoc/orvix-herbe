@@ -139,12 +139,15 @@
             <h3 class="font-bold text-slate-950">Detalle de cartera</h3>
             <p class="mt-1 text-sm text-slate-500">Vista por pagare pendiente o vencido; si un prestamo debe varios meses, aparece una fila por cada mensualidad.</p>
         </div>
+        <div class="border-b border-slate-200 px-5 py-3">
+            @include('partials.table-pagination', ['paginator' => $loanRows])
+        </div>
         <div class="divide-y divide-slate-100 md:hidden">
             @forelse ($loanRows as $row)
                 <article class="p-4">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <p class="font-semibold text-slate-950">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</p>
+                            <a class="font-semibold text-slate-950 hover:text-[#0f766e]" href="{{ route('loans.show', $row['loan_public_id']) }}">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</a>
                             <p class="mt-1 text-xs text-slate-500">{{ $row['folio'] }}</p>
                         </div>
                         <p class="shrink-0 text-right font-bold text-red-700">{{ $money($row['visible_sum_cents']) }}</p>
@@ -206,7 +209,7 @@
                     @forelse ($loanRows as $row)
                         <tr class="hover:bg-slate-50">
                             <td class="px-3 py-3">
-                                <p class="font-semibold">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</p>
+                                <a class="font-semibold hover:text-[#0f766e]" href="{{ route('loans.show', $row['loan_public_id']) }}">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</a>
                                 <p class="text-xs text-slate-500">{{ $row['folio'] }}</p>
                             </td>
                             <td class="px-3 py-3 font-semibold">{{ $row['payment_progress'] }}</td>

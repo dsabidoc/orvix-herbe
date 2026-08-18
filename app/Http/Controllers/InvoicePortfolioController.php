@@ -16,8 +16,10 @@ class InvoicePortfolioController extends Controller
         $this->authorizeAccess($request);
 
         $filters = $request->validate([
-            'holder' => ['nullable', 'in:caja,recepcion,operador,sin_ubicacion'],
+            'holder' => ['nullable', 'in:caja,recepcion,operador,en_tramite,sin_ubicacion'],
+            'invoice_status' => ['nullable', 'in:con_factura,sin_factura'],
             'operator_id' => ['nullable'],
+            'q' => ['nullable', 'string', 'max:120'],
         ]);
 
         $query = $this->query($request, $filters)
@@ -30,6 +32,7 @@ class InvoicePortfolioController extends Controller
             'printRows' => $query->get(),
             'filters' => $filters,
             'holderOptions' => $this->holderOptions(),
+            'invoiceStatusOptions' => $this->invoiceStatusOptions(),
             'operators' => $this->operators($request),
         ]);
     }
@@ -55,9 +58,35 @@ class InvoicePortfolioController extends Controller
                     ->orWhere('invoice_holder', 'like', '%Recepción%');
             }),
             'operador' => $query->where('invoice_holder', 'like', '%Operador%'),
+            'en_tramite' => $query->where(function (Builder $query) {
+                $query->where('invoice_holder', 'like', '%En tramite%')
+                    ->orWhere('invoice_holder', 'like', '%En trámite%');
+            }),
             'sin_ubicacion' => $query->where(fn (Builder $query) => $query->whereNull('invoice_holder')->orWhere('invoice_holder', '')),
             default => null,
         };
+
+        match ($filters['invoice_status'] ?? null) {
+            'con_factura' => $query->whereNotNull('invoice_document_id'),
+            'sin_factura' => $query->whereNull('invoice_document_id'),
+            default => null,
+        };
+
+        if (filled($filters['q'] ?? null)) {
+            $search = '%'.str($filters['q'])->trim()->toString().'%';
+            $query->where(function (Builder $query) use ($search): void {
+                $query->where('folio', 'like', $search)
+                    ->orWhereHas('client', fn (Builder $query) => $query
+                        ->where('first_name', 'like', $search)
+                        ->orWhere('last_name', 'like', $search)
+                        ->orWhere('phone', 'like', $search))
+                    ->orWhereHas('vehicle', fn (Builder $query) => $query
+                        ->where('brand', 'like', $search)
+                        ->orWhere('model', 'like', $search)
+                        ->orWhere('plates', 'like', $search)
+                        ->orWhere('vin', 'like', $search));
+            });
+        }
 
         return $query;
     }
@@ -103,7 +132,20 @@ class InvoicePortfolioController extends Controller
             'caja' => 'Caja',
             'recepcion' => 'Recepcion',
             'operador' => 'Operador',
+            'en_tramite' => 'En tramite',
             'sin_ubicacion' => 'Sin ubicacion',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function invoiceStatusOptions(): array
+    {
+        return [
+            '' => 'Todos',
+            'con_factura' => 'Con factura cargada',
+            'sin_factura' => 'Sin factura cargada',
         ];
     }
 }
