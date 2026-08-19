@@ -38,6 +38,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/cartera-y-saldos/exportar', [PortfolioBalanceController::class, 'export'])->name('portfolio-balances.export');
     Route::get('/carteras/facturas', InvoicePortfolioController::class)->name('invoice-portfolio.index');
     Route::get('/prestamos/nuevo/crear', [LoanCreationController::class, 'create'])->name('loans.create');
+    Route::get('/prestamos/nuevo/restaurar', fn () => redirect()->route('loans.create'));
+    Route::get('/prestamos/nuevo/cotizar-redondeo', fn () => redirect()->route('loans.create')->with('status', 'Vuelve a simular el prestamo para generar una vista previa actualizada.'));
+    Route::get('/prestamos/nuevo/confirmar-redondeo', fn () => redirect()->route('loans.create')->with('status', 'Vuelve a simular el prestamo antes de confirmarlo.'));
     Route::post('/prestamos/nuevo/restaurar', [LoanCreationController::class, 'restoreCreate'])->name('loans.create.restore');
     Route::post('/prestamos/nuevo/cotizar-redondeo', [LoanCreationController::class, 'quote'])->name('loans.quote-rounded');
     Route::post('/prestamos/nuevo/confirmar-redondeo', [LoanCreationController::class, 'confirmRounded'])->name('loans.confirm-rounded');
