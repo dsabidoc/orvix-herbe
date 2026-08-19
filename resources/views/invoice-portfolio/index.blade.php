@@ -1,26 +1,14 @@
 @php
     use Carbon\CarbonImmutable;
+    use App\Support\InvoiceHolders;
 
-    $holderLabel = function (?string $holder): string {
-        if (blank($holder)) {
-            return 'Sin ubicacion';
-        }
-
-        $normalized = str($holder)->lower()->ascii()->toString();
-
-        return match (true) {
-            str_contains($normalized, 'caja') => 'Caja',
-            str_contains($normalized, 'recepcion') => 'Recepcion',
-            str_contains($normalized, 'operador') => 'Operador',
-            str_contains($normalized, 'tramite') => 'En tramite',
-            default => $holder,
-        };
-    };
+    $holderLabel = fn (?string $holder): string => InvoiceHolders::label($holder);
 
     $vehicleTitle = fn ($loan) => trim(($loan->vehicle?->model ?: 'Vehiculo').' · Dia '.$loan->payment_day);
     $clientName = fn ($loan) => trim(($loan->client?->first_name ?? '').' '.($loan->client?->last_name ?? '')) ?: 'Sin cliente';
     $vehicleVin = fn ($loan) => filled($loan->vehicle?->vin) ? $loan->vehicle->vin : 'N/A';
     $vehiclePlates = fn ($loan) => filled($loan->vehicle?->plates) ? $loan->vehicle->plates : 'N/A';
+    $investorButtonLabel = fn ($loan) => $loan->investments->isEmpty() ? 'Sin inversionistas' : 'Inversionistas';
     $selectedOperator = (($filters['operator_id'] ?? '') === 'none')
         ? 'Sin operador asignado'
         : $operators->firstWhere('id', (int) ($filters['operator_id'] ?? 0))?->name;
@@ -36,7 +24,7 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET" action="{{ route('invoice-portfolio.index') }}">
-        <div class="grid gap-3 lg:grid-cols-[1.3fr_1fr_1fr_1fr_auto_auto] lg:items-end">
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.3fr_0.9fr_0.8fr_0.8fr_0.8fr_0.8fr_1fr_auto_auto] xl:items-end">
             <div>
                 <label class="text-sm font-semibold text-slate-700" for="q">Buscar</label>
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="q" name="q" type="search" value="{{ $filters['q'] ?? '' }}" placeholder="Cliente, folio, placas o num. de serie">
@@ -59,6 +47,29 @@
                     @foreach ($invoiceStatusOptions as $value => $label)
                         <option value="{{ $value }}" @selected(($filters['invoice_status'] ?? '') === $value)>{{ $label }}</option>
                     @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="plates_status">Placa</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="plates_status" name="plates_status">
+                    @foreach ($binaryStatusOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(($filters['plates_status'] ?? '') === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="vin_status">VIN</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="vin_status" name="vin_status">
+                    @foreach ($binaryStatusOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(($filters['vin_status'] ?? '') === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="investor_status">Inversionista</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="investor_status" name="investor_status">
+                    <option value="">Todos</option>
+                    <option value="sin_inversionista" @selected(($filters['investor_status'] ?? '') === 'sin_inversionista')>Sin inversionista</option>
                 </select>
             </div>
             <div>
@@ -114,7 +125,7 @@
                                 <span class="inline-flex rounded px-2 py-1 text-xs font-bold {{ blank($loan->invoice_holder) ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700' }}">{{ $holderLabel($loan->invoice_holder) }}</span>
                             </td>
                             <td class="px-5 py-4">
-                                <button class="rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" type="button" data-open-modal="invoice-investors-{{ $loan->id }}">Inversionistas</button>
+                                <button class="rounded-md border border-slate-300 px-3 py-2 text-xs font-bold {{ $loan->investments->isEmpty() ? 'text-slate-500' : 'text-slate-700' }}" type="button" data-open-modal="invoice-investors-{{ $loan->id }}">{{ $investorButtonLabel($loan) }}</button>
                             </td>
                         </tr>
                     @empty
@@ -135,7 +146,7 @@
                             <p class="mt-1 text-xs text-slate-500">{{ $loan->folio }}</p>
                             <p class="mt-1 text-xs text-slate-500">VIN {{ $vehicleVin($loan) }} · Placas {{ $vehiclePlates($loan) }}</p>
                             <p class="mt-2 text-sm font-semibold text-[#0f766e]">{{ $clientName($loan) }}</p>
-                            <button class="mt-3 rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" type="button" data-open-modal="invoice-investors-{{ $loan->id }}">Inversionistas</button>
+                            <button class="mt-3 rounded-md border border-slate-300 px-3 py-2 text-xs font-bold {{ $loan->investments->isEmpty() ? 'text-slate-500' : 'text-slate-700' }}" type="button" data-open-modal="invoice-investors-{{ $loan->id }}">{{ $investorButtonLabel($loan) }}</button>
                         </div>
                         <span class="shrink-0 rounded px-2 py-1 text-xs font-bold {{ blank($loan->invoice_holder) ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700' }}">{{ $holderLabel($loan->invoice_holder) }}</span>
                     </div>
@@ -176,7 +187,7 @@
         <div class="mb-3">
             <p class="text-[10px] text-slate-500">Fecha de exportacion: {{ CarbonImmutable::now('America/Merida')->format('d/m/Y H:i') }}</p>
             <h3 class="mt-1 text-base font-bold text-slate-950">Listado de facturas</h3>
-            <p class="text-xs text-slate-600">Operador: {{ $selectedOperator ?: 'Todos' }} · Ubicacion: {{ $holderOptions[$filters['holder'] ?? ''] ?? 'Todas las ubicaciones' }} · Archivo: {{ $invoiceStatusOptions[$filters['invoice_status'] ?? ''] ?? 'Todos' }}</p>
+            <p class="text-xs text-slate-600">Operador: {{ $selectedOperator ?: 'Todos' }} · Ubicacion: {{ $holderOptions[$filters['holder'] ?? ''] ?? 'Todas las ubicaciones' }} · Archivo: {{ $invoiceStatusOptions[$filters['invoice_status'] ?? ''] ?? 'Todos' }} · Placa: {{ $binaryStatusOptions[$filters['plates_status'] ?? ''] ?? 'Todos' }} · VIN: {{ $binaryStatusOptions[$filters['vin_status'] ?? ''] ?? 'Todos' }} · Inversionista: {{ (($filters['investor_status'] ?? '') === 'sin_inversionista') ? 'Sin inversionista' : 'Todos' }}</p>
         </div>
 
         <table class="cut-print-table w-full text-left text-sm">

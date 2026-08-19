@@ -6,6 +6,7 @@ use App\Domain\Loans\LoanDeletionService;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\LoanScheduleCalculator;
 use App\Domain\Loans\LoanSettlementService;
+use App\Models\Client;
 use App\Models\Document;
 use App\Models\Installment;
 use App\Models\Investor;
@@ -14,6 +15,7 @@ use App\Models\LoanInvoiceMovement;
 use App\Models\LoanNote;
 use App\Models\Operator;
 use App\Models\Vehicle;
+use App\Support\InvoiceHolders;
 use App\Support\LoanFolios;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -213,7 +215,7 @@ class LoanController extends Controller
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
-            'to_holder' => ['required', 'in:Caja,Recepcion,Operador,En tramite'],
+            'to_holder' => ['required', 'in:'.implode(',', InvoiceHolders::values())],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -335,13 +337,7 @@ class LoanController extends Controller
                 ? LoanFolios::next((int) $data['operator_id'], $data['start_date'], $loan->id)
                 : $loan->folio;
 
-            $loan->client->update([
-                'operator_id' => $data['operator_id'],
-                'first_name' => $data['first_name'],
-                'last_name' => $data['last_name'] ?? '',
-                'phone' => $data['phone'] ?? '',
-                'email' => $data['email'] ?? null,
-            ]);
+            $this->updateClientForLoan($loan, $data);
 
             $vehicle = $this->updateVehicleForLoan($loan, $data);
 
@@ -557,6 +553,55 @@ class LoanController extends Controller
             ->orderBy('guarantor_name')
             ->limit(500)
             ->get();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function updateClientForLoan(Loan $loan, array $data): void
+    {
+        $payload = [
+            'operator_id' => $data['operator_id'],
+            'first_name' => $data['first_name'],
+            'last_name' => $data['last_name'] ?? '',
+            'phone' => $data['phone'] ?? '',
+            'email' => $data['email'] ?? null,
+        ];
+
+        $client = $loan->client()->lockForUpdate()->firstOrFail();
+        $hasSharedLoans = $client->loans()
+            ->whereKeyNot($loan->id)
+            ->where('status', 'active')
+            ->exists();
+
+        if (! $hasSharedLoans || ! $this->clientIdentityChanged($client, $payload)) {
+            $client->update($payload);
+            $loan->setRelation('client', $client);
+
+            return;
+        }
+
+        $newClient = Client::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'status' => 'active',
+        ] + $payload);
+
+        $loan->forceFill(['client_id' => $newClient->id])->save();
+        $loan->setRelation('client', $newClient);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function clientIdentityChanged(Client $client, array $payload): bool
+    {
+        foreach (['first_name', 'last_name', 'phone', 'email'] as $field) {
+            if ((string) ($client->{$field} ?? '') !== (string) ($payload[$field] ?? '')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

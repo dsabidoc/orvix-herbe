@@ -42,6 +42,8 @@ class UppercaseFormInput
         'invoice_original_name',
         'invoice_size',
         'invoice_temp_path',
+        'invoice_status',
+        'investor_status',
         'new_password',
         'opening_fee_type',
         'opening_fee_value',
@@ -53,6 +55,7 @@ class UppercaseFormInput
         'payment_method',
         'permission',
         'permissions',
+        'plates_status',
         'phone',
         'rate_type',
         'rate_value',
@@ -68,6 +71,7 @@ class UppercaseFormInput
         'token',
         'user_id',
         'vat_enabled',
+        'vin_status',
         'year',
     ];
 

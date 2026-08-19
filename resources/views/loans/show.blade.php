@@ -1,6 +1,7 @@
 @php
     use App\Support\Money;
     use App\Support\StatusLabels;
+    use App\Support\InvoiceHolders;
 
     $operationalTotal = $loan->installments->sum(fn ($installment) => Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount));
     $operationalBalance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
@@ -182,7 +183,7 @@
             <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 class="font-bold text-slate-950">Factura fisica</h3>
                 <dl class="mt-3 space-y-2 text-sm">
-                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Ubicacion</dt><dd class="font-bold">{{ $loan->invoice_holder ?: 'Sin registrar' }}</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Ubicacion</dt><dd class="font-bold">{{ InvoiceHolders::label($loan->invoice_holder) }}</dd></div>
                     <div><dt class="text-slate-500">Archivo</dt><dd class="font-semibold">{{ $loan->invoiceDocument?->original_name ?: 'Sin factura PDF' }}</dd></div>
                 </dl>
                 <button class="mt-4 w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700" type="button" data-open-modal="loan-invoice-modal">{{ $canManageInvoice ? 'Gestionar factura' : 'Ver factura' }}</button>
@@ -551,7 +552,7 @@
                 <div class="space-y-3 text-sm">
                     <div class="rounded-md bg-slate-50 p-4">
                         <p class="text-slate-500">Ubicacion fisica actual</p>
-                        <p class="mt-1 text-lg font-bold text-slate-950">{{ $loan->invoice_holder ?: 'Sin registrar' }}</p>
+                        <p class="mt-1 text-lg font-bold text-slate-950">{{ InvoiceHolders::label($loan->invoice_holder) }}</p>
                         @if ($loan->invoiceDocument)
                             <div class="mt-2 flex flex-wrap gap-2">
                                 <a class="inline-flex rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" href="{{ route('documents.download', $loan->invoiceDocument) }}">Descargar factura PDF</a>
@@ -591,10 +592,9 @@
                         @csrf
                         <h4 class="font-bold text-slate-950">Mover factura fisica</h4>
                         <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="to_holder" required>
-                            <option value="Caja">Caja</option>
-                            <option value="Recepcion">Recepcion</option>
-                            <option value="Operador">Operador</option>
-                            <option value="En tramite">En tramite</option>
+                            @foreach (InvoiceHolders::options() as $value => $label)
+                                <option value="{{ $value }}" @selected($loan->invoice_holder === $value)>{{ $label }}</option>
+                            @endforeach
                         </select>
                         <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="notes" rows="2" placeholder="Motivo o tramite"></textarea>
                         <button class="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">Actualizar ubicacion</button>

@@ -17,6 +17,7 @@ use App\Models\LoanInvoiceMovement;
 use App\Models\Operator;
 use App\Models\OperatorLedgerEntry;
 use App\Models\WeeklyCut;
+use App\Support\InvoiceHolders;
 use App\Support\LoanFolios;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -92,7 +93,7 @@ class LoanCreationController extends Controller
                 'vin' => ['nullable', 'string', 'size:17'],
                 'calculation_method' => ['nullable', 'in:regular,rounded,interest_only'],
                 'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
-                'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador,En tramite'],
+                'invoice_holder' => ['nullable', 'in:'.implode(',', InvoiceHolders::values())],
                 'documents.*' => ['nullable', 'file', 'max:10240'],
                 'investors' => ['nullable', 'array', 'max:8'],
                 'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
@@ -528,7 +529,7 @@ class LoanCreationController extends Controller
             'vat_enabled' => ['nullable', 'boolean'],
             'interest_calculation_method' => ['required', 'in:fixed_principal,outstanding_balance'],
             'invoice_file' => ['nullable', 'file', 'mimes:pdf', 'max:102400'],
-            'invoice_holder' => ['nullable', 'in:Caja,Recepcion,Operador,En tramite'],
+            'invoice_holder' => ['nullable', 'in:'.implode(',', InvoiceHolders::values())],
             'invoice_temp_path' => ['nullable', 'string', 'max:500'],
             'invoice_original_name' => ['nullable', 'string', 'max:255'],
             'invoice_mime_type' => ['nullable', 'string', 'max:120'],

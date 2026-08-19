@@ -1,4 +1,6 @@
 @php
+    use App\Support\InvoiceHolders;
+
     $defaultStartDate = old('start_date', now('America/Merida')->toDateString());
     $defaultFirstPaymentDate = old('first_payment_date', \Carbon\CarbonImmutable::parse($defaultStartDate)->addMonthNoOverflow()->toDateString());
     $defaultDisbursementDate = old('disbursement_delivered_on', $defaultStartDate);
@@ -98,10 +100,9 @@
                     <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#e6f7f4] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-[#0f766e]" name="invoice_file" type="file" accept="application/pdf">
                     <label class="block text-sm font-semibold text-slate-700">Ubicacion fisica inicial
                         <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="invoice_holder">
-                            <option value="Recepcion" @selected(old('invoice_holder', 'Recepcion') === 'Recepcion')>Recepcion</option>
-                            <option value="Caja" @selected(old('invoice_holder') === 'Caja')>Caja</option>
-                            <option value="Operador" @selected(old('invoice_holder') === 'Operador')>Operador</option>
-                            <option value="En tramite" @selected(old('invoice_holder') === 'En tramite')>En tramite</option>
+                            @foreach (InvoiceHolders::options() as $value => $label)
+                                <option value="{{ $value }}" @selected(old('invoice_holder', 'Recepcion') === $value)>{{ $label }}</option>
+                            @endforeach
                         </select>
                     </label>
                     <p class="-mt-2 text-xs text-slate-500">Opcional, PDF menor a 100 MB.</p>
