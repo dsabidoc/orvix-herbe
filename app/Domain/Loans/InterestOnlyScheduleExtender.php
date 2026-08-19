@@ -30,7 +30,7 @@ class InterestOnlyScheduleExtender
             return;
         }
 
-        $through ??= CarbonImmutable::now('America/Merida')->addMonths(12)->endOfMonth();
+        $through ??= $this->currentMonthDueDate($loan);
         $loan->loadMissing('installments');
 
         $lastInstallment = $loan->installments->sortByDesc('number')->first();
@@ -82,5 +82,16 @@ class InterestOnlyScheduleExtender
         $lastDay = $date->endOfMonth()->day;
 
         return $date->day(min($paymentDay, $lastDay))->startOfDay();
+    }
+
+    private function currentMonthDueDate(Loan $loan): CarbonImmutable
+    {
+        $today = CarbonImmutable::now('America/Merida')->startOfDay();
+        $firstDueDate = CarbonImmutable::parse($loan->first_payment_date ?? $loan->start_date, 'America/Merida')->startOfDay();
+        $lastDay = $today->endOfMonth()->day;
+        $paymentDay = (int) ($loan->payment_day ?: $firstDueDate->day);
+        $currentMonthDueDate = $today->day(min($paymentDay, $lastDay))->startOfDay();
+
+        return $currentMonthDueDate->lessThan($firstDueDate) ? $firstDueDate : $currentMonthDueDate;
     }
 }

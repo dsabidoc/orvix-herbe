@@ -121,6 +121,7 @@ class LoanCreationController extends Controller
         }
         $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
         $this->ensureVinHasNoActiveLoan($data['vin']);
+        $data = $this->normalizeInterestOnlyTerms($data);
 
         $client = ($data['client_id'] ?? null)
             ? Client::query()->findOrFail($data['client_id'])
@@ -541,7 +542,7 @@ class LoanCreationController extends Controller
         $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
         $this->ensureVinHasNoActiveLoan($data['vin']);
 
-        return $data;
+        return $this->normalizeInterestOnlyTerms($data);
     }
 
     /**
@@ -725,7 +726,43 @@ class LoanCreationController extends Controller
      */
     private function allowedTerms(): array
     {
-        return array_values(array_unique([...$this->roundedTerms(), 120]));
+        return array_values(array_unique([...$this->roundedTerms(), 1, 120]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeInterestOnlyTerms(array $data): array
+    {
+        if (($data['calculation_method'] ?? 'regular') !== 'interest_only') {
+            return $data;
+        }
+
+        $data['term_months'] = $this->interestOnlyTermMonths(
+            (string) ($data['first_payment_date'] ?? $data['start_date']),
+            (int) ($data['payment_day'] ?? CarbonImmutable::parse($data['first_payment_date'] ?? $data['start_date'], 'America/Merida')->day),
+        );
+        $data['interest_calculation_method'] = 'fixed_principal';
+
+        return $data;
+    }
+
+    private function interestOnlyTermMonths(string $firstPaymentDate, int $paymentDay): int
+    {
+        $firstDueDate = CarbonImmutable::parse($firstPaymentDate, 'America/Merida')->startOfDay();
+        $today = CarbonImmutable::now('America/Merida')->startOfDay();
+        $lastDay = $today->endOfMonth()->day;
+        $currentMonthDueDate = $today->day(min(max(1, $paymentDay), $lastDay))->startOfDay();
+
+        if ($currentMonthDueDate->lessThan($firstDueDate)) {
+            return 1;
+        }
+
+        $firstMonthIndex = ($firstDueDate->year * 12) + $firstDueDate->month;
+        $currentMonthIndex = ($currentMonthDueDate->year * 12) + $currentMonthDueDate->month;
+
+        return max(1, ($currentMonthIndex - $firstMonthIndex) + 1);
     }
 
     private function guarantorOptions()
