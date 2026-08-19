@@ -121,6 +121,7 @@
                                 <option value="{{ $term }}" @selected((string) old('term_months') === (string) $term)>{{ $term }}</option>
                             @endforeach
                         </select>
+                        <input name="term_months" type="hidden" value="120" data-interest-only-term-hidden disabled>
                     </label>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
@@ -166,7 +167,7 @@
                     </select>
                 </label>
                 <p class="-mt-2 hidden rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800" data-interest-only-help>
-                    Sin plazo determinado: se proyectan pagos mensuales de interes sobre el capital vivo. Puedes abonar capital durante la vida del prestamo.
+                    Sin plazo determinado: el sistema genera intereses mensuales hasta que se liquide todo el capital. Los abonos no reducen el interes mensual; solo cierran el prestamo cuando cubren el capital total.
                 </p>
                 <label class="block text-sm font-semibold text-slate-700">IVA
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="vat_enabled" required>

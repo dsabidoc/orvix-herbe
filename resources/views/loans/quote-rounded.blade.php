@@ -15,7 +15,7 @@
                         };
                         $previewCopy = match ($previewMethod) {
                             'rounded' => 'Ambas opciones cobran el mismo total. Solo cambia el primer pago y el importe uniforme de los pagos restantes.',
-                            'interest_only' => 'Se proyecta una corrida mensual de intereses sobre el capital vivo; los abonos reducen el capital y recalculan intereses futuros.',
+                            'interest_only' => 'Sin plazo determinado: se generan intereses mensuales fijos hasta liquidar todo el capital; los abonos no reducen el interes mensual.',
                             default => 'Revisa el calendario y asigna inversionistas antes de crear el prestamo.',
                         };
                     @endphp

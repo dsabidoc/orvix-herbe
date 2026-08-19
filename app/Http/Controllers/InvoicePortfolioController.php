@@ -40,7 +40,7 @@ class InvoicePortfolioController extends Controller
     private function query(Request $request, array $filters): Builder
     {
         $query = Loan::query()
-            ->with(['client', 'operator', 'vehicle', 'invoiceDocument'])
+            ->with(['client', 'operator', 'vehicle', 'invoiceDocument', 'investments.investor'])
             ->where('status', 'active');
 
         if ($request->user()->hasRole('operador-cartera')) {

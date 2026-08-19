@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
@@ -22,6 +23,8 @@ class CollectionController extends Controller
 {
     public function index(Request $request): View
     {
+        app(InterestOnlyScheduleExtender::class)->ensureCoverageForScope($request);
+
         $selectedMonth = CarbonImmutable::parse($request->input('month', now('America/Merida')->format('Y-m').'-01'));
         $monthStart = $selectedMonth->startOfMonth();
         $monthEnd = $selectedMonth->endOfMonth();

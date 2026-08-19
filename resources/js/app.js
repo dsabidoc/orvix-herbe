@@ -255,7 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = select.closest('form');
         const rateType = form?.querySelector('select[name="rate_type"]');
         const rateValue = form?.querySelector('input[name="rate_value"]');
-        const termMonths = form?.querySelector('select[name="term_months"], input[name="term_months"]');
+        const termMonths = form?.querySelector('select[name="term_months"]');
+        const interestOnlyTerm = form?.querySelector('[data-interest-only-term-hidden]');
         const interestMethod = form?.querySelector('select[name="interest_calculation_method"]');
         const help = form?.querySelector('[data-interest-only-help]');
         const termWrapper = form?.querySelector('[data-term-months-wrapper]');
@@ -268,7 +269,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (termWrapper instanceof HTMLElement) {
-                termWrapper.classList.toggle('opacity-70', isInterestOnly);
+                termWrapper.classList.toggle('hidden', isInterestOnly);
+            }
+
+            if (termMonths instanceof HTMLSelectElement) {
+                termMonths.disabled = isInterestOnly;
+                termMonths.required = !isInterestOnly;
+            }
+
+            if (interestOnlyTerm instanceof HTMLInputElement) {
+                interestOnlyTerm.disabled = !isInterestOnly;
             }
 
             if (!isInterestOnly) {
@@ -283,12 +293,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 rateValue.value = '3';
             }
 
-            if (termMonths instanceof HTMLSelectElement || termMonths instanceof HTMLInputElement) {
-                termMonths.value = '48';
-            }
-
             if (interestMethod instanceof HTMLSelectElement) {
-                interestMethod.value = 'outstanding_balance';
+                interestMethod.value = 'fixed_principal';
             }
         };
 

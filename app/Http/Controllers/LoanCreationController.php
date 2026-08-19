@@ -506,7 +506,7 @@ class LoanCreationController extends Controller
             'rate_type' => ['required', 'in:monthly,annual'],
             'rate_value' => ['required', 'numeric', 'min:0'],
             'administration_fee' => ['nullable', 'numeric', 'min:0'],
-            'term_months' => ['required', 'integer', 'in:'.implode(',', $this->roundedTerms())],
+            'term_months' => ['required', 'integer', 'in:'.implode(',', $this->allowedTerms())],
             'start_date' => ['required', 'date'],
             'first_payment_date' => ['required', 'date'],
             'weekly_cut_id' => ['nullable', 'exists:weekly_cuts,id'],
@@ -717,7 +717,15 @@ class LoanCreationController extends Controller
      */
     private function roundedTerms(): array
     {
-        return [6, 12, 18, 24, 30, 36, 48];
+        return [6, 12, 18, 24, 30, 36, 40, 48];
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function allowedTerms(): array
+    {
+        return array_values(array_unique([...$this->roundedTerms(), 120]));
     }
 
     private function guarantorOptions()

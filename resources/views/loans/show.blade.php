@@ -10,12 +10,6 @@
     $overdueInstallments = $loan->installments->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0 && $installment->due_date->toDateString() < $today);
     $overdueCount = $overdueInstallments->count();
     $overdueBalanceCents = $overdueInstallments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
-    $interestMethodLabel = $loan->interest_calculation_method === 'outstanding_balance' ? 'saldo insoluto' : 'capital fijo';
-    $calculationMethodLabel = match ($loan->calculation_method ?? 'regular') {
-        'interest_only' => 'Solo interes sobre capital vigente',
-        'rounded' => 'Redondeo',
-        default => null,
-    };
     $loanUser = auth()->user();
     $isInvestorReadOnly = $loanUser->can('investments.view-own') && ! $loanUser->can('investors.manage');
     $isProviderUser = $loanUser->hasRole('operador-cartera') || $loanUser->hasRole('proveedor');
@@ -31,6 +25,8 @@
     $vehicleModelTitle = $vehicleModelTitle !== '' ? $vehicleModelTitle : 'Vehiculo sin modelo';
     $vehicleMetaTitle = trim(implode(' ', array_filter([$loan->vehicle?->brand, $loan->vehicle?->year])));
     $vehicleMetaTitle = $vehicleMetaTitle !== '' ? $vehicleMetaTitle : 'Marca y año sin datos';
+    $vehicleVinLabel = filled($loan->vehicle?->vin) ? $loan->vehicle->vin : 'N/A';
+    $vehiclePlatesLabel = filled($loan->vehicle?->plates) ? $loan->vehicle->plates : 'N/A';
     $nextDelinquencyCents = 0;
     if ($next && (float) ($loan->delinquency_rate ?? 0) > 0) {
         $graceLimit = $next->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
@@ -55,13 +51,7 @@
                     <h3 class="mt-1 text-2xl font-bold text-slate-950">{{ $vehicleModelTitle }} · Dia {{ $loan->payment_day }}</h3>
                     <p class="mt-1 text-sm font-semibold text-slate-500">{{ $vehicleMetaTitle }}</p>
                     <p class="mt-1 text-sm text-slate-500">
-                        {{ $loan->client->first_name }} {{ $loan->client->last_name }} · {{ ($loan->calculation_method ?? 'regular') === 'interest_only' ? 'sin plazo fijo proyectado a '.$loan->term_months.' meses' : $loan->term_months.' meses' }} · tasa {{ number_format(((float) $loan->monthly_rate) * 100, 2) }}% mensual · {{ $calculationMethodLabel ?: $interestMethodLabel }} · {{ $loan->vat_enabled ? 'Con IVA' : 'Sin IVA' }}
-                        @if (Money::cents($loan->administration_fee ?? 0) > 0)
-                            · Gtos Admon {{ Money::mxn($loan->administration_fee) }} fijo mensual
-                        @endif
-                        @if (($loan->calculation_method ?? 'regular') === 'rounded')
-                            · Redondeo a {{ $loan->rounding_multiple === 100 ? 'centenas' : 'decenas' }}
-                        @endif
+                        VIN {{ $vehicleVinLabel }} · Placas {{ $vehiclePlatesLabel }}
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -589,12 +579,6 @@
                         @csrf
                         <h4 class="font-bold text-slate-950">Subir factura PDF</h4>
                         <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#e6f7f4] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-[#0f766e]" name="file" type="file" accept="application/pdf" required>
-                        <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="holder" required>
-                            <option value="Recepcion">Recepcion</option>
-                            <option value="Caja">Caja</option>
-                            <option value="Operador">Operador</option>
-                            <option value="En tramite">En tramite</option>
-                        </select>
                         <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="notes" rows="2" placeholder="Nota opcional"></textarea>
                         <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Guardar factura</button>
                     </form>

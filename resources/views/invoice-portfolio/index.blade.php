@@ -19,6 +19,8 @@
 
     $vehicleTitle = fn ($loan) => trim(($loan->vehicle?->model ?: 'Vehiculo').' · Dia '.$loan->payment_day);
     $clientName = fn ($loan) => trim(($loan->client?->first_name ?? '').' '.($loan->client?->last_name ?? '')) ?: 'Sin cliente';
+    $vehicleVin = fn ($loan) => filled($loan->vehicle?->vin) ? $loan->vehicle->vin : 'N/A';
+    $vehiclePlates = fn ($loan) => filled($loan->vehicle?->plates) ? $loan->vehicle->plates : 'N/A';
     $selectedOperator = (($filters['operator_id'] ?? '') === 'none')
         ? 'Sin operador asignado'
         : $operators->firstWhere('id', (int) ($filters['operator_id'] ?? 0))?->name;
@@ -87,8 +89,11 @@
                     <tr>
                         <th class="px-5 py-3">Modelo / dia de pago</th>
                         <th class="px-5 py-3">Folio</th>
+                        <th class="px-5 py-3">VIN</th>
+                        <th class="px-5 py-3">Placas</th>
                         <th class="px-5 py-3">Cliente</th>
                         <th class="px-5 py-3">Donde esta la factura</th>
+                        <th class="px-5 py-3">Inversionistas</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -99,6 +104,8 @@
                                 <p class="mt-1 text-xs text-slate-500">{{ $loan->vehicle?->brand ?: 'Sin marca' }} {{ $loan->vehicle?->year ?: '' }}</p>
                             </td>
                             <td class="px-5 py-4 font-semibold text-[#0f766e]">{{ $loan->folio }}</td>
+                            <td class="px-5 py-4 font-semibold text-slate-700">{{ $vehicleVin($loan) }}</td>
+                            <td class="px-5 py-4 font-semibold text-slate-700">{{ $vehiclePlates($loan) }}</td>
                             <td class="px-5 py-4">
                                 <p class="font-semibold text-slate-950">{{ $clientName($loan) }}</p>
                                 <p class="mt-1 text-xs text-slate-500">{{ $loan->operator?->name ?? 'Sin operador' }}</p>
@@ -106,10 +113,13 @@
                             <td class="px-5 py-4">
                                 <span class="inline-flex rounded px-2 py-1 text-xs font-bold {{ blank($loan->invoice_holder) ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700' }}">{{ $holderLabel($loan->invoice_holder) }}</span>
                             </td>
+                            <td class="px-5 py-4">
+                                <button class="rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" type="button" data-open-modal="invoice-investors-{{ $loan->id }}">Inversionistas</button>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td class="px-5 py-8 text-center text-slate-500" colspan="4">No hay facturas para mostrar con ese filtro.</td>
+                            <td class="px-5 py-8 text-center text-slate-500" colspan="7">No hay facturas para mostrar con ese filtro.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -118,16 +128,18 @@
 
         <div class="divide-y divide-slate-100 lg:hidden">
             @forelse ($rows as $loan)
-                <a class="block p-4" href="{{ route('loans.show', $loan) }}">
+                <div class="p-4">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <p class="font-semibold text-slate-950">{{ $vehicleTitle($loan) }}</p>
+                            <a class="font-semibold text-slate-950" href="{{ route('loans.show', $loan) }}">{{ $vehicleTitle($loan) }}</a>
                             <p class="mt-1 text-xs text-slate-500">{{ $loan->folio }}</p>
+                            <p class="mt-1 text-xs text-slate-500">VIN {{ $vehicleVin($loan) }} · Placas {{ $vehiclePlates($loan) }}</p>
                             <p class="mt-2 text-sm font-semibold text-[#0f766e]">{{ $clientName($loan) }}</p>
+                            <button class="mt-3 rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" type="button" data-open-modal="invoice-investors-{{ $loan->id }}">Inversionistas</button>
                         </div>
                         <span class="shrink-0 rounded px-2 py-1 text-xs font-bold {{ blank($loan->invoice_holder) ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700' }}">{{ $holderLabel($loan->invoice_holder) }}</span>
                     </div>
-                </a>
+                </div>
             @empty
                 <p class="p-5 text-center text-sm text-slate-500">No hay facturas para mostrar con ese filtro.</p>
             @endforelse
@@ -137,6 +149,29 @@
             {{ $rows->links() }}
         </div>
     </section>
+
+    @foreach ($rows as $loan)
+        <dialog id="invoice-investors-{{ $loan->id }}" class="w-[min(94vw,520px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <div class="border-b border-slate-200 px-5 py-4">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-[#0f766e]">Inversionistas</p>
+                <h3 class="mt-2 text-xl font-bold text-slate-950">{{ $loan->folio }}</h3>
+            </div>
+            <div class="space-y-3 px-5 py-4">
+                <p class="font-bold text-slate-950">{{ $vehicleTitle($loan) }}</p>
+                @forelse ($loan->investments as $investment)
+                    <div class="rounded-md border border-slate-200 p-3 text-sm">
+                        <p class="font-bold text-slate-950">{{ $investment->investor?->name ?? 'Inversionista sin nombre' }}</p>
+                        <p class="mt-1 text-slate-500">Capital {{ \App\Support\Money::mxn($investment->capital_amount) }} · Interes {{ number_format((float) $investment->interest_share_percent, 2) }}%</p>
+                    </div>
+                @empty
+                    <p class="rounded-md bg-slate-50 p-4 text-sm text-slate-500">Sin inversionistas</p>
+                @endforelse
+            </div>
+            <form class="border-t border-slate-200 px-5 py-4 text-right" method="dialog">
+                <button class="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Cerrar</button>
+            </form>
+        </dialog>
+    @endforeach
 
     <section class="print-sheet hidden">
         <div class="mb-3">
@@ -150,6 +185,8 @@
                 <tr>
                     <th>Modelo / dia de pago</th>
                     <th>Folio</th>
+                    <th>VIN</th>
+                    <th>Placas</th>
                     <th>Cliente</th>
                     <th>Donde esta la factura</th>
                 </tr>
@@ -159,12 +196,14 @@
                     <tr>
                         <td>{{ $vehicleTitle($loan) }}</td>
                         <td>{{ $loan->folio }}</td>
+                        <td>{{ $vehicleVin($loan) }}</td>
+                        <td>{{ $vehiclePlates($loan) }}</td>
                         <td>{{ $clientName($loan) }}</td>
                         <td>{{ $holderLabel($loan->invoice_holder) }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4">No hay facturas para mostrar con ese filtro.</td>
+                        <td colspan="6">No hay facturas para mostrar con ese filtro.</td>
                     </tr>
                 @endforelse
             </tbody>

@@ -341,7 +341,9 @@ class PaymentApplicationService
     private function refreshInterestOnlyFutureInstallments($loan, int $capitalCents, $effectiveOn): void
     {
         $effectiveDate = CarbonImmutable::parse($effectiveOn, 'America/Merida')->toDateString();
-        $interestCents = (int) round($capitalCents * (float) $loan->monthly_rate);
+        $interestCents = $capitalCents > 0
+            ? (int) round(Money::cents($loan->capital) * (float) $loan->monthly_rate)
+            : 0;
         $administrationFeeCents = Money::cents($loan->administration_fee ?? 0);
         $vatRate = $loan->vat_enabled ? 0.16 : 0.0;
         $interestVatCents = (int) round(($interestCents + $administrationFeeCents) * $vatRate);

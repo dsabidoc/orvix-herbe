@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Loans\LoanDeletionService;
+use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\LoanScheduleCalculator;
 use App\Domain\Loans\LoanSettlementService;
 use App\Models\Document;
@@ -60,9 +61,11 @@ class LoanController extends Controller
         ]);
     }
 
-    public function show(Request $request, Loan $loan, LoanSettlementService $settlementService): View
+    public function show(Request $request, Loan $loan, LoanSettlementService $settlementService, InterestOnlyScheduleExtender $interestOnlyScheduleExtender): View
     {
         $this->authorizeLoanAccess($request, $loan);
+
+        $interestOnlyScheduleExtender->ensureCoverage($loan);
 
         $loan = $loan->load([
             'client',
@@ -178,7 +181,6 @@ class LoanController extends Controller
         $this->authorizeLoanAccess($request, $loan);
 
         $data = $request->validate([
-            'holder' => ['required', 'in:Caja,Recepcion,Operador,En tramite'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'file' => ['required', 'file', 'mimes:pdf', 'max:102400'],
         ]);
@@ -198,24 +200,11 @@ class LoanController extends Controller
             'status' => 'delivered',
             'notes' => filled($data['notes'] ?? null) ? '[Factura] '.$data['notes'] : '[Factura]',
         ]);
-        $previousHolder = $loan->invoice_holder;
-
         $loan->update([
             'invoice_document_id' => $document->id,
-            'invoice_holder' => $data['holder'],
         ]);
 
-        LoanInvoiceMovement::query()->create([
-            'loan_id' => $loan->id,
-            'document_id' => $document->id,
-            'from_holder' => $previousHolder,
-            'to_holder' => $data['holder'],
-            'moved_by' => $request->user()->id,
-            'moved_at' => now('America/Merida'),
-            'notes' => $data['notes'] ?? 'Factura cargada al expediente',
-        ]);
-
-        return back()->with('status', 'Factura cargada y ubicacion fisica actualizada.');
+        return back()->with('status', 'Factura cargada. La ubicacion fisica no cambio.');
     }
 
     public function moveInvoice(Request $request, Loan $loan): RedirectResponse
