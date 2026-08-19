@@ -161,7 +161,6 @@
                 @forelse ($loan->investments as $investment)
                     <div class="rounded-md border border-slate-200 p-3 text-sm">
                         <p class="font-bold text-slate-950">{{ $investment->investor?->name ?? 'Inversionista sin nombre' }}</p>
-                        <p class="mt-1 text-slate-500">Capital {{ \App\Support\Money::mxn($investment->capital_amount) }} · Interes {{ number_format((float) $investment->interest_share_percent, 2) }}%</p>
                     </div>
                 @empty
                     <p class="rounded-md bg-slate-50 p-4 text-sm text-slate-500">Sin inversionistas</p>

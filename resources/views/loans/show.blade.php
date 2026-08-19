@@ -54,7 +54,7 @@
                         VIN {{ $vehicleVinLabel }} · Placas {{ $vehiclePlatesLabel }}
                     </p>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap items-start gap-2">
                     @if ($canOperateLoan)
                         @can('loans.formalize')
                             @if ($canManageLoanDetails)
@@ -67,31 +67,36 @@
                                 Registrar cobro
                             </button>
                         @endif
-                        @if ($canManageLoanDetails)
-                            <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-documents-modal">Expediente</button>
-                        @endif
-                        @if ($canViewInvoice)
-                            <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-invoice-modal">Factura</button>
-                        @endif
-                        @if ($canManageLoanDetails)
-                            <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-notes-modal">Notas</button>
-                        @endif
-                        @if ($loan->status === 'active' && $canSettleLoan)
-                            <button class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700" type="button" data-open-modal="settle-loan-modal">Liquidar</button>
-                        @endif
-                        @if ($canManageLoanDetails)
-                            <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-open-modal="loan-investors-modal">Inversionistas</button>
-                            <a class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700" href="https://wa.me/52{{ preg_replace('/\D+/', '', $loan->client->phone) }}" target="_blank" rel="noreferrer">WhatsApp</a>
-                        @endif
-                        @can('loans.formalize')
-                            @if ($canManageLoanDetails)
-                                <form method="POST" action="{{ route('loans.destroy', $loan) }}" data-confirm-delete data-confirm-title="¿Eliminar este prestamo?" data-confirm-message="Se eliminara el prestamo como si no hubiera existido y se regresara el capital tomado a los inversionistas. Si algun retorno ya fue usado o reinvertido, el sistema lo bloqueara.">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="rounded-md border border-red-300 bg-red-100 px-3 py-2 text-sm font-bold text-red-800" type="submit">Eliminar prestamo</button>
-                                </form>
-                            @endif
-                        @endcan
+                        <details class="relative">
+                            <summary class="list-none cursor-pointer rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 marker:hidden [&::-webkit-details-marker]:hidden">Mas opciones</summary>
+                            <div class="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white p-2 shadow-xl">
+                                @if ($canManageLoanDetails)
+                                    <button class="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" data-open-modal="loan-documents-modal">Expediente</button>
+                                @endif
+                                @if ($canViewInvoice)
+                                    <button class="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" data-open-modal="loan-invoice-modal">Factura</button>
+                                @endif
+                                @if ($canManageLoanDetails)
+                                    <button class="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" data-open-modal="loan-notes-modal">Notas</button>
+                                @endif
+                                @if ($loan->status === 'active' && $canSettleLoan)
+                                    <button class="block w-full rounded-md px-3 py-2 text-left text-sm font-bold text-red-700 hover:bg-red-50" type="button" data-open-modal="settle-loan-modal">Liquidar</button>
+                                @endif
+                                @if ($canManageLoanDetails)
+                                    <button class="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50" type="button" data-open-modal="loan-investors-modal">Inversionistas</button>
+                                    <a class="block rounded-md px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://wa.me/52{{ preg_replace('/\D+/', '', $loan->client->phone) }}" target="_blank" rel="noreferrer">WhatsApp</a>
+                                @endif
+                                @can('loans.formalize')
+                                    @if ($canManageLoanDetails)
+                                        <form method="POST" action="{{ route('loans.destroy', $loan) }}" data-confirm-delete data-confirm-title="¿Eliminar este prestamo?" data-confirm-message="Se eliminara el prestamo como si no hubiera existido y se regresara el capital tomado a los inversionistas. Si algun retorno ya fue usado o reinvertido, el sistema lo bloqueara.">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="block w-full rounded-md px-3 py-2 text-left text-sm font-bold text-red-700 hover:bg-red-50" type="submit">Eliminar prestamo</button>
+                                        </form>
+                                    @endif
+                                @endcan
+                            </div>
+                        </details>
                     @endif
                 </div>
             </div>
