@@ -216,9 +216,12 @@ class InvestorController extends Controller
         return view('investors.show', [
             'investor' => $investor->load([
                 'user',
-                'investments.loan.client',
-                'investments.loan.installments',
-                'investments.loan.vehicle',
+                'investments' => fn ($query) => $query
+                    ->with(['loan.client', 'loan.installments', 'loan.vehicle'])
+                    ->leftJoin('loans', 'investments.loan_id', '=', 'loans.id')
+                    ->select('investments.*')
+                    ->orderByRaw('COALESCE(loans.payment_day, 99)')
+                    ->orderBy('loans.folio'),
                 'capitalMovements' => fn ($query) => $query->latest()->limit(30),
                 'withdrawalRequests' => fn ($query) => $query->latest()->limit(20),
             ]),

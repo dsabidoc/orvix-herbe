@@ -57,6 +57,10 @@ class LoanController extends Controller
             $query->whereHas('installments', fn ($query) => $query->whereDate('due_date', now('America/Merida')->toDateString())->where('remaining_amount', '>', 0));
         }
 
+        if (in_array($request->input('collection_status'), ['active', 'frozen'], true)) {
+            $query->where('is_frozen', $request->input('collection_status') === 'frozen');
+        }
+
         return view('loans.index', [
             'loans' => $query->latest()->paginate(15)->withQueryString(),
             'today' => CarbonImmutable::now('America/Merida')->toDateString(),
