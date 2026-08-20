@@ -497,6 +497,11 @@ class LoanCreationController extends Controller
      */
     private function validatedRoundedData(Request $request): array
     {
+        $calculationMethod = (string) $request->input('calculation_method', 'regular');
+        $termMonthsRule = $calculationMethod === 'interest_only'
+            ? ['required', 'integer', 'min:1', 'max:1200']
+            : ['required', 'integer', 'in:'.implode(',', $this->allowedTerms())];
+
         $data = $request->validate([
             'client_id' => ['nullable', 'exists:clients,id'],
             'first_name' => ['required_without:client_id', 'nullable', 'string', 'max:120'],
@@ -508,7 +513,7 @@ class LoanCreationController extends Controller
             'rate_type' => ['required', 'in:monthly,annual'],
             'rate_value' => ['required', 'numeric', 'min:0'],
             'administration_fee' => ['nullable', 'numeric', 'min:0'],
-            'term_months' => ['required', 'integer', 'in:'.implode(',', $this->allowedTerms())],
+            'term_months' => $termMonthsRule,
             'start_date' => ['required', 'date'],
             'first_payment_date' => ['required', 'date'],
             'weekly_cut_id' => ['nullable', 'exists:weekly_cuts,id'],
