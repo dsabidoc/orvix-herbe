@@ -19,6 +19,7 @@ use App\Models\OperatorLedgerEntry;
 use App\Models\WeeklyCut;
 use App\Support\InvoiceHolders;
 use App\Support\LoanFolios;
+use App\Support\LoanTerms;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -43,7 +44,7 @@ class LoanCreationController extends Controller
             'guarantors' => $this->guarantorOptions(),
             'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
             'investors' => Investor::availableForFunding()->get(),
-            'terms' => $this->roundedTerms(),
+            'terms' => LoanTerms::active(),
             'selectedOperatorId' => $request->integer('operator_id') ?: $weeklyCut?->operator_id,
             'weeklyCut' => $weeklyCut,
         ]);
@@ -722,17 +723,9 @@ class LoanCreationController extends Controller
     /**
      * @return list<int>
      */
-    private function roundedTerms(): array
-    {
-        return [6, 12, 18, 24, 30, 36, 40, 48];
-    }
-
-    /**
-     * @return list<int>
-     */
     private function allowedTerms(): array
     {
-        return array_values(array_unique([...$this->roundedTerms(), 1, 120]));
+        return LoanTerms::allowed();
     }
 
     /**

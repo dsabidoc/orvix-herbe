@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Models\FundDisbursement;
 use App\Models\Loan;
 use App\Models\LoanApplication;
+use App\Models\LoanTermOption;
 use App\Models\Operator;
 use App\Models\Simulation;
 use App\Models\User;
@@ -60,6 +61,52 @@ class SettingsController extends Controller
         return view('settings.permissions', [
             'permissions' => Permission::query()->orderBy('name')->get(),
         ]);
+    }
+
+    public function loanTerms(Request $request): View
+    {
+        abort_unless($request->user()->can('settings.manage'), 403);
+
+        return view('settings.loan-terms', [
+            'terms' => LoanTermOption::query()->orderBy('term_months')->get(),
+        ]);
+    }
+
+    public function storeLoanTerm(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->can('settings.manage'), 403);
+
+        $data = $request->validate([
+            'term_months' => ['required', 'integer', 'min:1', 'max:1200'],
+        ], [
+            'term_months.required' => 'Captura el plazo en meses.',
+            'term_months.integer' => 'El plazo debe ser un numero entero de meses.',
+        ]);
+
+        LoanTermOption::query()->updateOrCreate(
+            ['term_months' => (int) $data['term_months']],
+            [
+                'is_active' => true,
+                'created_by' => $request->user()->id,
+                'disabled_by' => null,
+                'disabled_at' => null,
+            ],
+        );
+
+        return back()->with('status', 'Plazo agregado al dropdown de prestamos.');
+    }
+
+    public function destroyLoanTerm(Request $request, LoanTermOption $term): RedirectResponse
+    {
+        abort_unless($request->user()->can('settings.manage'), 403);
+
+        $term->update([
+            'is_active' => false,
+            'disabled_by' => $request->user()->id,
+            'disabled_at' => now('America/Merida'),
+        ]);
+
+        return back()->with('status', 'Plazo quitado del dropdown de prestamos.');
     }
 
     public function clientMerge(Request $request): View

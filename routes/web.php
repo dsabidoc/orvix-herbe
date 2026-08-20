@@ -111,6 +111,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])->name('settings.users');
     Route::get('/configuracion/roles', [SettingsController::class, 'roles'])->name('settings.roles');
     Route::get('/configuracion/permisos', [SettingsController::class, 'permissions'])->name('settings.permissions');
+    Route::get('/configuracion/plazos', [SettingsController::class, 'loanTerms'])->name('settings.loan-terms');
     Route::get('/configuracion/unificar-clientes', [SettingsController::class, 'clientMerge'])->name('settings.client-merge');
     Route::post('/configuracion/usuarios', [SettingsController::class, 'storeUser'])->name('settings.users.store');
     Route::put('/configuracion/usuarios/{user}', [SettingsController::class, 'updateUser'])->name('settings.users.update');
@@ -119,5 +120,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/configuracion/roles', [SettingsController::class, 'storeRole'])->name('settings.roles.store');
     Route::put('/configuracion/roles/{role}', [SettingsController::class, 'updateRole'])->name('settings.roles.update');
     Route::post('/configuracion/permisos', [SettingsController::class, 'storePermission'])->name('settings.permissions.store');
+    Route::post('/configuracion/plazos', [SettingsController::class, 'storeLoanTerm'])->name('settings.loan-terms.store');
+    Route::delete('/configuracion/plazos/{term}', [SettingsController::class, 'destroyLoanTerm'])->name('settings.loan-terms.destroy');
     Route::post('/configuracion/unificar-clientes', [SettingsController::class, 'mergeClients'])->name('settings.client-merge.store');
 });
