@@ -182,7 +182,7 @@ class CollectionController extends Controller
             'confirmation_status' => 'reported',
         ]);
 
-        if (($data['return_to'] ?? null) === 'cut') {
+        if (($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement)) {
             $cutPeriodService->attachMovementToCut(
                 $movement,
                 $selectedCut,
@@ -208,7 +208,11 @@ class CollectionController extends Controller
             ]),
         };
 
-        return redirect($route)->with('status', $this->shouldApplyImmediately($request) ? 'Letra marcada como pagada y aplicada al calendario.' : (($data['return_to'] ?? null) === 'cut' ? 'Letra marcada como pagada y agregada a este corte.' : 'Letra marcada como pagada; aparecera cuando se genere el corte de esa fecha.'));
+        return redirect($route)->with('status', $this->shouldApplyImmediately($request)
+            ? 'Letra marcada como pagada y aplicada al calendario.'
+            : ((($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement))
+                ? 'Letra marcada como pagada y agregada a este corte.'
+                : 'Letra marcada como pagada; solo los cobros reales de operador apareceran al generar corte.'));
     }
 
     public function markPaidBulk(Request $request, WeeklyCutPeriodService $cutPeriodService, PaymentApplicationService $paymentApplicationService): RedirectResponse

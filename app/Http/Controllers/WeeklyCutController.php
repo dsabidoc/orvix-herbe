@@ -118,11 +118,14 @@ class WeeklyCutController extends Controller
         $dayEnd = $date->endOfDay();
 
         CollectionMovement::query()
+            ->with('registeredBy')
             ->where('operator_id', $operator->id)
             ->whereNull('weekly_cut_id')
+            ->where('affects_investors', true)
             ->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES)
             ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$dayStart, $dayEnd])
             ->get()
+            ->filter(fn (CollectionMovement $movement) => WeeklyCutPeriodService::isReportableMovement($movement))
             ->each(fn (CollectionMovement $movement) => $cutPeriodService->attachMovementToCut($movement, $cut, $request->user()->id));
 
         return $cutPeriodService->refreshTotals($cut);
@@ -148,7 +151,11 @@ class WeeklyCutController extends Controller
             $balanceAfterCents = $previousBalanceCents + $receivedCents - $reportedCents;
             $receivedAt = CarbonImmutable::parse($data['received_on'], 'America/Merida')->endOfDay();
 
-            foreach ($cut->items()->with('movement')->whereHas('movement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES))->get() as $item) {
+            foreach ($cut->items()->with('movement.registeredBy')->whereHas('movement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES))->get() as $item) {
+                if (! WeeklyCutPeriodService::isReportableMovement($item->movement)) {
+                    continue;
+                }
+
                 if ($item->movement->confirmation_status === 'reported') {
                     try {
                         $service->confirm($item->movement, $request->user()->id);

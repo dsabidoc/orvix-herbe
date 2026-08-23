@@ -57,6 +57,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/prestamos/{loan}/factura', [LoanController::class, 'destroyInvoice'])->name('loans.invoice.destroy');
     Route::post('/prestamos/{loan}/inversionistas', [LoanInvestmentController::class, 'store'])->name('loans.investments.store');
     Route::post('/prestamos/{loan}/liquidar', [LoanSettlementController::class, 'store'])->name('loans.settle');
+    Route::post('/prestamos/{loan}/cancelar-liquidacion', [LoanSettlementController::class, 'reverse'])->name('loans.settlement.reverse');
     Route::post('/prestamos/{loan}/expediente', [DocumentController::class, 'store'])->name('documents.store');
     Route::get('/expedientes', [DocumentController::class, 'index'])->name('documents.index');
     Route::get('/expedientes/{document}/descargar', [DocumentController::class, 'download'])->name('documents.download');

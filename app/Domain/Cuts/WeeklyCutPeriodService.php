@@ -21,8 +21,19 @@ class WeeklyCutPeriodService
 
     public static function isReportableMovement(?CollectionMovement $movement): bool
     {
-        return $movement !== null
-            && in_array($movement->confirmation_status, self::REPORTABLE_MOVEMENT_STATUSES, true);
+        if ($movement === null || ! in_array($movement->confirmation_status, self::REPORTABLE_MOVEMENT_STATUSES, true)) {
+            return false;
+        }
+
+        if (! $movement->affects_investors) {
+            return false;
+        }
+
+        $registeredBy = $movement->relationLoaded('registeredBy')
+            ? $movement->registeredBy
+            : $movement->registeredBy()->first();
+
+        return (bool) $registeredBy?->hasRole('operador-cartera');
     }
 
     /**

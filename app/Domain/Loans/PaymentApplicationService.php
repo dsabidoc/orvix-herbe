@@ -217,6 +217,85 @@ class PaymentApplicationService
         });
     }
 
+    public function reverseSettlement(CollectionMovement $movement, int $reversedByUserId): CollectionMovement
+    {
+        return DB::transaction(function () use ($movement, $reversedByUserId) {
+            $movement = CollectionMovement::query()
+                ->with(['weeklyCut', 'allocations.installment', 'loan'])
+                ->whereKey($movement->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($movement->type !== 'settlement' || $movement->confirmation_status !== 'applied') {
+                throw new RuntimeException('Esta liquidacion ya no se puede cancelar.');
+            }
+
+            if ($movement->weeklyCut?->status === 'closed') {
+                throw new RuntimeException('No se puede cancelar una liquidacion ligada a un corte cerrado.');
+            }
+
+            $loan = $movement->loan()->lockForUpdate()->firstOrFail();
+
+            $this->reverseInvestorReturns($movement, $reversedByUserId);
+
+            foreach ($movement->allocations as $allocation) {
+                $installment = $allocation->installment()->lockForUpdate()->firstOrFail();
+                $allocationCents = Money::cents($allocation->amount);
+                $appliedCents = max(0, Money::cents($installment->applied_amount) - $allocationCents);
+                $contractCents = $this->operationalCents($installment);
+                $remainingCents = max(0, $contractCents - $appliedCents);
+
+                $installment->update([
+                    'applied_amount' => Money::decimal($appliedCents),
+                    'remaining_amount' => Money::decimal($remainingCents),
+                    'status' => $remainingCents === 0
+                        ? 'confirmed'
+                        : ($appliedCents > 0 ? 'partial' : 'upcoming'),
+                ]);
+            }
+
+            $cut = $movement->weeklyCut;
+
+            $movement->allocations()->delete();
+            WeeklyCutItem::query()
+                ->where('collection_movement_id', $movement->id)
+                ->delete();
+
+            $movement->update([
+                'confirmation_status' => 'reversed',
+                'weekly_cut_id' => null,
+                'origin_weekly_cut_id' => null,
+                'notes' => trim((string) $movement->notes."\nLiquidacion cancelada por administracion el ".now('America/Merida')->format('d/m/Y H:i')),
+            ]);
+
+            $loan->update([
+                'status' => 'active',
+                'settlement_reason' => null,
+                'settled_at' => null,
+                'settled_by' => null,
+            ]);
+
+            if ($cut) {
+                $this->cutPeriodService->refreshTotals($cut);
+            }
+
+            AuditEvent::query()->create([
+                'user_id' => $reversedByUserId,
+                'action' => 'loan_settlement.reversed',
+                'auditable_type' => CollectionMovement::class,
+                'auditable_id' => $movement->id,
+                'after' => [
+                    'folio' => $movement->folio,
+                    'loan_id' => $loan->id,
+                    'allocations_reversed' => $movement->allocations->count(),
+                ],
+                'related_idempotency_key' => $movement->idempotency_key,
+            ]);
+
+            return $movement->fresh(['loan.client']);
+        });
+    }
+
     private function statusForCoveredInstallment(string $movementType): string
     {
         return in_array($movementType, ['advance', 'capital_advance'], true) ? 'advanced' : 'confirmed';

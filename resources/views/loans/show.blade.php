@@ -452,6 +452,12 @@
                                 </form>
                             @endif
                         @endcan
+                        @if ($movement->type === 'settlement' && $movement->confirmation_status === 'applied' && $loanUser->can('settlements.authorize') && ! $isProviderUser)
+                            <form class="mt-3" method="POST" action="{{ route('loans.settlement.reverse', $loan) }}" data-confirm-delete data-confirm-title="¿Cancelar liquidacion?" data-confirm-message="El prestamo regresara a activo, las letras volveran a pendiente y se revertiran los retornos de inversionistas si no han sido usados o reinvertidos.">
+                                @csrf
+                                <button class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700" type="submit">Cancelar liquidacion</button>
+                            </form>
+                        @endif
                     </div>
                 @empty
                     <p class="p-5 text-sm text-slate-500">Sin movimientos.</p>
