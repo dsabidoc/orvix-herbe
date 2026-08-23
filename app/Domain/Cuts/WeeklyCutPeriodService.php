@@ -29,6 +29,10 @@ class WeeklyCutPeriodService
             return false;
         }
 
+        if ($movement->weekly_cut_id || $movement->origin_weekly_cut_id) {
+            return true;
+        }
+
         $registeredBy = $movement->relationLoaded('registeredBy')
             ? $movement->registeredBy
             : $movement->registeredBy()->first();
@@ -163,7 +167,7 @@ class WeeklyCutPeriodService
                 'registered_at' => $registeredAt,
             ]);
 
-            WeeklyCutItem::query()->firstOrCreate(
+            WeeklyCutItem::query()->updateOrCreate(
                 [
                     'weekly_cut_id' => $cut->id,
                     'collection_movement_id' => $movement->id,
@@ -218,7 +222,7 @@ class WeeklyCutPeriodService
                 'registered_at' => $registeredAt,
             ]);
 
-            WeeklyCutItem::query()->firstOrCreate(
+            WeeklyCutItem::query()->updateOrCreate(
                 [
                     'weekly_cut_id' => $cut->id,
                     'collection_movement_id' => $movement->id,

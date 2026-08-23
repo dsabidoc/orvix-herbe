@@ -37,12 +37,23 @@ class InvoiceHolders
      */
     public static function filterValues(?string $holder): array
     {
-        return match ($holder) {
-            'Recepcion' => ['Recepcion', 'Recepción'],
-            'Operador pendiente' => ['Operador pendiente', 'Operador'],
-            'En tramite' => ['En tramite', 'En trámite'],
-            'Sin ubicacion' => ['Sin ubicacion', 'Sin ubicación', ''],
-            default => filled($holder) ? [$holder] : [],
+        if (blank($holder)) {
+            return [];
+        }
+
+        $normalized = str($holder)->lower()->ascii()->toString();
+
+        return match ($normalized) {
+            'caja' => ['Caja', 'caja'],
+            'recepcion' => ['Recepcion', 'Recepción', 'recepcion'],
+            'operador pendiente' => ['Operador pendiente', 'Operador'],
+            'operador en tramite' => ['Operador en tramite', 'Operador en trámite'],
+            'operador abogado' => ['Operador abogado'],
+            'en tramite' => ['En tramite', 'En trámite'],
+            'abogado' => ['Abogado'],
+            'sin ubicacion' => ['Sin ubicacion', 'Sin ubicación', ''],
+            'operador en venta' => ['Operador en venta'],
+            default => [$holder],
         };
     }
 

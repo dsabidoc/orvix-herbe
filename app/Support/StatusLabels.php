@@ -122,6 +122,7 @@ final class StatusLabels
         return [
             'pronto_pago_cliente' => 'Pronto pago del cliente',
             'dejo_de_pagar' => 'Dejo de pagar; cobrador liquida',
+            'calendario_pagado' => 'Calendario pagado completo',
         ][$reason] ?? self::fallback($reason);
     }
 

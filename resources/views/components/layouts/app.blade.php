@@ -41,6 +41,7 @@
                                         ['Saldos', 'portfolio-balances.index'],
                                         ['Cobranza', 'collections.index'],
                                         ['Facturas', 'invoice-portfolio.index'],
+                                        ['Liquidados', 'loans.settled'],
                                     ],
                                 ],
                                 ['Cortes', 'cuts.index', 'receipt'],

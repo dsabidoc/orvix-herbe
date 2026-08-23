@@ -115,6 +115,8 @@ class PaymentApplicationService
                 'confirmed_at' => now('America/Merida'),
             ]);
 
+            $this->markLoanSettledIfFullyPaid($movement, $confirmedByUserId);
+
             if ($movement->weekly_cut_id) {
                 $this->cutPeriodService->refreshTotals($movement->weeklyCut()->first());
             }
@@ -180,6 +182,8 @@ class PaymentApplicationService
                         'status' => $appliedCents > 0 ? 'partial' : 'upcoming',
                     ]);
                 }
+
+                $this->markLoanActiveIfScheduleReopened($movement, $reversedByUserId);
 
                 $movement->allocations()->delete();
             }
@@ -595,5 +599,76 @@ class PaymentApplicationService
                 ],
             ]);
         }
+    }
+
+    private function markLoanSettledIfFullyPaid(CollectionMovement $movement, int $userId): void
+    {
+        $loan = $movement->loan()->lockForUpdate()->first();
+
+        if (! $loan || $loan->status !== 'active' || ($loan->calculation_method ?? 'regular') === 'interest_only') {
+            return;
+        }
+
+        $hasPendingInstallments = $loan->installments()
+            ->where('remaining_amount', '>', 0)
+            ->exists();
+
+        if ($hasPendingInstallments) {
+            return;
+        }
+
+        $loan->update([
+            'status' => 'settled',
+            'settlement_reason' => 'calendario_pagado',
+            'settled_at' => now('America/Merida'),
+            'settled_by' => $userId,
+        ]);
+
+        AuditEvent::query()->create([
+            'user_id' => $userId,
+            'action' => 'loan_settled_by_full_schedule',
+            'auditable_type' => $loan::class,
+            'auditable_id' => $loan->id,
+            'after' => [
+                'folio' => $loan->folio,
+                'settlement_reason' => 'calendario_pagado',
+            ],
+            'related_idempotency_key' => $movement->idempotency_key,
+        ]);
+    }
+
+    private function markLoanActiveIfScheduleReopened(CollectionMovement $movement, int $userId): void
+    {
+        $loan = $movement->loan()->lockForUpdate()->first();
+
+        if (! $loan || $loan->status !== 'settled' || $loan->settlement_reason !== 'calendario_pagado') {
+            return;
+        }
+
+        $hasPendingInstallments = $loan->installments()
+            ->where('remaining_amount', '>', 0)
+            ->exists();
+
+        if (! $hasPendingInstallments) {
+            return;
+        }
+
+        $loan->update([
+            'status' => 'active',
+            'settlement_reason' => null,
+            'settled_at' => null,
+            'settled_by' => null,
+        ]);
+
+        AuditEvent::query()->create([
+            'user_id' => $userId,
+            'action' => 'loan_reopened_by_payment_reverse',
+            'auditable_type' => $loan::class,
+            'auditable_id' => $loan->id,
+            'after' => [
+                'folio' => $loan->folio,
+            ],
+            'related_idempotency_key' => $movement->idempotency_key,
+        ]);
     }
 }

@@ -7,6 +7,7 @@ use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\LoanScheduleCalculator;
 use App\Domain\Loans\LoanSettlementService;
 use App\Models\Client;
+use App\Models\CollectionMovement;
 use App\Models\Document;
 use App\Models\Installment;
 use App\Models\Investor;
@@ -34,7 +35,12 @@ class LoanController extends Controller
     {
         $query = Loan::query()
             ->with(['client', 'operator', 'vehicle', 'installments' => fn ($query) => $query->orderBy('number')])
-            ->where('status', 'active');
+            ->where('status', 'active')
+            ->where(function ($query) {
+                $query
+                    ->where('calculation_method', 'interest_only')
+                    ->orWhereHas('installments', fn ($query) => $query->where('remaining_amount', '>', 0));
+            });
 
         if ($request->user()->hasRole('operador-cartera')) {
             $query->where('operator_id', $request->user()->operatorProfile?->id);
@@ -64,6 +70,51 @@ class LoanController extends Controller
         return view('loans.index', [
             'loans' => $query->latest()->paginate(15)->withQueryString(),
             'today' => CarbonImmutable::now('America/Merida')->toDateString(),
+        ]);
+    }
+
+    public function settled(Request $request): View
+    {
+        $query = Loan::query()
+            ->with(['client', 'operator', 'vehicle', 'installments' => fn ($query) => $query->orderBy('number')])
+            ->addSelect([
+                'latest_applied_at' => CollectionMovement::query()
+                    ->selectRaw('MAX(COALESCE(confirmed_at, registered_at, created_at))')
+                    ->whereColumn('loan_id', 'loans.id')
+                    ->whereIn('confirmation_status', ['reported', 'applied']),
+            ])
+            ->whereHas('installments')
+            ->where(function ($query) {
+                $query
+                    ->where('status', 'settled')
+                    ->orWhere(function ($query) {
+                        $query
+                            ->where(function ($query) {
+                                $query->whereNull('calculation_method')
+                                    ->orWhere('calculation_method', '!=', 'interest_only');
+                            })
+                            ->whereDoesntHave('installments', fn ($query) => $query->where('remaining_amount', '>', 0));
+                    });
+            });
+
+        if ($request->user()->hasRole('operador-cartera')) {
+            $query->where('operator_id', $request->user()->operatorProfile?->id);
+        }
+
+        if ($request->filled('q')) {
+            $search = '%'.$request->string('q')->toString().'%';
+            $query->where(function ($query) use ($search) {
+                $query->where('folio', 'like', $search)
+                    ->orWhereHas('client', fn ($query) => $query->where('first_name', 'like', $search)->orWhere('last_name', 'like', $search))
+                    ->orWhereHas('vehicle', fn ($query) => $query->where('model', 'like', $search)->orWhere('brand', 'like', $search)->orWhere('plates', 'like', $search)->orWhere('vin', 'like', $search));
+            });
+        }
+
+        return view('loans.settled', [
+            'loans' => $query
+                ->orderByRaw('COALESCE(settled_at, latest_applied_at, loans.updated_at) DESC')
+                ->paginate(15)
+                ->withQueryString(),
         ]);
     }
 

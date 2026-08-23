@@ -48,7 +48,11 @@
                 </div>
             </div>
             <dl class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <div class="rounded-md bg-blue-50 p-3 ring-1 ring-blue-100"><dt class="text-sm text-blue-700">Capital total</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($capitalTotalCents)) }}</dd></div>
+                <div class="rounded-md bg-blue-50 p-3 ring-1 ring-blue-100">
+                    <dt class="text-sm text-blue-700">Capital total</dt>
+                    <dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($capitalTotalCents)) }}</dd>
+                    <p class="mt-2 text-xs leading-snug text-blue-700">Disponible mas capital pendiente de recuperar en prestamos activos. No incluye intereses.</p>
+                </div>
                 <div class="rounded-md bg-indigo-50 p-3 ring-1 ring-indigo-100"><dt class="text-sm text-indigo-700">Capital disponible</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->available_capital) }}</dd></div>
                 <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Capital invertido</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($investedCents)) }}</dd></div>
                 <div class="rounded-md bg-emerald-50 p-3 ring-1 ring-emerald-100"><dt class="text-sm text-emerald-700">Capital retornado</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->returned_capital_balance) }}</dd></div>

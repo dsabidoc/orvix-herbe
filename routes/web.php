@@ -34,6 +34,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/prestamos', [LoanController::class, 'index'])->name('loans.index');
+    Route::get('/prestamos/liquidados', [LoanController::class, 'settled'])->name('loans.settled');
     Route::get('/cartera-y-saldos', [PortfolioBalanceController::class, 'index'])->name('portfolio-balances.index');
     Route::get('/cartera-y-saldos/exportar', [PortfolioBalanceController::class, 'export'])->name('portfolio-balances.export');
     Route::get('/carteras/facturas', InvoicePortfolioController::class)->name('invoice-portfolio.index');

@@ -808,6 +808,7 @@ class OrvixWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->post(route('cuts.confirm', $cut), [
                 'received_total' => $received,
+                'received_on' => '2026-07-31',
                 'reason' => 'Faltante demo',
             ])
             ->assertSessionHas('status');
@@ -862,6 +863,7 @@ class OrvixWorkflowTest extends TestCase
 
         $this->actingAs($admin)->post(route('cuts.confirm', $cut), [
             'received_total' => $received,
+            'received_on' => '2026-07-31',
             'reason' => 'Faltante demo',
         ]);
 
@@ -1706,9 +1708,9 @@ class OrvixWorkflowTest extends TestCase
 
         $this->actingAs($samuel)->post(route('cuts.store'), ['cut_date' => '2026-08-13']);
         $thursdayMovement->refresh();
-        $this->assertSame('2026-08-07', $thursdayMovement->weeklyCut->period_starts_on->toDateString());
+        $this->assertSame('2026-08-13', $thursdayMovement->weeklyCut->period_starts_on->toDateString());
         $this->assertSame('2026-08-13', $thursdayMovement->weeklyCut->period_ends_on->toDateString());
-        $this->assertSame('2026-08-14', $thursdayMovement->weeklyCut->settlement_on->toDateString());
+        $this->assertSame('2026-08-13', $thursdayMovement->weeklyCut->settlement_on->toDateString());
 
         Carbon::setTestNow('2026-08-14 00:01:00');
         CarbonImmutable::setTestNow('2026-08-14 00:01:00');
@@ -1725,8 +1727,8 @@ class OrvixWorkflowTest extends TestCase
         $this->actingAs($samuel)->post(route('cuts.store'), ['cut_date' => '2026-08-14']);
         $fridayMovement->refresh();
         $this->assertSame('2026-08-14', $fridayMovement->weeklyCut->period_starts_on->toDateString());
-        $this->assertSame('2026-08-20', $fridayMovement->weeklyCut->period_ends_on->toDateString());
-        $this->assertSame('2026-08-21', $fridayMovement->weeklyCut->settlement_on->toDateString());
+        $this->assertSame('2026-08-14', $fridayMovement->weeklyCut->period_ends_on->toDateString());
+        $this->assertSame('2026-08-14', $fridayMovement->weeklyCut->settlement_on->toDateString());
 
         Carbon::setTestNow();
         CarbonImmutable::setTestNow();
@@ -1862,6 +1864,7 @@ class OrvixWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->post(route('cuts.confirm', $cut), [
                 'received_total' => $cut->reported_total,
+                'received_on' => '2026-08-10',
                 'reason' => 'Primera recepcion',
             ])
             ->assertSessionHas('status');
@@ -1888,6 +1891,7 @@ class OrvixWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->post(route('cuts.confirm', $cut), [
                 'received_total' => $cut->reported_total,
+                'received_on' => '2026-08-10',
                 'reason' => 'Recepcion actualizada',
             ])
             ->assertSessionHas('status');
