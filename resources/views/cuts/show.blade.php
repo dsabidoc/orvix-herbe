@@ -169,13 +169,13 @@
                     <table class="cut-print-table w-full table-fixed text-left text-sm">
                         <thead class="bg-red-50 text-xs uppercase text-red-700">
                             <tr>
-                                <th class="w-[34%] px-4 py-3">Modelo / dia</th>
-                                <th class="w-[18%] px-4 py-3">Cliente</th>
+                                <th class="w-[26%] px-4 py-3">Modelo / dia</th>
+                                <th class="w-[22%] px-4 py-3">Cliente</th>
                                 <th class="w-[12%] px-4 py-3">Num pagare</th>
-                                <th class="w-[16%] px-4 py-3">Fecha vencimiento</th>
-                                <th class="w-[12%] px-4 py-3 text-right">Pago</th>
+                                <th class="w-[17%] px-4 py-3">Fecha vencimiento</th>
+                                <th class="w-[14%] px-4 py-3 text-right">Pago</th>
                                 @can('weekly-cuts.confirm')
-                                    <th class="w-[8%] px-4 py-3 text-right">Accion</th>
+                                    <th class="w-[9%] px-4 py-3 text-right">Accion</th>
                                 @endcan
                             </tr>
                         </thead>
