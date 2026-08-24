@@ -169,12 +169,13 @@
                     <table class="cut-print-table w-full table-fixed text-left text-sm">
                         <thead class="bg-red-50 text-xs uppercase text-red-700">
                             <tr>
-                                <th class="w-[38%] px-5 py-3">Modelo / dia</th>
-                                <th class="w-[14%] px-5 py-3">Num pagare</th>
-                                <th class="w-[18%] px-5 py-3">Fecha vencimiento</th>
-                                <th class="w-[18%] px-5 py-3 text-right">Pago</th>
+                                <th class="w-[34%] px-4 py-3">Modelo / dia</th>
+                                <th class="w-[18%] px-4 py-3">Cliente</th>
+                                <th class="w-[12%] px-4 py-3">Num pagare</th>
+                                <th class="w-[16%] px-4 py-3">Fecha vencimiento</th>
+                                <th class="w-[12%] px-4 py-3 text-right">Pago</th>
                                 @can('weekly-cuts.confirm')
-                                    <th class="w-[12%] px-5 py-3 text-right">Accion</th>
+                                    <th class="w-[8%] px-4 py-3 text-right">Accion</th>
                                 @endcan
                             </tr>
                         </thead>
@@ -198,15 +199,16 @@
                                     ]);
                                 @endphp
                                 <tr data-cut-pending-row="cut-pending-{{ $cut->id }}" data-search-text="{{ $searchText }}">
-                                    <td class="px-5 py-3">
+                                    <td class="px-4 py-3">
                                         <a class="break-words font-semibold text-[#0f766e]" href="{{ route('loans.show', $installment->loan) }}">{{ $vehicleLabel }} · Dia {{ $installment->loan->payment_day }}</a>
                                         <p class="break-all text-xs text-slate-500">{{ $installment->loan->folio }}</p>
                                     </td>
-                                    <td class="px-5 py-3">{{ $installment->number }}</td>
-                                    <td class="px-5 py-3">{{ $installment->due_date->format('d/m/Y') }}</td>
-                                    <td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
+                                    <td class="px-4 py-3 font-semibold text-slate-950">{{ $installment->loan->client->first_name }}</td>
+                                    <td class="px-4 py-3">{{ $installment->number }}</td>
+                                    <td class="px-4 py-3">{{ $installment->due_date->format('d/m/Y') }}</td>
+                                    <td class="px-4 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
                                     @can('weekly-cuts.confirm')
-                                        <td class="px-5 py-3 text-right">
+                                        <td class="px-4 py-3 text-right">
                                             <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid>
                                                 @csrf
                                                 <input name="return_to" type="hidden" value="cut">
