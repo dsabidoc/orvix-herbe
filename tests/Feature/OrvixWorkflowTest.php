@@ -476,7 +476,7 @@ class OrvixWorkflowTest extends TestCase
         $this->assertGreaterThan($operationalCents, Money::cents($installment->contract_amount));
     }
 
-    public function test_paid_without_investor_effects_applies_installment_without_recording_returns(): void
+    public function test_paid_without_investor_effects_reports_installment_without_recording_returns(): void
     {
         $this->seed(DatabaseSeeder::class);
 
@@ -503,9 +503,9 @@ class OrvixWorkflowTest extends TestCase
         $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
 
         $this->assertFalse($movement->affects_investors);
-        $this->assertSame('applied', $movement->confirmation_status);
+        $this->assertSame('reported', $movement->confirmation_status);
 
-        $this->assertSame(0, Money::cents($installment->fresh()->remaining_amount));
+        $this->assertSame(Money::cents($installment->remaining_amount), Money::cents($installment->fresh()->remaining_amount));
         $this->assertSame($returnsBefore, InvestorCapitalMovement::query()->where('type', 'payment_returns_recorded')->count());
     }
 
@@ -801,7 +801,9 @@ class OrvixWorkflowTest extends TestCase
         $cut = WeeklyCut::query()
             ->where('operator_id', $samuel->operatorProfile->id)
             ->where('status', 'submitted')
+            ->where('reported_total', '>', 0)
             ->firstOrFail();
+        $cut->forceFill(['previous_balance' => '0.00'])->save();
 
         $received = max(0, (int) floor((float) $cut->reported_total) - 1000);
 
@@ -850,6 +852,8 @@ class OrvixWorkflowTest extends TestCase
 
     public function test_settling_weekly_cut_shortfall_clears_next_week_carry(): void
     {
+        $this->markTestSkipped('La liquidacion manual de saldo pendiente fue retirada del detalle de corte.');
+
         $this->seed(DatabaseSeeder::class);
 
         $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
@@ -857,7 +861,9 @@ class OrvixWorkflowTest extends TestCase
         $cut = WeeklyCut::query()
             ->where('operator_id', $samuel->operatorProfile->id)
             ->where('status', 'submitted')
+            ->where('reported_total', '>', 0)
             ->firstOrFail();
+        $cut->forceFill(['previous_balance' => '0.00'])->save();
 
         $received = max(0, (int) floor((float) $cut->reported_total) - 1000);
 
@@ -1081,7 +1087,7 @@ class OrvixWorkflowTest extends TestCase
             ->assertSessionHasInput('capital', '123000');
     }
 
-    public function test_admin_bulk_paid_applies_selected_installments_immediately(): void
+    public function test_admin_bulk_paid_reports_selected_installments_for_cut(): void
     {
         $this->seed(DatabaseSeeder::class);
 
@@ -1118,14 +1124,14 @@ class OrvixWorkflowTest extends TestCase
                 'affects_investors' => 0,
                 'return_to' => 'loan',
             ])
-            ->assertRedirect(route('loans.show', $loan));
+            ->assertRedirect(route('loans.show', $loan).'#calendar');
 
         foreach ($selected as $installment) {
             $installment->refresh();
             $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
 
-            $this->assertSame('applied', $movement->confirmation_status);
-            $this->assertSame(0, Money::cents($installment->remaining_amount));
+            $this->assertSame('reported', $movement->confirmation_status);
+            $this->assertSame(Money::cents($installment->remaining_amount), Money::cents($installment->fresh()->remaining_amount));
             $this->assertFalse($movement->affects_investors);
         }
     }
@@ -1268,8 +1274,14 @@ class OrvixWorkflowTest extends TestCase
 
         $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
 
-        $this->assertSame('applied', $movement->fresh()->confirmation_status);
+        $this->assertSame('reported', $movement->fresh()->confirmation_status);
         $this->assertSame(0, InvestorCapitalMovement::query()->where('loan_id', $loan->id)->where('type', 'payment_returns_recorded')->count());
+
+        $this->actingAs($admin)
+            ->post(route('payments.confirm', $movement))
+            ->assertSessionHas('status');
+
+        $this->assertSame('applied', $movement->fresh()->confirmation_status);
 
         $this->actingAs($admin)
             ->post(route('loans.investments.store', $loan), [
@@ -1697,7 +1709,7 @@ class OrvixWorkflowTest extends TestCase
         Carbon::setTestNow('2026-08-13 23:30:00');
         CarbonImmutable::setTestNow('2026-08-13 23:30:00');
         $this->actingAs($samuel)->post(route('collections.mark-paid', $installments[0]), [
-            'operated_on' => '2026-08-01',
+            'operated_on' => '2026-08-13',
             'contract_amount' => $installments[0]->remaining_amount,
             'operator_surcharge_amount' => 0,
             'external_concepts_amount' => 0,
@@ -1715,7 +1727,7 @@ class OrvixWorkflowTest extends TestCase
         Carbon::setTestNow('2026-08-14 00:01:00');
         CarbonImmutable::setTestNow('2026-08-14 00:01:00');
         $this->actingAs($samuel)->post(route('collections.mark-paid', $installments[1]), [
-            'operated_on' => '2026-08-01',
+            'operated_on' => '2026-08-14',
             'contract_amount' => $installments[1]->remaining_amount,
             'operator_surcharge_amount' => 0,
             'external_concepts_amount' => 0,
@@ -1750,7 +1762,7 @@ class OrvixWorkflowTest extends TestCase
             ->firstOrFail();
 
         $this->actingAs($samuel)->post(route('collections.mark-paid', $installment), [
-            'operated_on' => '2026-07-01',
+            'operated_on' => '2026-08-10',
             'contract_amount' => $installment->remaining_amount,
             'operator_surcharge_amount' => 0,
             'external_concepts_amount' => 0,
@@ -1831,7 +1843,7 @@ class OrvixWorkflowTest extends TestCase
                 'external_concepts_amount' => 0,
                 'notes' => 'Ajuste desde atrasados del corte',
             ])
-            ->assertRedirect(route('cuts.show', $cut));
+            ->assertRedirect(route('cuts.show', $cut).'#cut-payments');
 
         $movement = CollectionMovement::query()
             ->where('target_installment_id', $installment->id)
@@ -1885,7 +1897,7 @@ class OrvixWorkflowTest extends TestCase
                 'operator_surcharge_amount' => 0,
                 'external_concepts_amount' => 0,
             ])
-            ->assertRedirect(route('cuts.show', $cut));
+            ->assertRedirect(route('cuts.show', $cut).'#cut-payments');
 
         $cut->refresh();
         $this->actingAs($admin)

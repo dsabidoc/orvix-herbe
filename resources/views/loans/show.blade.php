@@ -360,7 +360,7 @@
                                         ->filter(fn ($candidate) => Money::cents($candidate->remaining_amount) > 0 && ! $candidate->reportedMovement)
                                         ->isEmpty();
                             @endphp
-                            <tr class="{{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
+                            <tr id="installment-{{ $installment->id }}" class="scroll-mt-24 {{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
                                 <td class="px-3 py-2">
                                     @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
                                         <input class="rounded border-slate-300" type="checkbox" value="{{ $installment->id }}" data-bulk-payment-checkbox @if($isOverdue) data-overdue-payment-checkbox @endif aria-label="Seleccionar letra {{ $installment->number }}">

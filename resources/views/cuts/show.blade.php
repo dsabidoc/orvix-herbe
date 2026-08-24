@@ -97,6 +97,13 @@
                 </dl>
             </div>
 
+            <div class="no-print flex flex-wrap gap-2 border-b border-slate-200 px-5 py-3" data-cut-tabs>
+                <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" data-cut-tab-button="payments">Cobros del corte</button>
+                <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" type="button" data-cut-tab-button="pending">Atrasados sin marcar</button>
+                <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" type="button" data-cut-tab-button="new-loans">Carteras nuevas</button>
+            </div>
+
+            <div id="cut-payments" data-cut-tab-panel="payments">
             <div class="border-b border-slate-200 px-5 py-4">
                 <h3 class="font-bold text-slate-950">Cobros del corte</h3>
                 <p class="mt-1 text-sm text-slate-500">Cobros pagados vigentes incluidos al momento de generar este corte.</p>
@@ -105,11 +112,14 @@
                 <table class="cut-print-table w-full table-fixed text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
-                            <th class="w-[28%] px-5 py-3">Cliente</th>
-                            <th class="w-[24%] px-5 py-3">Credito</th>
-                            <th class="w-[18%] px-5 py-3">Fechas</th>
-                            <th class="w-[16%] px-5 py-3 text-right">Importes</th>
-                            <th class="w-[14%] px-5 py-3">Estado</th>
+                            <th class="w-[24%] px-5 py-3">Cliente</th>
+                            <th class="w-[22%] px-5 py-3">Credito</th>
+                            <th class="w-[17%] px-5 py-3">Fechas</th>
+                            <th class="w-[15%] px-5 py-3 text-right">Importes</th>
+                            <th class="w-[12%] px-5 py-3">Estado</th>
+                            @can('weekly-cuts.confirm')
+                                <th class="no-print w-[10%] px-5 py-3 text-right">Accion</th>
+                            @endcan
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -146,16 +156,30 @@
                                     <p class="mt-2 text-xs text-slate-500">Registró</p>
                                     <p class="font-semibold text-slate-950">{{ $item->movement->registeredBy?->name ?? '-' }}</p>
                                 </td>
+                                @can('weekly-cuts.confirm')
+                                    <td class="no-print px-5 py-4 text-right align-top">
+                                        @if ($cut->status !== 'closed')
+                                            <form method="POST" action="{{ route('cuts.movements.reverse', [$cut, $item->movement]) }}" data-confirm-delete data-confirm-title="¿Revertir este movimiento?" data-confirm-message="Se quitara del corte y regresara como pendiente si la letra aun tiene saldo.">
+                                                @csrf
+                                                <button class="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700" type="submit">Revertir</button>
+                                            </form>
+                                        @else
+                                            <span class="text-xs font-semibold text-slate-400">-</span>
+                                        @endif
+                                    </td>
+                                @endcan
                             </tr>
                         @empty
                             <tr>
-                                <td class="px-5 py-6 text-sm text-slate-500" colspan="5">No hay cobros registrados en este corte.</td>
+                                <td class="px-5 py-6 text-sm text-slate-500" colspan="@can('weekly-cuts.confirm') 6 @else 5 @endcan">No hay cobros registrados en este corte.</td>
                             </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
+            </div>
 
+            <div id="cut-pending-installments" class="hidden" data-cut-tab-panel="pending">
             @if ($pendingInstallments->isNotEmpty())
                 <div class="no-print border-y border-slate-200 px-5 py-4">
                     <h3 class="font-bold text-slate-950">Atrasados sin marcar</h3>
@@ -229,8 +253,12 @@
                         </tbody>
                     </table>
                 </div>
+            @else
+                <div class="no-print border-y border-slate-200 px-5 py-6 text-sm text-slate-500">No hay atrasados sin marcar para este corte.</div>
             @endif
+            </div>
 
+            <div id="cut-new-loans" class="hidden" data-cut-tab-panel="new-loans">
             <div class="no-print border-y border-slate-200 px-5 py-4">
                 <h3 class="font-bold text-slate-950">Carteras nuevas</h3>
                 <p class="mt-1 text-sm text-slate-500">Fondos entregados al operador para abrir prestamos relacionados con este corte.</p>
@@ -271,6 +299,7 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
             </div>
         </section>
 

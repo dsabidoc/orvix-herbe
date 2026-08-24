@@ -87,6 +87,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/cortes/{cut}/confirmar', [WeeklyCutController::class, 'confirm'])->name('cuts.confirm');
     Route::post('/cortes/{cut}/cerrar', [WeeklyCutController::class, 'close'])->name('cuts.close');
     Route::post('/cortes/{cut}/reabrir', [WeeklyCutController::class, 'reopen'])->name('cuts.reopen');
+    Route::post('/cortes/{cut}/movimientos/{movement}/revertir', [WeeklyCutController::class, 'reverseMovement'])->name('cuts.movements.reverse');
     Route::post('/cortes/{cut}/liquidar-saldo', [WeeklyCutController::class, 'settleBalance'])->name('cuts.settle-balance');
     Route::delete('/cortes/{cut}', [WeeklyCutController::class, 'destroy'])->name('cuts.destroy');
 

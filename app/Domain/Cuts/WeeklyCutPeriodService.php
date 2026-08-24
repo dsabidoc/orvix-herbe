@@ -29,15 +29,7 @@ class WeeklyCutPeriodService
             return true;
         }
 
-        if (! $movement->affects_investors) {
-            return false;
-        }
-
-        $registeredBy = $movement->relationLoaded('registeredBy')
-            ? $movement->registeredBy
-            : $movement->registeredBy()->first();
-
-        return (bool) $registeredBy?->hasRole('operador-cartera');
+        return $movement->confirmation_status === 'reported';
     }
 
     /**

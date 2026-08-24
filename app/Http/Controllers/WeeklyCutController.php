@@ -117,16 +117,14 @@ class WeeklyCutController extends Controller
     {
         $date = CarbonImmutable::parse($cutDate ?: now('America/Merida')->toDateString(), 'America/Merida');
         $cut = $cutPeriodService->createCutForOperator($operator, $request->user()->id, $date);
-        $dayStart = $date->startOfDay();
-        $dayEnd = $date->endOfDay();
+        $cutDay = $date->toDateString();
 
         CollectionMovement::query()
             ->with('registeredBy')
             ->where('operator_id', $operator->id)
             ->whereNull('weekly_cut_id')
-            ->where('affects_investors', true)
             ->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES)
-            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$dayStart, $dayEnd])
+            ->whereDate('operated_on', $cutDay)
             ->get()
             ->filter(fn (CollectionMovement $movement) => WeeklyCutPeriodService::isReportableMovement($movement))
             ->each(fn (CollectionMovement $movement) => $cutPeriodService->attachMovementToCut($movement, $cut, $request->user()->id));
@@ -333,6 +331,27 @@ class WeeklyCutController extends Controller
         return redirect()->route('cuts.show', $cut)->with('status', 'Corte reabierto.');
     }
 
+    public function reverseMovement(Request $request, WeeklyCut $cut, CollectionMovement $movement, PaymentApplicationService $service): RedirectResponse
+    {
+        abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
+        abort_if($cut->status === 'closed', 422, 'No se puede revertir un movimiento en un corte cerrado sin reabrirlo.');
+        abort_unless((int) $movement->weekly_cut_id === (int) $cut->id || (int) $movement->origin_weekly_cut_id === (int) $cut->id, 404);
+
+        try {
+            if ($movement->type === 'settlement') {
+                $service->reverseSettlement($movement, $request->user()->id, 'Revertido desde detalle de corte');
+            } else {
+                $service->reverse($movement, $request->user()->id, 'Revertido desde detalle de corte');
+            }
+        } catch (RuntimeException $exception) {
+            return redirect(route('cuts.show', $cut).'#cut-payments')->with('warning', $exception->getMessage());
+        }
+
+        app(WeeklyCutPeriodService::class)->refreshTotals($cut);
+
+        return redirect(route('cuts.show', $cut).'#cut-pending-installments')->with('status', 'Movimiento revertido y regresado a atrasados sin marcar.');
+    }
+
     public function destroy(Request $request, WeeklyCut $cut): RedirectResponse
     {
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
@@ -404,18 +423,35 @@ class WeeklyCutController extends Controller
                 return [
                     (int) ($first->loan->payment_day ?? 0),
                     (string) ($first->loan->vehicle?->model ?? ''),
+                    $this->loanChronologyKey($first->loan),
                     $first->due_date->timestamp,
                     (string) $first->loan->folio,
                     (int) $first->number,
                 ] <=> [
                     (int) ($second->loan->payment_day ?? 0),
                     (string) ($second->loan->vehicle?->model ?? ''),
+                    $this->loanChronologyKey($second->loan),
                     $second->due_date->timestamp,
                     (string) $second->loan->folio,
                     (int) $second->number,
                 ];
             })
             ->values();
+    }
+
+    private function loanChronologyKey(?Loan $loan): string
+    {
+        $folio = (string) ($loan?->folio ?? '');
+
+        if (preg_match('/^[A-Z]{1,3}-(\d{2})(\d{2})(\d{2,4})-\d{2}$/', $folio, $matches)) {
+            $year = strlen($matches[3]) === 2 ? '20'.$matches[3] : $matches[3];
+
+            return $year.$matches[2].$matches[1];
+        }
+
+        return $loan?->start_date?->format('Ymd')
+            ?? $loan?->first_payment_date?->format('Ymd')
+            ?? '99999999';
     }
 
     private function advanceLoansForCut(WeeklyCut $cut, LoanSettlementService $settlementService)

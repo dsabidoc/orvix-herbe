@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
-use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
 use App\Models\Operator;
@@ -16,7 +15,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use RuntimeException;
 use Illuminate\View\View;
 
 class CollectionController extends Controller
@@ -99,7 +97,7 @@ class CollectionController extends Controller
         ]);
     }
 
-    public function markPaid(Request $request, Installment $installment, WeeklyCutPeriodService $cutPeriodService, PaymentApplicationService $paymentApplicationService): RedirectResponse
+    public function markPaid(Request $request, Installment $installment, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
     {
         $installment->load('loan.operator');
         $this->authorizeInstallmentAccess($request, $installment);
@@ -139,6 +137,16 @@ class CollectionController extends Controller
             return back()->with('warning', 'El abono a capital solo se puede aplicar desde la ultima letra pendiente, avanzando de atras hacia adelante.');
         }
 
+        $selectedCut = null;
+        if (($data['return_to'] ?? null) === 'cut') {
+            abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
+            abort_if(empty($data['cut_id']), 422, 'Selecciona el corte a ajustar.');
+            $selectedCut = WeeklyCut::query()->findOrFail($data['cut_id']);
+            abort_if($selectedCut->status === 'closed', 422, 'No se pueden registrar cobros en un corte cerrado.');
+            abort_if($selectedCut->operator_id !== $installment->loan->operator_id, 422, 'El cobro no pertenece al operador de este corte.');
+            $data['operated_on'] = $selectedCut->period_starts_on->toDateString();
+        }
+
         $contractAmountCents = $paymentEffect === 'capital_advance'
             ? $this->capitalAdvanceAmountCents($installment)
             : Money::cents($data['contract_amount']);
@@ -147,15 +155,6 @@ class CollectionController extends Controller
             : $this->calculatedDelinquencyCents($installment, $data['operated_on']);
 
         abort_if($contractAmountCents <= 0, 422, 'Esta letra no tiene abono a capital disponible.');
-
-        $selectedCut = null;
-        if (($data['return_to'] ?? null) === 'cut') {
-            abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
-            abort_if(empty($data['cut_id']), 422, 'Selecciona el corte a ajustar.');
-            $selectedCut = WeeklyCut::query()->findOrFail($data['cut_id']);
-            abort_if($selectedCut->status === 'closed', 422, 'No se pueden registrar cobros en un corte cerrado.');
-            abort_if($selectedCut->operator_id !== $installment->loan->operator_id, 422, 'El cobro no pertenece al operador de este corte.');
-        }
 
         $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
         $movementPublicId = (string) Str::ulid();
@@ -190,32 +189,22 @@ class CollectionController extends Controller
             );
         }
 
-        if ($this->shouldApplyImmediately($request)) {
-            try {
-                $paymentApplicationService->confirm($movement, $request->user()->id);
-            } catch (RuntimeException $exception) {
-                return back()->with('warning', $exception->getMessage());
-            }
-        }
-
         $route = match ($data['return_to'] ?? '') {
-            'loan' => route('loans.show', $installment->loan),
+            'loan' => route('loans.show', $installment->loan).'#installment-'.$installment->id,
             'dashboard' => route('dashboard'),
-            'cut' => route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id'])),
+            'cut' => route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id'])).'#cut-payments',
             default => route('collections.index', [
                 'month' => $data['return_month'] ?? now('America/Merida')->format('Y-m'),
                 'operator_id' => $installment->loan->operator_id,
             ]),
         };
 
-        return redirect($route)->with('status', $this->shouldApplyImmediately($request)
-            ? 'Letra marcada como pagada y aplicada al calendario.'
-            : ((($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement))
+        return redirect($route)->with('status', ((($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement))
                 ? 'Letra marcada como pagada y agregada a este corte.'
-                : 'Letra marcada como pagada; solo los cobros reales de operador apareceran al generar corte.'));
+                : 'Letra marcada como pagada y enviada al corte de la fecha seleccionada.'));
     }
 
-    public function markPaidBulk(Request $request, WeeklyCutPeriodService $cutPeriodService, PaymentApplicationService $paymentApplicationService): RedirectResponse
+    public function markPaidBulk(Request $request, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
     {
         $data = $request->validate([
             'installment_ids' => ['required', 'array', 'min:1', 'max:80'],
@@ -294,22 +283,14 @@ class CollectionController extends Controller
                 'confirmation_status' => 'reported',
             ]);
 
-            if ($this->shouldApplyImmediately($request)) {
-                try {
-                    $paymentApplicationService->confirm($movement, $request->user()->id);
-                } catch (RuntimeException $exception) {
-                    return back()->with('warning', $exception->getMessage());
-                }
-            }
-
             $created++;
         }
 
         $loan = $installments->first()->loan;
 
         return redirect()
-            ->route('loans.show', $loan)
-            ->with('status', $this->shouldApplyImmediately($request) ? $created.' letra(s) marcadas como pagadas y aplicadas.' : $created.' letra(s) marcadas como pagadas; apareceran al generar corte.');
+            ->to(route('loans.show', $loan).'#calendar')
+            ->with('status', $created.' letra(s) marcadas como pagadas; apareceran al generar corte.');
     }
 
     private function selectedOperatorId(Request $request): ?int
@@ -397,6 +378,6 @@ class CollectionController extends Controller
 
     private function shouldApplyImmediately(Request $request): bool
     {
-        return $request->user()->can('payments.confirm') && ! $request->user()->hasRole('operador-cartera');
+        return false;
     }
 }
