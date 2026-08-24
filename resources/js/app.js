@@ -690,6 +690,44 @@ document.addEventListener('DOMContentLoaded', () => {
         syncPanels();
     });
 
+    document.querySelectorAll('[data-quick-payment-search]').forEach((input) => {
+        const selectId = input.getAttribute('data-quick-payment-search');
+        const select = selectId ? document.getElementById(selectId) : null;
+
+        if (!(input instanceof HTMLInputElement) || !(select instanceof HTMLSelectElement)) {
+            return;
+        }
+
+        const normalize = (value) => value
+            .toString()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+        const filterOptions = () => {
+            const needle = normalize(input.value).trim();
+            let visibleMatches = 0;
+
+            Array.from(select.options).forEach((option) => {
+                if (option.value === '') {
+                    option.hidden = false;
+                    return;
+                }
+
+                const haystack = normalize(option.getAttribute('data-search-text') || option.textContent || '');
+                const isVisible = needle === '' || haystack.includes(needle);
+
+                option.hidden = !isVisible;
+                visibleMatches += isVisible ? 1 : 0;
+            });
+
+            select.classList.toggle('border-amber-300', needle !== '' && visibleMatches === 0);
+        };
+
+        input.addEventListener('input', filterOptions);
+        filterOptions();
+    });
+
     document.querySelectorAll('[data-cut-pending-search]').forEach((input) => {
         const target = input.getAttribute('data-cut-pending-search');
 

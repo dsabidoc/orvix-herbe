@@ -374,11 +374,22 @@
                         </div>
                     @else
                         <div>
+                            <label class="text-sm font-semibold text-slate-700" for="cut_advance_loan_search">Buscar cartera</label>
+                            <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_advance_loan_search" type="search" placeholder="Buscar por modelo, dia, folio o cliente" data-quick-payment-search="cut_advance_loan">
                             <label class="text-sm font-semibold text-slate-700" for="cut_advance_loan">Cartera</label>
                             <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_advance_loan" data-quick-payment-select>
                                 <option value="">Seleccionar cartera</option>
                                 @foreach ($advanceLoans as $loan)
-                                    <option value="cut-advance-loan-{{ $loan->id }}">
+                                    @php
+                                        $advanceSearchText = implode(' ', [
+                                            $loan->vehicle?->model ?? 'Vehiculo',
+                                            $loan->payment_day,
+                                            $loan->folio,
+                                            $loan->client->first_name,
+                                            $loan->client->last_name,
+                                        ]);
+                                    @endphp
+                                    <option value="cut-advance-loan-{{ $loan->id }}" data-search-text="{{ $advanceSearchText }}">
                                         {{ $loan->vehicle?->model ?? 'Vehiculo' }} · Dia {{ $loan->payment_day }} · {{ $loan->folio }} · {{ $loan->client->first_name }} {{ $loan->client->last_name }}
                                     </option>
                                 @endforeach
