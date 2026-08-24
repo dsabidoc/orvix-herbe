@@ -55,12 +55,22 @@ document.addEventListener('submit', (event) => {
     pendingPaidForm = form;
 
     const capitalAdvanceButton = dialog.querySelector('[data-capital-advance-action]');
-    const allowsCapitalAdvance = form.dataset.capitalAdvanceAllowed === 'true';
+    const normalPaymentButton = dialog.querySelector('[data-normal-payment-action]');
+    const noInvestorsButton = dialog.querySelector('[data-no-investors-action]');
+    const forceCapitalAdvance = form.dataset.forceCapitalAdvance === 'true';
+    const allowsCapitalAdvance = form.dataset.capitalAdvanceAllowed === 'true' || forceCapitalAdvance;
 
     if (capitalAdvanceButton instanceof HTMLButtonElement) {
         capitalAdvanceButton.hidden = !allowsCapitalAdvance;
         capitalAdvanceButton.disabled = !allowsCapitalAdvance;
     }
+
+    [normalPaymentButton, noInvestorsButton].forEach((button) => {
+        if (button instanceof HTMLButtonElement) {
+            button.hidden = forceCapitalAdvance;
+            button.disabled = forceCapitalAdvance;
+        }
+    });
 
     const paymentDateInput = dialog.querySelector('#confirm-paid-date');
     const formPaymentDateInput = form.querySelector('input[name="operated_on"]');
@@ -419,7 +429,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (dialog.returnValue === 'confirm-capital-advance' && pendingPaidForm.dataset.capitalAdvanceAllowed !== 'true') {
+            const forceCapitalAdvance = pendingPaidForm.dataset.forceCapitalAdvance === 'true';
+
+            if (dialog.returnValue === 'confirm-capital-advance' && pendingPaidForm.dataset.capitalAdvanceAllowed !== 'true' && !forceCapitalAdvance) {
                 pendingPaidForm = null;
                 return;
             }
@@ -676,5 +688,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         select.addEventListener('change', syncPanels);
         syncPanels();
+    });
+
+    document.querySelectorAll('[data-cut-pending-search]').forEach((input) => {
+        const target = input.getAttribute('data-cut-pending-search');
+
+        if (!target) {
+            return;
+        }
+
+        const normalize = (value) => value
+            .toString()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+        const rows = Array.from(document.querySelectorAll(`[data-cut-pending-row="${target}"]`));
+        const filterRows = () => {
+            const needle = normalize(input.value).trim();
+
+            rows.forEach((row) => {
+                const haystack = normalize(row.getAttribute('data-search-text') || row.textContent || '');
+                row.classList.toggle('hidden', needle !== '' && !haystack.includes(needle));
+            });
+        };
+
+        input.addEventListener('input', filterRows);
+        filterRows();
     });
 });

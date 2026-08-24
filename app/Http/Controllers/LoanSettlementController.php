@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Loan;
+use App\Models\WeeklyCut;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,7 +26,18 @@ class LoanSettlementController extends Controller
         $data = $request->validate([
             'settlement_reason' => ['required', 'in:pronto_pago_cliente,dejo_de_pagar'],
             'settled_on' => ['nullable', 'date'],
+            'return_to' => ['nullable', 'string', 'max:20'],
+            'cut_id' => ['nullable', 'exists:weekly_cuts,id'],
         ]);
+
+        $selectedCut = null;
+        if (($data['return_to'] ?? null) === 'cut') {
+            abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
+            abort_if(empty($data['cut_id']), 422, 'Selecciona el corte a ajustar.');
+            $selectedCut = WeeklyCut::query()->findOrFail($data['cut_id']);
+            abort_if($selectedCut->status === 'closed', 422, 'No se pueden registrar liquidaciones en un corte cerrado.');
+            abort_if($selectedCut->operator_id !== $loan->operator_id, 422, 'La liquidacion no pertenece al operador de este corte.');
+        }
 
         $service->settle(
             $loan,
@@ -32,6 +45,22 @@ class LoanSettlementController extends Controller
             $request->user()->id,
             CarbonImmutable::parse($data['settled_on'] ?? now('America/Merida')->toDateString(), 'America/Merida'),
         );
+
+        if ($selectedCut) {
+            $movement = CollectionMovement::query()
+                ->where('loan_id', $loan->id)
+                ->where('type', 'settlement')
+                ->where('confirmation_status', 'applied')
+                ->latest('id')
+                ->first();
+
+            if ($movement) {
+                $movement->update(['origin_weekly_cut_id' => $selectedCut->id]);
+                app(WeeklyCutPeriodService::class)->attachMovementToCut($movement, $selectedCut, $request->user()->id);
+            }
+
+            return redirect()->route('cuts.show', $selectedCut)->with('status', 'Credito liquidado y agregado a este corte.');
+        }
 
         return redirect()->route('loans.show', $loan)->with('status', 'Credito liquidado para Orvix.');
     }

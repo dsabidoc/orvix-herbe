@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\AuditEvent;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
+use App\Models\Loan;
 use App\Models\Operator;
 use App\Models\OperatorLedgerEntry;
 use App\Models\WeeklyCut;
@@ -33,7 +35,7 @@ class WeeklyCutController extends Controller
         ]);
     }
 
-    public function show(Request $request, WeeklyCut $cut): View
+    public function show(Request $request, WeeklyCut $cut, LoanSettlementService $settlementService): View
     {
         if ($request->user()->hasRole('operador-cartera') && $cut->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
@@ -61,7 +63,8 @@ class WeeklyCutController extends Controller
 
         return view('cuts.show', [
             'cut' => $cut,
-            'overdueInstallments' => $this->overdueInstallmentsForCut($cut),
+            'pendingInstallments' => $this->pendingInstallmentsForCut($cut),
+            'advanceLoans' => $this->advanceLoansForCut($cut, $settlementService),
         ]);
     }
 
@@ -383,21 +386,75 @@ class WeeklyCutController extends Controller
         return redirect()->route('cuts.index')->with('status', 'Corte eliminado. Los cobros y movimientos relacionados se conservaron sin corte asignado.');
     }
 
-    private function overdueInstallmentsForCut(WeeklyCut $cut)
+    private function pendingInstallmentsForCut(WeeklyCut $cut)
     {
-        return $this->overdueInstallmentsForPeriod($cut->operator_id, $cut->period_starts_on->toDateString());
-    }
+        $cutDate = $cut->period_starts_on->toDateString();
 
-    private function overdueInstallmentsForPeriod(int $operatorId, string $periodStartsOn)
-    {
         return Installment::query()
             ->with(['loan.client', 'loan.vehicle', 'reportedMovement'])
             ->where('remaining_amount', '>', 0)
-            ->whereDate('due_date', '<', $periodStartsOn)
+            ->whereDate('due_date', '<=', $cutDate)
             ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', ['reported', 'applied']))
-            ->whereHas('loan', fn ($query) => $query->where('operator_id', $operatorId)->where('status', 'active'))
-            ->orderBy('due_date')
-            ->get();
+            ->whereHas('loan', fn ($query) => $query
+                ->where('operator_id', $cut->operator_id)
+                ->where('status', 'active')
+                ->where('is_frozen', false))
+            ->get()
+            ->sort(function (Installment $first, Installment $second): int {
+                return [
+                    (int) ($first->loan->payment_day ?? 0),
+                    (string) ($first->loan->vehicle?->model ?? ''),
+                    $first->due_date->timestamp,
+                    (string) $first->loan->folio,
+                    (int) $first->number,
+                ] <=> [
+                    (int) ($second->loan->payment_day ?? 0),
+                    (string) ($second->loan->vehicle?->model ?? ''),
+                    $second->due_date->timestamp,
+                    (string) $second->loan->folio,
+                    (int) $second->number,
+                ];
+            })
+            ->values();
+    }
+
+    private function advanceLoansForCut(WeeklyCut $cut, LoanSettlementService $settlementService)
+    {
+        return Loan::query()
+            ->with([
+                'client',
+                'vehicle',
+                'installments' => fn ($query) => $query
+                    ->with('reportedMovement')
+                    ->where('remaining_amount', '>', 0)
+                    ->orderBy('number'),
+            ])
+            ->where('operator_id', $cut->operator_id)
+            ->where('status', 'active')
+            ->where('is_frozen', false)
+            ->whereHas('installments', fn ($query) => $query
+                ->where('remaining_amount', '>', 0)
+                ->whereDate('due_date', '<=', $cut->period_starts_on->toDateString())
+                ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', ['reported', 'applied'])))
+            ->get()
+            ->filter(fn (Loan $loan) => $loan->installments->isNotEmpty())
+            ->sort(function (Loan $first, Loan $second): int {
+                return [
+                    (int) ($first->payment_day ?? 0),
+                    (string) ($first->vehicle?->model ?? ''),
+                    (string) $first->folio,
+                ] <=> [
+                    (int) ($second->payment_day ?? 0),
+                    (string) ($second->vehicle?->model ?? ''),
+                    (string) $second->folio,
+                ];
+            })
+            ->map(function (Loan $loan) use ($settlementService): Loan {
+                $loan->setAttribute('cut_settlement_quote', $settlementService->quote($loan));
+
+                return $loan;
+            })
+            ->values();
     }
 
     private function latestOperatorBalance(int $operatorId): int

@@ -25,12 +25,12 @@ class WeeklyCutPeriodService
             return false;
         }
 
-        if (! $movement->affects_investors) {
-            return false;
-        }
-
         if ($movement->weekly_cut_id || $movement->origin_weekly_cut_id) {
             return true;
+        }
+
+        if (! $movement->affects_investors) {
+            return false;
         }
 
         $registeredBy = $movement->relationLoaded('registeredBy')
