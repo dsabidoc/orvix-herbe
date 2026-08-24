@@ -556,6 +556,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.querySelectorAll('[data-loan-tabs]').forEach((container) => {
+        const buttons = Array.from(container.querySelectorAll('[data-loan-tab-button]'));
+        const panels = Array.from(container.querySelectorAll('[data-loan-tab-panel]'));
+
+        const activate = (target) => {
+            buttons.forEach((button) => {
+                const isActive = button.getAttribute('data-loan-tab-button') === target;
+
+                button.classList.toggle('bg-slate-950', isActive);
+                button.classList.toggle('text-white', isActive);
+                button.classList.toggle('border', !isActive);
+                button.classList.toggle('border-slate-300', !isActive);
+                button.classList.toggle('bg-white', !isActive);
+                button.classList.toggle('text-slate-700', !isActive);
+            });
+
+            panels.forEach((panel) => {
+                panel.classList.toggle('hidden', panel.getAttribute('data-loan-tab-panel') !== target);
+            });
+        };
+
+        const hashTarget = window.location.hash ? document.querySelector(window.location.hash) : null;
+        const hashPanel = hashTarget?.closest('[data-loan-tab-panel]');
+        const initial = hashPanel?.getAttribute('data-loan-tab-panel') || 'general';
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const target = button.getAttribute('data-loan-tab-button');
+
+                if (target) {
+                    activate(target);
+                }
+            });
+        });
+
+        activate(initial);
+
+        if (hashTarget instanceof HTMLElement && hashPanel) {
+            requestAnimationFrame(() => hashTarget.scrollIntoView({ block: 'center' }));
+        }
+    });
+
     const parseJsonDataset = (element, key, fallback = {}) => {
         try {
             return JSON.parse(element.dataset[key] || JSON.stringify(fallback));

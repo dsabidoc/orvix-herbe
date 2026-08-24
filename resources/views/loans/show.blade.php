@@ -151,140 +151,147 @@
             @endif
         </section>
 
-        <section class="grid gap-4 {{ $canManageLoanDetails && $canViewInvoice ? 'lg:grid-cols-3' : 'lg:grid-cols-2' }}">
-            @if ($canManageLoanDetails)
-            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 class="font-bold text-slate-950">Control operativo</h3>
-                <dl class="mt-3 space-y-2 text-sm">
-                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Estado cobranza</dt><dd class="font-bold {{ $loan->is_frozen ? 'text-blue-700' : 'text-emerald-700' }}">{{ $loan->is_frozen ? 'Congelado' : 'Activo' }}</dd></div>
-                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Morosidad</dt><dd class="font-bold">{{ number_format((float) ($loan->delinquency_rate ?? 0), 2) }}% despues de {{ (int) ($loan->delinquency_grace_days ?? 0) }} dias</dd></div>
-                </dl>
-                @if ($canManageLoanDetails)
-                    @if ($loan->is_frozen)
-                        <form class="mt-4" method="POST" action="{{ route('loans.unfreeze', $loan) }}">
-                            @csrf
-                            <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Reactivar prestamo</button>
-                        </form>
-                    @else
-                        <button class="mt-4 w-full rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700" type="button" data-open-modal="freeze-loan-modal">Congelar prestamo</button>
-                    @endif
-                @endif
+        <section class="rounded-lg border border-slate-200 bg-white shadow-sm" data-loan-tabs>
+            <div class="no-print flex flex-wrap gap-2 border-b border-slate-200 px-5 py-3">
+                <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" data-loan-tab-button="general">General</button>
+                <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" type="button" data-loan-tab-button="calendar">Calendario</button>
+                <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" type="button" data-loan-tab-button="movements">Movimientos</button>
             </div>
-            @endif
-            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 class="font-bold text-slate-950">Aval</h3>
-                <dl class="mt-3 space-y-2 text-sm">
-                    <div><dt class="text-slate-500">Nombre</dt><dd class="font-semibold">{{ $loan->guarantor_name ?: '-' }}</dd></div>
-                    <div><dt class="text-slate-500">Celular</dt><dd class="font-semibold">{{ $loan->guarantor_phone ?: '-' }}</dd></div>
-                    <div><dt class="text-slate-500">Direccion</dt><dd class="font-semibold">{{ $loan->guarantor_address ?: '-' }}</dd></div>
-                </dl>
-            </div>
-            @if ($canViewInvoice)
-            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 class="font-bold text-slate-950">Factura fisica</h3>
-                <dl class="mt-3 space-y-2 text-sm">
-                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Ubicacion</dt><dd class="font-bold">{{ InvoiceHolders::label($loan->invoice_holder) }}</dd></div>
-                    <div><dt class="text-slate-500">Archivo</dt><dd class="font-semibold">{{ $loan->invoiceDocument?->original_name ?: 'Sin factura PDF' }}</dd></div>
-                </dl>
-                <button class="mt-4 w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700" type="button" data-open-modal="loan-invoice-modal">{{ $canManageInvoice ? 'Gestionar factura' : 'Ver factura' }}</button>
-            </div>
-            @endif
-        </section>
 
-        @if ($canManageLoanDetails)
-        <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-200 px-5 py-4">
-                <h3 class="font-bold text-slate-950">Origen del desembolso</h3>
-                <p class="mt-1 text-sm text-slate-500">Entrega de fondos relacionada con este prestamo.</p>
-            </div>
-            <div class="divide-y divide-slate-100">
-                @forelse ($loan->fundDisbursements as $disbursement)
-                    <div class="grid gap-3 p-5 text-sm md:grid-cols-6">
-                        <div>
-                            <p class="text-slate-500">Fecha entrega</p>
-                            <p class="font-bold text-slate-950">{{ $disbursement->delivered_on->format('d/m/Y') }}</p>
-                            @if ($disbursement->is_delivery_date_inferred)
-                                <p class="mt-1 text-xs text-amber-700">Inferida historica</p>
-                            @endif
-                        </div>
-                        <div>
-                            <p class="text-slate-500">Importe</p>
-                            <p class="font-bold text-slate-950">{{ Money::mxn($disbursement->amount) }}</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500">Operador</p>
-                            <p class="font-bold text-slate-950">{{ $disbursement->operator?->name }}</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500">Corte</p>
-                            @if ($disbursement->weeklyCut)
-                                <a class="font-bold text-[#0f766e]" href="{{ route('cuts.show', $disbursement->weeklyCut) }}">
-                                    {{ $disbursement->weeklyCut->settlement_on?->format('d/m/Y') ?? $disbursement->weeklyCut->period_ends_on->format('d/m/Y') }}
-                                </a>
+            <div id="loan-general" class="space-y-4 p-5" data-loan-tab-panel="general">
+                <section class="grid gap-4 {{ $canManageLoanDetails && $canViewInvoice ? 'lg:grid-cols-3' : 'lg:grid-cols-2' }}">
+                    @if ($canManageLoanDetails)
+                    <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                        <h3 class="font-bold text-slate-950">Control operativo</h3>
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex justify-between gap-3"><dt class="text-slate-500">Estado cobranza</dt><dd class="font-bold {{ $loan->is_frozen ? 'text-blue-700' : 'text-emerald-700' }}">{{ $loan->is_frozen ? 'Congelado' : 'Activo' }}</dd></div>
+                            <div class="flex justify-between gap-3"><dt class="text-slate-500">Morosidad</dt><dd class="font-bold">{{ number_format((float) ($loan->delinquency_rate ?? 0), 2) }}% despues de {{ (int) ($loan->delinquency_grace_days ?? 0) }} dias</dd></div>
+                        </dl>
+                        @if ($canManageLoanDetails)
+                            @if ($loan->is_frozen)
+                                <form class="mt-4" method="POST" action="{{ route('loans.unfreeze', $loan) }}">
+                                    @csrf
+                                    <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Reactivar prestamo</button>
+                                </form>
                             @else
-                                <p class="font-bold text-slate-950">Fuera de corte</p>
+                                <button class="mt-4 w-full rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700" type="button" data-open-modal="freeze-loan-modal">Congelar prestamo</button>
                             @endif
-                        </div>
-                        <div>
-                            <p class="text-slate-500">Registro</p>
-                            <p class="font-bold text-slate-950">{{ $disbursement->registeredBy?->name ?? 'Sistema' }}</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500">Origen capital</p>
-                            <p class="font-bold text-slate-950">{{ ucfirst(str_replace('_', ' ', (string) $disbursement->capital_source)) }}</p>
-                        </div>
+                        @endif
                     </div>
-                @empty
-                    <p class="p-5 text-sm text-slate-500">Este prestamo no tiene origen de desembolso registrado. Puede tratarse de informacion historica anterior al control de cortes.</p>
-                @endforelse
-            </div>
-        </section>
-        @endif
+                    @endif
+                    <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                        <h3 class="font-bold text-slate-950">Aval</h3>
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div><dt class="text-slate-500">Nombre</dt><dd class="font-semibold">{{ $loan->guarantor_name ?: '-' }}</dd></div>
+                            <div><dt class="text-slate-500">Celular</dt><dd class="font-semibold">{{ $loan->guarantor_phone ?: '-' }}</dd></div>
+                            <div><dt class="text-slate-500">Direccion</dt><dd class="font-semibold">{{ $loan->guarantor_address ?: '-' }}</dd></div>
+                        </dl>
+                    </div>
+                    @if ($canViewInvoice)
+                    <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                        <h3 class="font-bold text-slate-950">Factura fisica</h3>
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex justify-between gap-3"><dt class="text-slate-500">Ubicacion</dt><dd class="font-bold">{{ InvoiceHolders::label($loan->invoice_holder) }}</dd></div>
+                            <div><dt class="text-slate-500">Archivo</dt><dd class="font-semibold">{{ $loan->invoiceDocument?->original_name ?: 'Sin factura PDF' }}</dd></div>
+                        </dl>
+                        <button class="mt-4 w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700" type="button" data-open-modal="loan-invoice-modal">{{ $canManageInvoice ? 'Gestionar factura' : 'Ver factura' }}</button>
+                    </div>
+                    @endif
+                </section>
 
-        @if ($canManageLoanDetails)
-        <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <h3 class="font-bold text-slate-950">Inversionistas del prestamo</h3>
-                    <p class="mt-1 text-sm text-slate-500">Capital aportado y porcentaje pactado sobre intereses del credito.</p>
-                </div>
-                @if ($canOperateLoan)
-                    <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" data-open-modal="loan-investors-modal">Editar inversionistas</button>
+                @if ($canManageLoanDetails)
+                <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div class="border-b border-slate-200 px-5 py-4">
+                        <h3 class="font-bold text-slate-950">Origen del desembolso</h3>
+                        <p class="mt-1 text-sm text-slate-500">Entrega de fondos relacionada con este prestamo.</p>
+                    </div>
+                    <div class="divide-y divide-slate-100">
+                        @forelse ($loan->fundDisbursements as $disbursement)
+                            <div class="grid gap-3 p-5 text-sm md:grid-cols-6">
+                                <div>
+                                    <p class="text-slate-500">Fecha entrega</p>
+                                    <p class="font-bold text-slate-950">{{ $disbursement->delivered_on->format('d/m/Y') }}</p>
+                                    @if ($disbursement->is_delivery_date_inferred)
+                                        <p class="mt-1 text-xs text-amber-700">Inferida historica</p>
+                                    @endif
+                                </div>
+                                <div>
+                                    <p class="text-slate-500">Importe</p>
+                                    <p class="font-bold text-slate-950">{{ Money::mxn($disbursement->amount) }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-slate-500">Operador</p>
+                                    <p class="font-bold text-slate-950">{{ $disbursement->operator?->name }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-slate-500">Corte</p>
+                                    @if ($disbursement->weeklyCut)
+                                        <a class="font-bold text-[#0f766e]" href="{{ route('cuts.show', $disbursement->weeklyCut) }}">
+                                            {{ $disbursement->weeklyCut->settlement_on?->format('d/m/Y') ?? $disbursement->weeklyCut->period_ends_on->format('d/m/Y') }}
+                                        </a>
+                                    @else
+                                        <p class="font-bold text-slate-950">Fuera de corte</p>
+                                    @endif
+                                </div>
+                                <div>
+                                    <p class="text-slate-500">Registro</p>
+                                    <p class="font-bold text-slate-950">{{ $disbursement->registeredBy?->name ?? 'Sistema' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-slate-500">Origen capital</p>
+                                    <p class="font-bold text-slate-950">{{ ucfirst(str_replace('_', ' ', (string) $disbursement->capital_source)) }}</p>
+                                </div>
+                            </div>
+                        @empty
+                            <p class="p-5 text-sm text-slate-500">Este prestamo no tiene origen de desembolso registrado. Puede tratarse de informacion historica anterior al control de cortes.</p>
+                        @endforelse
+                    </div>
+                </section>
+
+                <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <h3 class="font-bold text-slate-950">Inversionistas del prestamo</h3>
+                            <p class="mt-1 text-sm text-slate-500">Capital aportado y porcentaje pactado sobre intereses del credito.</p>
+                        </div>
+                        @if ($canOperateLoan)
+                            <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" data-open-modal="loan-investors-modal">Editar inversionistas</button>
+                        @endif
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[620px] text-left text-sm">
+                            <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+                                <tr>
+                                    <th class="px-5 py-3">Participante</th>
+                                    <th class="px-5 py-3 text-right">Capital</th>
+                                    <th class="px-5 py-3 text-right">% Interes</th>
+                                    <th class="px-5 py-3">Rol</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @forelse ($loan->investments as $investment)
+                                    @php
+                                        $interestSharePercent = (float) $investment->investor_share_rate * 100;
+                                    @endphp
+                                    <tr>
+                                        <td class="px-5 py-3 font-semibold text-slate-950">{{ $investment->investor?->name }}</td>
+                                        <td class="px-5 py-3 text-right">{{ Money::mxn($investment->amount) }}</td>
+                                        <td class="px-5 py-3 text-right">{{ number_format($interestSharePercent, 2) }}%</td>
+                                        <td class="px-5 py-3 text-slate-500">Inversionista</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td class="px-5 py-6 text-sm text-slate-500" colspan="4">Este prestamo aun no tiene inversionistas configurados.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
                 @endif
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[620px] text-left text-sm">
-                    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
-                        <tr>
-                            <th class="px-5 py-3">Participante</th>
-                            <th class="px-5 py-3 text-right">Capital</th>
-                            <th class="px-5 py-3 text-right">% Interes</th>
-                            <th class="px-5 py-3">Rol</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @forelse ($loan->investments as $investment)
-                            @php
-                                $interestSharePercent = (float) $investment->investor_share_rate * 100;
-                            @endphp
-                            <tr>
-                                <td class="px-5 py-3 font-semibold text-slate-950">{{ $investment->investor?->name }}</td>
-                                <td class="px-5 py-3 text-right">{{ Money::mxn($investment->amount) }}</td>
-                                <td class="px-5 py-3 text-right">{{ number_format($interestSharePercent, 2) }}%</td>
-                                <td class="px-5 py-3 text-slate-500">Inversionista</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td class="px-5 py-6 text-sm text-slate-500" colspan="4">Este prestamo aun no tiene inversionistas configurados.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
-        @endif
 
-        <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div id="loan-calendar" class="hidden" data-loan-tab-panel="calendar">
             <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h3 class="font-bold text-slate-950">Calendario contractual</h3>
@@ -303,7 +310,7 @@
                     </div>
                 @endif
             </div>
-            <div class="max-h-[560px] overflow-x-auto overflow-y-auto">
+            <div class="overflow-x-auto">
                 <table class="w-full min-w-[940px] table-fixed text-left text-sm">
                     <colgroup>
                         <col class="w-[40px]">
@@ -403,9 +410,9 @@
                     </tbody>
                 </table>
             </div>
-        </section>
+            </div>
 
-        <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div id="loan-movements" class="hidden" data-loan-tab-panel="movements">
             <div class="border-b border-slate-200 px-5 py-4">
                 <h3 class="font-bold text-slate-950">Movimientos</h3>
             </div>
@@ -462,6 +469,7 @@
                 @empty
                     <p class="p-5 text-sm text-slate-500">Sin movimientos.</p>
                 @endforelse
+            </div>
             </div>
         </section>
     </div>
