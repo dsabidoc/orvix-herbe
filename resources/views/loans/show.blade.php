@@ -793,7 +793,7 @@
                         </div>
                     @endif
                     <div>
-                        <label class="text-sm font-semibold text-slate-700" for="settled_on">Fecha de liquidacion</label>
+                        <label class="text-sm font-semibold text-slate-700" for="settled_on">Fecha de liquidación y se agrega al corte</label>
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="settled_on" name="settled_on" type="date" value="{{ now('America/Merida')->toDateString() }}">
                     </div>
                     <div>

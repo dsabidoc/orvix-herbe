@@ -44,13 +44,14 @@ class LoanSettlementController extends Controller
             $data['settlement_reason'],
             $request->user()->id,
             CarbonImmutable::parse($data['settled_on'] ?? now('America/Merida')->toDateString(), 'America/Merida'),
+            true,
         );
 
         if ($selectedCut) {
             $movement = CollectionMovement::query()
                 ->where('loan_id', $loan->id)
                 ->where('type', 'settlement')
-                ->where('confirmation_status', 'applied')
+                ->where('confirmation_status', 'reported')
                 ->latest('id')
                 ->first();
 
@@ -62,7 +63,7 @@ class LoanSettlementController extends Controller
             return redirect()->route('cuts.show', $selectedCut)->with('status', 'Credito liquidado y agregado a este corte.');
         }
 
-        return redirect()->route('loans.show', $loan)->with('status', 'Credito liquidado para Orvix.');
+        return redirect()->route('loans.show', $loan)->with('status', 'Liquidacion enviada al corte de la fecha seleccionada.');
     }
 
     public function reverse(Request $request, Loan $loan, PaymentApplicationService $service): RedirectResponse

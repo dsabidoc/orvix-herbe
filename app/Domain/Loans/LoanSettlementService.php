@@ -6,6 +6,7 @@ use App\Domain\Investors\InvestorReturnRecorder;
 use App\Models\CollectionMovement;
 use App\Models\Loan;
 use App\Models\PaymentAllocation;
+use App\Models\WeeklyCutItem;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -109,9 +110,9 @@ class LoanSettlementService
         ];
     }
 
-    public function settle(Loan $loan, string $reason, int $userId, CarbonImmutable|string|null $settledOn = null): Loan
+    public function settle(Loan $loan, string $reason, int $userId, CarbonImmutable|string|null $settledOn = null, bool $deferToCut = false): Loan
     {
-        return DB::transaction(function () use ($loan, $reason, $userId, $settledOn) {
+        return DB::transaction(function () use ($loan, $reason, $userId, $settledOn, $deferToCut) {
             $loan = Loan::query()
                 ->with(['investments'])
                 ->whereKey($loan->id)
@@ -129,58 +130,131 @@ class LoanSettlementService
                     'loan_id' => $loan->id,
                     'operator_id' => $loan->operator_id,
                     'registered_by' => $userId,
-                    'confirmed_by' => $userId,
+                    'confirmed_by' => $deferToCut ? null : $userId,
                     'operated_on' => $quote['settled_on'],
                     'registered_at' => now('America/Merida'),
-                    'confirmed_at' => now('America/Merida'),
+                    'confirmed_at' => $deferToCut ? null : now('America/Merida'),
                     'contract_amount' => Money::decimal($quote['total_cents']),
                     'operator_surcharge_amount' => '0.00',
                     'external_concepts_amount' => '0.00',
                     'affects_investors' => true,
                     'type' => 'settlement',
                     'payment_method' => 'cash',
-                    'notes' => 'Liquidacion: capital futuro, interes del mes corriente y sin intereses futuros.',
-                    'confirmation_status' => 'applied',
+                    'notes' => 'Liquidacion: capital futuro, interes del mes corriente y sin intereses futuros. Motivo='.$reason,
+                    'confirmation_status' => $deferToCut ? 'reported' : 'applied',
                 ]);
             }
 
-            foreach ($quote['rows'] as $row) {
-                $installment = $loan->installments()->whereKey($row['installment_id'])->lockForUpdate()->firstOrFail();
-                $newAppliedCents = Money::cents($installment->applied_amount) + $row['amount_cents'];
-
-                $installment->update([
-                    'applied_amount' => Money::decimal($newAppliedCents),
-                    'remaining_amount' => '0.00',
-                    'status' => 'settled',
-                ]);
-
-                if ($movement && $row['amount_cents'] > 0) {
-                    PaymentAllocation::query()->create([
-                        'collection_movement_id' => $movement->id,
-                        'installment_id' => $installment->id,
-                        'amount' => Money::decimal($row['amount_cents']),
-                    ]);
-
-                    $this->investorReturnRecorder->record(
-                        $loan,
-                        $installment,
-                        $row['principal_cents'],
-                        $row['interest_cents'],
-                        $movement,
-                        $userId,
-                    );
-                }
+            if ($deferToCut) {
+                return $loan->fresh(['client', 'installments', 'movements']);
             }
 
-            $loan->update([
-                'status' => 'settled',
-                'settlement_reason' => $reason,
-                'settled_at' => $settledOn->endOfDay(),
-                'settled_by' => $userId,
-            ]);
+            $this->applyQuoteRows($loan, $quote, $movement, $reason, $userId, $settledOn);
 
             return $loan->fresh(['client', 'installments', 'movements']);
         });
+    }
+
+    public function applyReportedSettlement(CollectionMovement $movement, int $confirmedByUserId): CollectionMovement
+    {
+        return DB::transaction(function () use ($movement, $confirmedByUserId) {
+            $movement = CollectionMovement::query()
+                ->with('loan')
+                ->whereKey($movement->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($movement->type !== 'settlement' || $movement->confirmation_status !== 'reported') {
+                throw new \RuntimeException('Esta liquidacion ya no esta pendiente para aplicar.');
+            }
+
+            $loan = Loan::query()
+                ->with(['investments'])
+                ->whereKey($movement->loan_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $settledOn = CarbonImmutable::parse($movement->operated_on, 'America/Merida');
+            $reason = str_contains((string) $movement->notes, 'Motivo=dejo_de_pagar')
+                ? 'dejo_de_pagar'
+                : 'pronto_pago_cliente';
+            $quote = $this->quote($loan, $settledOn);
+
+            $movement->update([
+                'contract_amount' => Money::decimal($quote['total_cents']),
+                'confirmed_by' => $confirmedByUserId,
+                'confirmed_at' => now('America/Merida'),
+                'confirmation_status' => 'applied',
+            ]);
+
+            $this->applyQuoteRows($loan, $quote, $movement->fresh(), $reason, $confirmedByUserId, $settledOn);
+
+            return $movement->fresh(['loan.client']);
+        });
+    }
+
+    public function cancelReportedSettlement(CollectionMovement $movement, int $reversedByUserId, string $reason = 'Liquidacion reportada cancelada'): CollectionMovement
+    {
+        return DB::transaction(function () use ($movement, $reversedByUserId, $reason) {
+            $movement = CollectionMovement::query()
+                ->whereKey($movement->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($movement->type !== 'settlement' || $movement->confirmation_status !== 'reported') {
+                throw new \RuntimeException('Esta liquidacion ya no esta pendiente para cancelar.');
+            }
+
+            WeeklyCutItem::query()
+                ->where('collection_movement_id', $movement->id)
+                ->delete();
+
+            $movement->update([
+                'confirmation_status' => 'reversed',
+                'weekly_cut_id' => null,
+                'origin_weekly_cut_id' => null,
+                'notes' => trim((string) $movement->notes."\n".$reason.' por administracion el '.now('America/Merida')->format('d/m/Y H:i')),
+            ]);
+
+            return $movement->fresh(['loan.client']);
+        });
+    }
+
+    private function applyQuoteRows(Loan $loan, array $quote, ?CollectionMovement $movement, string $reason, int $userId, CarbonImmutable $settledOn): void
+    {
+        foreach ($quote['rows'] as $row) {
+            $installment = $loan->installments()->whereKey($row['installment_id'])->lockForUpdate()->firstOrFail();
+            $newAppliedCents = Money::cents($installment->applied_amount) + $row['amount_cents'];
+
+            $installment->update([
+                'applied_amount' => Money::decimal($newAppliedCents),
+                'remaining_amount' => '0.00',
+                'status' => 'settled',
+            ]);
+
+            if ($movement && $row['amount_cents'] > 0) {
+                PaymentAllocation::query()->create([
+                    'collection_movement_id' => $movement->id,
+                    'installment_id' => $installment->id,
+                    'amount' => Money::decimal($row['amount_cents']),
+                ]);
+
+                $this->investorReturnRecorder->record(
+                    $loan,
+                    $installment,
+                    $row['principal_cents'],
+                    $row['interest_cents'],
+                    $movement,
+                    $userId,
+                );
+            }
+        }
+
+        $loan->update([
+            'status' => 'settled',
+            'settlement_reason' => $reason,
+            'settled_at' => $settledOn->endOfDay(),
+            'settled_by' => $userId,
+        ]);
     }
 
     /**

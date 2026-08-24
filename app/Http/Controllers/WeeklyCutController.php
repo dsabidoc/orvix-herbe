@@ -132,7 +132,7 @@ class WeeklyCutController extends Controller
         return $cutPeriodService->refreshTotals($cut);
     }
 
-    public function confirm(Request $request, WeeklyCut $cut, PaymentApplicationService $service): RedirectResponse
+    public function confirm(Request $request, WeeklyCut $cut, PaymentApplicationService $service, LoanSettlementService $settlementService): RedirectResponse
     {
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
@@ -159,7 +159,11 @@ class WeeklyCutController extends Controller
 
                 if ($item->movement->confirmation_status === 'reported') {
                     try {
-                        $service->confirm($item->movement, $request->user()->id);
+                        if ($item->movement->type === 'settlement') {
+                            $settlementService->applyReportedSettlement($item->movement, $request->user()->id);
+                        } else {
+                            $service->confirm($item->movement, $request->user()->id);
+                        }
                     } catch (RuntimeException) {
                         // Keep confirming the cut totals; item-level issues stay visible on the movement.
                     }
@@ -331,7 +335,7 @@ class WeeklyCutController extends Controller
         return redirect()->route('cuts.show', $cut)->with('status', 'Corte reabierto.');
     }
 
-    public function reverseMovement(Request $request, WeeklyCut $cut, CollectionMovement $movement, PaymentApplicationService $service): RedirectResponse
+    public function reverseMovement(Request $request, WeeklyCut $cut, CollectionMovement $movement, PaymentApplicationService $service, LoanSettlementService $settlementService): RedirectResponse
     {
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
         abort_if($cut->status === 'closed', 422, 'No se puede revertir un movimiento en un corte cerrado sin reabrirlo.');
@@ -339,7 +343,11 @@ class WeeklyCutController extends Controller
 
         try {
             if ($movement->type === 'settlement') {
-                $service->reverseSettlement($movement, $request->user()->id, 'Revertido desde detalle de corte');
+                if ($movement->confirmation_status === 'reported') {
+                    $settlementService->cancelReportedSettlement($movement, $request->user()->id, 'Revertido desde detalle de corte');
+                } else {
+                    $service->reverseSettlement($movement, $request->user()->id, 'Revertido desde detalle de corte');
+                }
             } else {
                 $service->reverse($movement, $request->user()->id, 'Revertido desde detalle de corte');
             }
