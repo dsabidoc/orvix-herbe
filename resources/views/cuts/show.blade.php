@@ -165,17 +165,17 @@
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="pending_installments_search_{{ $cut->id }}" type="search" placeholder="Buscar por modelo, folio, cliente, fecha o pago" data-cut-pending-search="cut-pending-{{ $cut->id }}">
                     </div>
                 </div>
-                <div class="no-print overflow-hidden">
-                    <table class="cut-print-table w-full table-fixed text-left text-sm">
+                <div class="no-print overflow-x-auto">
+                    <table class="cut-print-table w-auto text-left text-sm">
                         <thead class="bg-red-50 text-xs uppercase text-red-700">
                             <tr>
-                                <th class="w-[26%] px-4 py-3">Modelo / dia</th>
-                                <th class="w-[22%] px-4 py-3">Cliente</th>
-                                <th class="w-[12%] px-4 py-3">Num pagare</th>
-                                <th class="w-[17%] px-4 py-3">Fecha vencimiento</th>
-                                <th class="w-[14%] px-4 py-3 text-right">Pago</th>
+                                <th class="px-3 py-3">Modelo / dia</th>
+                                <th class="px-3 py-3">Cliente</th>
+                                <th class="whitespace-nowrap px-3 py-3">Num pagare</th>
+                                <th class="whitespace-nowrap px-3 py-3">Fecha vencimiento</th>
+                                <th class="whitespace-nowrap px-3 py-3 text-right">Pago</th>
                                 @can('weekly-cuts.confirm')
-                                    <th class="w-[9%] px-4 py-3 text-right">Accion</th>
+                                    <th class="whitespace-nowrap px-3 py-3 text-right">Accion</th>
                                 @endcan
                             </tr>
                         </thead>
@@ -199,16 +199,16 @@
                                     ]);
                                 @endphp
                                 <tr data-cut-pending-row="cut-pending-{{ $cut->id }}" data-search-text="{{ $searchText }}">
-                                    <td class="px-4 py-3">
-                                        <a class="break-words font-semibold text-[#0f766e]" href="{{ route('loans.show', $installment->loan) }}">{{ $vehicleLabel }} · Dia {{ $installment->loan->payment_day }}</a>
-                                        <p class="break-all text-xs text-slate-500">{{ $installment->loan->folio }}</p>
+                                    <td class="px-3 py-3">
+                                        <a class="font-semibold text-[#0f766e]" href="{{ route('loans.show', $installment->loan) }}">{{ $vehicleLabel }} · Dia {{ $installment->loan->payment_day }}</a>
+                                        <p class="text-xs text-slate-500">{{ $installment->loan->folio }}</p>
                                     </td>
-                                    <td class="px-4 py-3 font-semibold text-slate-950">{{ $installment->loan->client->first_name }}</td>
-                                    <td class="px-4 py-3">{{ $installment->number }}</td>
-                                    <td class="px-4 py-3">{{ $installment->due_date->format('d/m/Y') }}</td>
-                                    <td class="px-4 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
+                                    <td class="px-3 py-3 font-semibold text-slate-950">{{ $installment->loan->client->first_name }}</td>
+                                    <td class="whitespace-nowrap px-3 py-3">{{ $installment->number }}</td>
+                                    <td class="whitespace-nowrap px-3 py-3">{{ $installment->due_date->format('d/m/Y') }}</td>
+                                    <td class="whitespace-nowrap px-3 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
                                     @can('weekly-cuts.confirm')
-                                        <td class="px-4 py-3 text-right">
+                                        <td class="whitespace-nowrap px-3 py-3 text-right">
                                             <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid>
                                                 @csrf
                                                 <input name="return_to" type="hidden" value="cut">
