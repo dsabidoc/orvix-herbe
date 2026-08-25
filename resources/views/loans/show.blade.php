@@ -26,6 +26,9 @@
     $vehicleModelTitle = $vehicleModelTitle !== '' ? $vehicleModelTitle : 'Vehiculo sin modelo';
     $vehicleMetaTitle = trim(implode(' ', array_filter([$loan->vehicle?->brand, $loan->vehicle?->year])));
     $vehicleMetaTitle = $vehicleMetaTitle !== '' ? $vehicleMetaTitle : 'Marca y año sin datos';
+    $loanTermLabel = ($loan->calculation_method ?? 'regular') === 'interest_only'
+        ? 'Sin plazo'
+        : ((int) $loan->term_months.' meses');
     $vehicleVinLabel = filled($loan->vehicle?->vin) ? $loan->vehicle->vin : 'N/A';
     $vehiclePlatesLabel = filled($loan->vehicle?->plates) ? $loan->vehicle->plates : 'N/A';
     $nextDelinquencyCents = 0;
@@ -50,7 +53,7 @@
                 <div>
                     <p class="text-sm font-semibold text-[#0f766e]">{{ $loan->operator?->name }} · {{ $loan->folio }}</p>
                     <h3 class="mt-1 text-2xl font-bold text-slate-950">{{ $vehicleModelTitle }} · Dia {{ $loan->payment_day }}</h3>
-                    <p class="mt-1 text-sm font-semibold text-slate-500">{{ $vehicleMetaTitle }}</p>
+                    <p class="mt-1 text-sm font-semibold text-slate-500">{{ $vehicleMetaTitle }} · {{ $loanTermLabel }}</p>
                     <p class="mt-1 text-sm text-slate-500">
                         VIN {{ $vehicleVinLabel }} · Placas {{ $vehiclePlatesLabel }}
                     </p>
