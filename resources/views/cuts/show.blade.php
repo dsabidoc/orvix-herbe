@@ -394,7 +394,7 @@
                 <div class="border-b border-slate-200 px-5 py-4">
                     <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Adelanto / liquidacion</p>
                     <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $cut->operator->name }} · {{ $cut->period_starts_on->format('d/m/Y') }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">Busca cualquier cartera activa del operador de este corte para adelantar letras o liquidarla sin salir de la pantalla.</p>
+                    <p class="mt-1 text-sm text-slate-500">Busca cualquier cartera activa del operador de este corte para registrar pagos, adelantar letras o liquidarla sin salir de la pantalla.</p>
                 </div>
                 <div class="space-y-4 px-5 py-4">
                     @if ($advanceLoans->isEmpty())
@@ -428,7 +428,9 @@
                         @foreach ($advanceLoans as $loan)
                             @php
                                 $quote = $loan->getAttribute('cut_settlement_quote');
-                                $cutDateString = $cut->period_starts_on->toDateString();
+                                $cutDate = $cut->period_starts_on;
+                                $cutDateString = $cutDate->toDateString();
+                                $cutMonthEndString = $cutDate->copy()->endOfMonth()->toDateString();
                             @endphp
                             <section class="hidden rounded-lg border border-slate-200" data-quick-payment-panel="cut-advance-loan-{{ $loan->id }}" id="cut-advance-loan-{{ $loan->id }}">
                                 <div class="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
@@ -470,11 +472,12 @@
                                         <tbody class="divide-y divide-slate-100">
                                             @foreach ($loan->installments as $installment)
                                                 @php
-                                                    $isFutureAdvance = $installment->due_date->toDateString() > $cutDateString;
+                                                    $isAfterCutDate = $installment->due_date->toDateString() > $cutDateString;
+                                                    $isCapitalAdvance = $installment->due_date->toDateString() > $cutMonthEndString;
                                                     $hasLaterPending = $loan->installments->contains(fn ($candidate) => $candidate->number > $installment->number && Money::cents($candidate->remaining_amount) > 0 && ! $candidate->reportedMovement);
-                                                    $canAdvanceCapital = $isFutureAdvance && ! $hasLaterPending;
+                                                    $canAdvanceCapital = $isCapitalAdvance && ! $hasLaterPending;
                                                     $graceLimit = $installment->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
-                                                    $delinquencyCents = (! $isFutureAdvance && (float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < $cutDateString)
+                                                    $delinquencyCents = (! $isAfterCutDate && (float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < $cutDateString)
                                                         ? (int) round(Money::cents($installment->contract_amount) * ((float) $loan->delinquency_rate / 100))
                                                         : 0;
                                                 @endphp
@@ -487,7 +490,7 @@
                                                     <td class="px-4 py-3 text-right">
                                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}"
                                                             data-confirm-paid
-                                                            @if ($isFutureAdvance) data-force-capital-advance="true" @endif
+                                                            @if ($isCapitalAdvance) data-force-capital-advance="true" @endif
                                                             @if ($canAdvanceCapital) data-capital-advance-allowed="true" @endif>
                                                             @csrf
                                                             <input name="return_to" type="hidden" value="cut">
@@ -498,9 +501,9 @@
                                                             <input name="external_concepts_amount" type="hidden" value="0">
                                                             <input name="additional_charge_amount" type="hidden" value="0">
                                                             <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($delinquencyCents) }}">
-                                                            <input name="notes" type="hidden" value="{{ $isFutureAdvance ? 'Adelanto registrado desde corte' : 'Cobro registrado desde corte' }}">
-                                                            <button class="rounded-md px-3 py-1.5 text-xs font-bold {{ $isFutureAdvance && ! $canAdvanceCapital ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'bg-[#0d9488] text-white' }}" type="submit" @disabled($isFutureAdvance && ! $canAdvanceCapital)>
-                                                                {{ $isFutureAdvance ? 'Abonar capital' : 'Pagado' }}
+                                                            <input name="notes" type="hidden" value="{{ $isCapitalAdvance ? 'Adelanto registrado desde corte' : 'Cobro registrado desde corte' }}">
+                                                            <button class="rounded-md px-3 py-1.5 text-xs font-bold {{ $isCapitalAdvance && ! $canAdvanceCapital ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'bg-[#0d9488] text-white' }}" type="submit" @disabled($isCapitalAdvance && ! $canAdvanceCapital)>
+                                                                {{ $isCapitalAdvance ? 'Abonar capital' : 'Pagado' }}
                                                             </button>
                                                         </form>
                                                     </td>
