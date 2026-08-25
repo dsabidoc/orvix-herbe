@@ -45,4 +45,9 @@ class InvestorCapitalMovement extends Model
     {
         return $this->belongsTo(Investment::class);
     }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

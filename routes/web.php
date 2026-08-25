@@ -74,6 +74,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/inversionistas/{investor}/retornos', [InvestorController::class, 'creditReturns'])->name('investors.returns.credit');
     Route::post('/inversionistas/{investor}/reinvertir', [InvestorController::class, 'reinvest'])->name('investors.reinvest');
     Route::post('/inversionistas/{investor}/retiro-directo', [InvestorController::class, 'directWithdrawal'])->name('investors.withdrawals.direct');
+    Route::post('/inversionistas/{investor}/movimientos/{movement}/cancelar', [InvestorController::class, 'cancelCapitalMovement'])->name('investors.capital-movements.cancel');
     Route::get('/cobranza', [CollectionController::class, 'index'])->name('collections.index');
     Route::post('/cobranza/letras/{installment}/pagado', [CollectionController::class, 'markPaid'])->name('collections.mark-paid');
     Route::post('/cobranza/letras/pagado-masivo', [CollectionController::class, 'markPaidBulk'])->name('collections.mark-paid.bulk');

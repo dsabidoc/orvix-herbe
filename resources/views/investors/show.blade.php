@@ -29,6 +29,43 @@
         }) ?? 0;
     });
     $capitalTotalCents = Money::cents($investor->available_capital) + $pendingReturnCapitalCents;
+    $activeTab = request('tab') === 'movimientos' ? 'movimientos' : 'prestamos';
+    $movementLabels = [
+        'available_capital_contribution' => 'Aportacion a capital disponible',
+        'available_capital_adjusted' => 'Ajuste de capital disponible',
+        'initial_capital_adjusted' => 'Ajuste de capital inicial',
+        'initial_capital' => 'Capital inicial',
+        'loan_funded' => 'Capital asignado a prestamo',
+        'loan_investment_released' => 'Capital liberado de prestamo',
+        'admin_capital_withdrawal' => 'Retiro directo de capital',
+        'withdrawal_paid' => 'Retiro aprobado',
+        'withdrawal' => 'Retiro',
+        'returns_recorded' => 'Retornos registrados',
+        'returns_reinvested' => 'Reinversion a capital',
+        'reinvest_capital' => 'Reinversion de capital retornado',
+        'reinvest_interest' => 'Reinversion de interes generado',
+        'payment_returns_recorded' => 'Retorno por pago aplicado',
+        'payment_returns_reversed' => 'Retorno revertido',
+        'capital_return' => 'Retorno de capital',
+        'interest_return' => 'Interes generado',
+    ];
+    $cancellableMovementTypes = [
+        'available_capital_contribution',
+        'available_capital_adjusted',
+        'admin_capital_withdrawal',
+        'withdrawal_paid',
+        'withdrawal',
+        'reinvest_capital',
+        'reinvest_interest',
+        'returns_reinvested',
+    ];
+    $cancelledMovementIds = $investor->capitalMovements
+        ->filter(fn ($movement) => str_starts_with((string) $movement->type, 'cancel_'))
+        ->map(fn ($movement) => data_get($movement->metadata, 'cancels_movement_id'))
+        ->filter()
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
 @endphp
 
 <x-layouts.app title="Inversionista · {{ $investor->name }}">
@@ -60,6 +97,12 @@
             </dl>
         </section>
 
+        <nav class="flex flex-wrap gap-2">
+            <a class="rounded-md px-4 py-2 text-sm font-bold {{ $activeTab === 'prestamos' ? 'bg-slate-950 text-white' : 'border border-slate-300 bg-white text-slate-700' }}" href="{{ route('investors.show', $investor) }}">Prestamos</a>
+            <a class="rounded-md px-4 py-2 text-sm font-bold {{ $activeTab === 'movimientos' ? 'bg-slate-950 text-white' : 'border border-slate-300 bg-white text-slate-700' }}" href="{{ route('investors.show', ['investor' => $investor, 'tab' => 'movimientos']) }}">Movimientos</a>
+        </nav>
+
+        @if ($activeTab === 'prestamos')
         <div class="investor-detail-grid grid gap-6">
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 px-5 py-4">
@@ -224,33 +267,84 @@
             </aside>
         </div>
 
-        <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-200 px-5 py-4"><h3 class="font-bold text-slate-950">Movimientos de capital</h3></div>
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[780px] text-left text-sm">
-                    <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-5 py-3">Fecha</th><th class="px-5 py-3">Tipo</th><th class="px-5 py-3 text-right">Monto</th><th class="px-5 py-3 text-right">Saldo antes</th><th class="px-5 py-3 text-right">Saldo despues</th><th class="px-5 py-3">Nota</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @forelse ($investor->capitalMovements as $movement)
-                            @php
-                                $movementLabels = [
-                                    'available_capital_contribution' => 'Aporte a capital disponible',
-                                    'available_capital_adjusted' => 'Ajuste de capital disponible',
-                                    'initial_capital_adjusted' => 'Ajuste de capital inicial',
-                                    'withdrawal' => 'Retiro',
-                                    'reinvest_capital' => 'Reinversion de capital',
-                                    'reinvest_interest' => 'Reinversion de interes',
-                                    'capital_return' => 'Retorno de capital',
-                                    'interest_return' => 'Retorno de interes',
-                                ];
-                            @endphp
-                            <tr><td class="px-5 py-3">{{ $movement->created_at->format('d/m/Y H:i') }}</td><td class="px-5 py-3">{{ $movementLabels[$movement->type] ?? str_replace('_', ' ', $movement->type) }}</td><td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($movement->amount) }}</td><td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_before) }}</td><td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_after) }}</td><td class="px-5 py-3 text-slate-500">{{ $movement->notes }}</td></tr>
-                        @empty
-                            <tr><td class="px-5 py-8 text-slate-500" colspan="6">Sin movimientos.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
+        @else
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div class="border-b border-slate-200 px-5 py-4">
+                    <h3 class="font-bold text-slate-950">Movimientos de capital</h3>
+                    <p class="mt-1 text-sm text-slate-500">Historial completo de aportaciones, retiros, reinversiones y ajustes del inversionista.</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[1040px] text-left text-sm">
+                        <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+                            <tr>
+                                <th class="px-5 py-3">Fecha</th>
+                                <th class="px-5 py-3">Movimiento</th>
+                                <th class="px-5 py-3 text-right">Monto</th>
+                                <th class="px-5 py-3 text-right">Saldo antes</th>
+                                <th class="px-5 py-3 text-right">Saldo despues</th>
+                                <th class="px-5 py-3">Registro</th>
+                                <th class="px-5 py-3">Estado</th>
+                                <th class="px-5 py-3">Nota</th>
+                                @if ($canManage)
+                                    <th class="px-5 py-3 text-right">Acciones</th>
+                                @endif
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @forelse ($investor->capitalMovements as $movement)
+                                @php
+                                    $isCancellation = str_starts_with((string) $movement->type, 'cancel_');
+                                    $originalType = $isCancellation ? str_replace('cancel_', '', (string) $movement->type) : null;
+                                    $movementLabel = $isCancellation
+                                        ? 'Cancelacion de '.strtolower($movementLabels[$originalType] ?? str_replace('_', ' ', (string) $originalType))
+                                        : ($movementLabels[$movement->type] ?? str_replace('_', ' ', (string) $movement->type));
+                                    $wasCancelled = in_array((int) $movement->id, $cancelledMovementIds, true);
+                                    $canCancelMovement = $canManage
+                                        && ! $isCancellation
+                                        && ! $wasCancelled
+                                        && in_array($movement->type, $cancellableMovementTypes, true);
+                                    $cleanNote = trim(preg_replace('/CANCELA_MOVIMIENTO:\d+\s*/', '', (string) $movement->notes));
+                                @endphp
+                                <tr>
+                                    <td class="px-5 py-3 whitespace-nowrap">{{ $movement->created_at->format('d/m/Y H:i') }}</td>
+                                    <td class="px-5 py-3 font-semibold text-slate-950">{{ $movementLabel }}</td>
+                                    <td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($movement->amount) }}</td>
+                                    <td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_before) }}</td>
+                                    <td class="px-5 py-3 text-right">{{ Money::mxn($movement->balance_after) }}</td>
+                                    <td class="px-5 py-3 text-slate-500">{{ $movement->createdBy?->name ?? '-' }}</td>
+                                    <td class="px-5 py-3">
+                                        @if ($isCancellation)
+                                            <span class="rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">Cancelacion</span>
+                                        @elseif ($wasCancelled)
+                                            <span class="rounded bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">Cancelado</span>
+                                        @else
+                                            <span class="rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">Registrado</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-3 text-slate-500">{{ $cleanNote !== '' ? $cleanNote : '-' }}</td>
+                                    @if ($canManage)
+                                        <td class="px-5 py-3 text-right">
+                                            @if ($canCancelMovement)
+                                                <form method="POST" action="{{ route('investors.capital-movements.cancel', [$investor, $movement]) }}" data-confirm-delete data-confirm-title="¿Cancelar este movimiento?" data-confirm-message="Se registrara una reversa contable para regresar el capital al estado anterior. El movimiento original quedara en el historial.">
+                                                    @csrf
+                                                    <button class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700" type="submit">Cancelar</button>
+                                                </form>
+                                            @else
+                                                <span class="text-xs text-slate-400">Sin accion</span>
+                                            @endif
+                                        </td>
+                                    @endif
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td class="px-5 py-8 text-slate-500" colspan="{{ $canManage ? 9 : 8 }}">Sin movimientos.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        @endif
     </div>
 
     @if ($canManage)

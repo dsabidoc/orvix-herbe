@@ -223,7 +223,7 @@ class InvestorController extends Controller
                     ->select('investments.*')
                     ->orderByRaw('COALESCE(loans.payment_day, 99)')
                     ->orderBy('loans.folio'),
-                'capitalMovements' => fn ($query) => $query->latest()->limit(30),
+                'capitalMovements' => fn ($query) => $query->with('createdBy')->latest(),
                 'withdrawalRequests' => fn ($query) => $query->latest()->limit(20),
             ]),
             'canManage' => $request->user()->can('investors.manage'),
@@ -430,15 +430,132 @@ class InvestorController extends Controller
                 'generated_interest_balance' => Money::decimal($availableGeneratedInterestCents - $generatedInterestCents),
             ])->save();
 
-            $ledger->creditAvailable(
-                $investor,
-                $amountCents,
-                'returns_reinvested',
-                $request->user()->id,
-                notes: 'Retornos convertidos a capital disponible. Capital retornado: '.Money::mxn(Money::decimal($returnedCapitalCents)).'. Interes generado: '.Money::mxn(Money::decimal($generatedInterestCents)).'.',
-            );
+            if ($returnedCapitalCents > 0) {
+                $ledger->creditAvailable(
+                    $investor,
+                    $returnedCapitalCents,
+                    'reinvest_capital',
+                    $request->user()->id,
+                    notes: 'Capital retornado convertido a capital disponible.',
+                );
+            }
+
+            if ($generatedInterestCents > 0) {
+                $ledger->creditAvailable(
+                    $investor,
+                    $generatedInterestCents,
+                    'reinvest_interest',
+                    $request->user()->id,
+                    notes: 'Interes generado convertido a capital disponible.',
+                );
+            }
         });
 
         return back()->with('status', 'Retornos reinvertidos a capital disponible.');
+    }
+
+    public function cancelCapitalMovement(Request $request, Investor $investor, InvestorCapitalMovement $movement): RedirectResponse
+    {
+        abort_unless($request->user()->can('investors.manage'), 403);
+        abort_if($investor->status === 'deleted', 404);
+        abort_unless($movement->investor_id === $investor->id, 404);
+
+        $allowedTypes = [
+            'available_capital_contribution',
+            'available_capital_adjusted',
+            'admin_capital_withdrawal',
+            'withdrawal_paid',
+            'withdrawal',
+            'reinvest_capital',
+            'reinvest_interest',
+            'returns_reinvested',
+        ];
+
+        if (str_starts_with((string) $movement->type, 'cancel_') || ! in_array($movement->type, $allowedTypes, true)) {
+            return back()->withErrors(['movement' => 'Este movimiento no se puede cancelar desde esta pantalla.']);
+        }
+
+        if ($this->capitalMovementCancellationExists($movement)) {
+            return back()->withErrors(['movement' => 'Este movimiento ya fue cancelado previamente.']);
+        }
+
+        DB::transaction(function () use ($request, $investor, $movement) {
+            $investor = Investor::query()->whereKey($investor->id)->lockForUpdate()->firstOrFail();
+            $movement = InvestorCapitalMovement::query()->whereKey($movement->id)->lockForUpdate()->firstOrFail();
+
+            if ($this->capitalMovementCancellationExists($movement)) {
+                throw ValidationException::withMessages([
+                    'movement' => 'Este movimiento ya fue cancelado previamente.',
+                ]);
+            }
+
+            $availableBeforeCents = Money::cents($investor->available_capital);
+            $returnedBeforeCents = Money::cents($investor->returned_capital_balance);
+            $interestBeforeCents = Money::cents($investor->generated_interest_balance);
+            $movementDeltaCents = Money::cents($movement->balance_after) - Money::cents($movement->balance_before);
+            $availableAfterCents = $availableBeforeCents - $movementDeltaCents;
+            $returnedAfterCents = $returnedBeforeCents;
+            $interestAfterCents = $interestBeforeCents;
+
+            if ($movement->type === 'reinvest_capital') {
+                $returnedAfterCents += abs(Money::cents($movement->amount));
+            }
+
+            if ($movement->type === 'reinvest_interest') {
+                $interestAfterCents += abs(Money::cents($movement->amount));
+            }
+
+            if ($movement->type === 'returns_reinvested') {
+                $returnedFromMetadataCents = Money::cents($movement->metadata['returned_capital'] ?? 0);
+                $interestFromMetadataCents = Money::cents($movement->metadata['generated_interest'] ?? 0);
+
+                if ($returnedFromMetadataCents + $interestFromMetadataCents <= 0) {
+                    $returnedFromMetadataCents = abs(Money::cents($movement->amount));
+                }
+
+                $returnedAfterCents += $returnedFromMetadataCents;
+                $interestAfterCents += $interestFromMetadataCents;
+            }
+
+            $investor->forceFill([
+                'available_capital' => Money::decimal($availableAfterCents),
+                'returned_capital_balance' => Money::decimal($returnedAfterCents),
+                'generated_interest_balance' => Money::decimal($interestAfterCents),
+            ])->save();
+
+            InvestorCapitalMovement::query()->create([
+                'public_id' => (string) Str::ulid(),
+                'investor_id' => $investor->id,
+                'loan_id' => $movement->loan_id,
+                'investment_id' => $movement->investment_id,
+                'created_by' => $request->user()->id,
+                'type' => 'cancel_'.$movement->type,
+                'amount' => Money::decimal(-Money::cents($movement->amount)),
+                'balance_before' => Money::decimal($availableBeforeCents),
+                'balance_after' => Money::decimal($availableAfterCents),
+                'notes' => 'CANCELA_MOVIMIENTO:'.$movement->id.' Cancelacion de movimiento de capital.',
+                'metadata' => [
+                    'cancels_movement_id' => $movement->id,
+                    'original_type' => $movement->type,
+                    'available_before' => Money::decimal($availableBeforeCents),
+                    'available_after' => Money::decimal($availableAfterCents),
+                    'returned_capital_before' => Money::decimal($returnedBeforeCents),
+                    'returned_capital_after' => Money::decimal($returnedAfterCents),
+                    'generated_interest_before' => Money::decimal($interestBeforeCents),
+                    'generated_interest_after' => Money::decimal($interestAfterCents),
+                ],
+            ]);
+        });
+
+        return back()->with('status', 'Movimiento de capital cancelado.');
+    }
+
+    private function capitalMovementCancellationExists(InvestorCapitalMovement $movement): bool
+    {
+        return InvestorCapitalMovement::query()
+            ->where('investor_id', $movement->investor_id)
+            ->where('type', 'like', 'cancel_%')
+            ->where('notes', 'like', '%CANCELA_MOVIMIENTO:'.$movement->id.'%')
+            ->exists();
     }
 }
