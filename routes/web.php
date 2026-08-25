@@ -79,6 +79,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/cobranza/letras/pagado-masivo', [CollectionController::class, 'markPaidBulk'])->name('collections.mark-paid.bulk');
     Route::post('/prestamos/{loan}/cobros', [PaymentController::class, 'store'])->name('payments.store');
     Route::post('/cobros/{movement}/confirmar', [PaymentController::class, 'confirm'])->name('payments.confirm');
+    Route::post('/cobros/{movement}/cancelar', [PaymentController::class, 'cancel'])->name('payments.cancel');
     Route::post('/cobros/{movement}/regresar-pendiente', [PaymentController::class, 'reverse'])->name('payments.reverse');
 
     Route::get('/cortes', [WeeklyCutController::class, 'index'])->name('cuts.index');

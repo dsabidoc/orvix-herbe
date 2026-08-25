@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Loan;
@@ -93,6 +94,29 @@ class PaymentController extends Controller
         }
 
         return back()->with('status', 'La letra regreso a pendiente y el boton Pagado queda disponible de nuevo.');
+    }
+
+    public function cancel(Request $request, CollectionMovement $movement, PaymentApplicationService $payments, LoanSettlementService $settlements): RedirectResponse
+    {
+        abort_unless($request->user()->can('payments.confirm') && ! $request->user()->hasRole('operador-cartera'), 403);
+
+        if ($movement->confirmation_status !== 'reported') {
+            return back()->with('warning', 'Solo se pueden cancelar movimientos por confirmar.');
+        }
+
+        try {
+            if ($movement->type === 'settlement') {
+                $settlements->cancelReportedSettlement($movement, $request->user()->id, 'Liquidacion reportada cancelada desde movimientos');
+            } else {
+                $payments->reverse($movement, $request->user()->id);
+            }
+        } catch (RuntimeException $exception) {
+            return back()->with('warning', $exception->getMessage());
+        }
+
+        return redirect()
+            ->to(route('loans.show', $movement->loan).'#loan-movements')
+            ->with('status', 'Movimiento cancelado; la letra o liquidacion regreso a su estado normal.');
     }
 
     private function authorizeLoanAccess(Request $request, Loan $loan): void

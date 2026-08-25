@@ -453,10 +453,16 @@
                         </dl>
                         @can('payments.confirm')
                             @if ($movement->confirmation_status === 'reported')
-                                <form class="mt-3" method="POST" action="{{ route('payments.confirm', $movement) }}">
-                                    @csrf
-                                    <button class="rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white" type="submit">Confirmar y aplicar</button>
-                                </form>
+                                <div class="mt-3 flex flex-wrap items-center gap-2">
+                                    <form method="POST" action="{{ route('payments.confirm', $movement) }}">
+                                        @csrf
+                                        <button class="rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white" type="submit">Confirmar y aplicar</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('payments.cancel', $movement) }}" data-confirm-delete data-confirm-title="¿Cancelar este movimiento?" data-confirm-message="Se cancelara este movimiento por confirmar y regresara la letra o liquidacion a su estado normal.">
+                                        @csrf
+                                        <button class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700" type="submit">Cancelar</button>
+                                    </form>
+                                </div>
                             @endif
                         @endcan
                         @if ($movement->type === 'settlement' && $movement->confirmation_status === 'applied' && $loanUser->can('settlements.authorize') && ! $isProviderUser)
