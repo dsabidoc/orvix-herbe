@@ -47,20 +47,24 @@ class LoanSettlementController extends Controller
             true,
         );
 
-        if ($selectedCut) {
-            $movement = CollectionMovement::query()
-                ->where('loan_id', $loan->id)
-                ->where('type', 'settlement')
-                ->where('confirmation_status', 'reported')
-                ->latest('id')
-                ->first();
+        $movement = CollectionMovement::query()
+            ->where('loan_id', $loan->id)
+            ->where('type', 'settlement')
+            ->where('confirmation_status', 'reported')
+            ->latest('id')
+            ->first();
 
+        if ($selectedCut) {
             if ($movement) {
                 $movement->update(['origin_weekly_cut_id' => $selectedCut->id]);
                 app(WeeklyCutPeriodService::class)->attachMovementToCut($movement, $selectedCut, $request->user()->id);
             }
 
             return redirect()->route('cuts.show', $selectedCut)->with('status', 'Credito liquidado y agregado a este corte.');
+        }
+
+        if ($movement) {
+            app(WeeklyCutPeriodService::class)->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
         }
 
         return redirect()->route('loans.show', $loan)->with('status', 'Liquidacion enviada al corte de la fecha seleccionada.');

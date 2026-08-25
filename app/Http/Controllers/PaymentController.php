@@ -65,6 +65,8 @@ class PaymentController extends Controller
             ],
         );
 
+        $cutPeriodService->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
+
         return redirect()
             ->route('loans.show', $loan)
             ->with($movement->wasRecentlyCreated ? 'status' : 'warning', $movement->wasRecentlyCreated ? 'Cobro registrado por confirmar. Se agregara al corte cuando se genere por fecha.' : 'Ese cobro ya estaba registrado; no se duplico.');

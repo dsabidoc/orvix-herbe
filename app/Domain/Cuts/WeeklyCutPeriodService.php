@@ -144,8 +144,9 @@ class WeeklyCutPeriodService
     {
         return DB::transaction(function () use ($movement, $userId) {
             $movement = CollectionMovement::query()->whereKey($movement->id)->lockForUpdate()->firstOrFail();
+            $cutDate = $movement->operated_on ?? $movement->registered_at ?? $movement->created_at ?? now(self::TIMEZONE);
+            $cut = $this->openCutForOperator($movement->operator_id, $userId ?? $movement->registered_by, $cutDate);
             $registeredAt = $movement->registered_at ?? $movement->created_at ?? now(self::TIMEZONE);
-            $cut = $this->openCutForOperator($movement->operator_id, $userId ?? $movement->registered_by, $registeredAt);
 
             abort_if($cut->status === 'closed', 422, 'No se pueden registrar cobros en un corte cerrado.');
             abort_unless(self::isReportableMovement($movement), 422, 'Solo los cobros pagados vigentes pueden agregarse al corte.');
@@ -188,6 +189,57 @@ class WeeklyCutPeriodService
 
             return $cut;
         });
+    }
+
+    public function attachMovementToOpenCutForOperatedDate(CollectionMovement $movement, ?int $userId = null): ?WeeklyCut
+    {
+        $movement = CollectionMovement::query()->whereKey($movement->id)->firstOrFail();
+
+        if ($movement->weekly_cut_id) {
+            return $movement->weeklyCut()->first();
+        }
+
+        if (! self::isReportableMovement($movement)) {
+            return null;
+        }
+
+        $cutBaseDate = $movement->operated_on ?? $movement->registered_at ?? $movement->created_at ?? now(self::TIMEZONE);
+        $cutDate = CarbonImmutable::parse($cutBaseDate, self::TIMEZONE)->toDateString();
+
+        $cut = WeeklyCut::query()
+            ->where('operator_id', $movement->operator_id)
+            ->whereDate('period_starts_on', $cutDate)
+            ->where('status', '!=', 'closed')
+            ->latest('id')
+            ->first();
+
+        if (! $cut) {
+            return null;
+        }
+
+        return $this->attachMovementToCut($movement, $cut, $userId);
+    }
+
+    public function attachPendingMovementsForCut(WeeklyCut $cut, ?int $userId = null): WeeklyCut
+    {
+        $cut = WeeklyCut::query()->whereKey($cut->id)->firstOrFail();
+
+        if ($cut->status === 'closed') {
+            return $cut;
+        }
+
+        $cutDate = CarbonImmutable::parse($cut->period_starts_on, self::TIMEZONE)->toDateString();
+
+        CollectionMovement::query()
+            ->where('operator_id', $cut->operator_id)
+            ->whereNull('weekly_cut_id')
+            ->whereIn('confirmation_status', self::REPORTABLE_MOVEMENT_STATUSES)
+            ->whereDate('operated_on', $cutDate)
+            ->get()
+            ->filter(fn (CollectionMovement $movement) => self::isReportableMovement($movement))
+            ->each(fn (CollectionMovement $movement) => $this->attachMovementToCut($movement, $cut, $userId ?? $movement->registered_by));
+
+        return $this->refreshTotals($cut->fresh());
     }
 
     public function attachMovementToCut(CollectionMovement $movement, WeeklyCut $cut, ?int $userId = null): WeeklyCut

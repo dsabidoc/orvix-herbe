@@ -187,6 +187,8 @@ class CollectionController extends Controller
                 $selectedCut,
                 $request->user()->id,
             );
+        } else {
+            $cutPeriodService->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
         }
 
         $route = match ($data['return_to'] ?? '') {
@@ -282,6 +284,8 @@ class CollectionController extends Controller
                     : 'Marcado pagado en bloque desde calendario contractual',
                 'confirmation_status' => 'reported',
             ]);
+
+            $cutPeriodService->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
 
             $created++;
         }

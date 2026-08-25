@@ -41,7 +41,8 @@ class WeeklyCutController extends Controller
             abort(403);
         }
 
-        $cut = app(WeeklyCutPeriodService::class)->refreshTotals($cut)->load([
+        $cutPeriodService = app(WeeklyCutPeriodService::class);
+        $cut = $cutPeriodService->attachPendingMovementsForCut($cut, $request->user()->id)->load([
             'operator',
             'submittedBy',
             'confirmedBy',
