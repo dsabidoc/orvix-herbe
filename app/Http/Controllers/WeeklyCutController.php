@@ -143,7 +143,7 @@ class WeeklyCutController extends Controller
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        DB::transaction(function () use ($cut, $data, $request, $service) {
+        DB::transaction(function () use ($cut, $data, $request, $service, $settlementService) {
             $cut = WeeklyCut::query()->whereKey($cut->id)->lockForUpdate()->firstOrFail();
             abort_if($cut->status === 'closed', 422, 'No se puede confirmar un corte cerrado sin reabrirlo.');
             $receivedCents = Money::cents($data['received_total']);
