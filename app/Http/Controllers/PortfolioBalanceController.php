@@ -59,6 +59,7 @@ class PortfolioBalanceController extends Controller
             fwrite($handle, "\xEF\xBB\xBF");
 
             fputcsv($handle, ['Fecha de exportacion', CarbonImmutable::now('America/Merida')->format('d/m/Y H:i')]);
+            fputcsv($handle, ['Periodo', $report['filters']['period_label'] ?? 'Mes en curso']);
             fputcsv($handle, ['Corte', $report['cutoff']->format('d/m/Y')]);
             fputcsv($handle, []);
 
@@ -142,14 +143,45 @@ class PortfolioBalanceController extends Controller
     {
         $validated = $request->validate([
             'operator_id' => ['nullable'],
+            'month_mode' => ['nullable', 'in:current,next,custom'],
+            'month' => ['nullable', 'regex:/^\d{4}-\d{2}$/'],
         ]);
 
-        $validated['cutoff_date'] = CarbonImmutable::now('America/Merida')->toDateString();
+        $monthMode = (string) ($validated['month_mode'] ?? 'current');
+        $today = CarbonImmutable::now('America/Merida')->startOfDay();
+        $selectedMonth = match ($monthMode) {
+            'next' => $today->addMonthNoOverflow()->startOfMonth(),
+            'custom' => $this->selectedMonth($validated['month'] ?? null, $today),
+            default => $today->startOfMonth(),
+        };
+
+        if ($monthMode === 'custom' && empty($validated['month'])) {
+            $monthMode = 'current';
+            $selectedMonth = $today->startOfMonth();
+        }
+
+        $validated['month_mode'] = $monthMode;
+        $validated['month'] = $selectedMonth->format('Y-m');
+        $validated['period_label'] = match ($monthMode) {
+            'next' => 'Mes siguiente '.$selectedMonth->format('m/Y'),
+            'custom' => 'Mes seleccionado '.$selectedMonth->format('m/Y'),
+            default => 'Mes en curso '.$selectedMonth->format('m/Y'),
+        };
+        $validated['cutoff_date'] = $selectedMonth->endOfMonth()->toDateString();
         $validated['mode'] = 'complete';
         $validated['upcoming_range'] = 'month';
         $validated['per_page'] = (int) $request->integer('per_page', 15);
 
         return $validated;
+    }
+
+    private function selectedMonth(mixed $month, CarbonImmutable $fallback): CarbonImmutable
+    {
+        if (! is_string($month) || ! preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return $fallback->startOfMonth();
+        }
+
+        return CarbonImmutable::parse($month.'-01', 'America/Merida')->startOfMonth();
     }
 
     /**

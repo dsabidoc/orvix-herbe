@@ -3,14 +3,14 @@
     use Carbon\CarbonImmutable;
 
     $money = fn (int $cents) => Money::mxn(Money::decimal($cents));
-    $filterQuery = collect(request()->only(['operator_id']))->filter(fn ($value) => $value !== null && $value !== '')->all();
+    $filterQuery = collect(request()->only(['operator_id', 'month_mode', 'month']))->filter(fn ($value) => $value !== null && $value !== '')->all();
 @endphp
 
 <x-layouts.app title="Cartera y saldos">
     <div class="no-print mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
             <p class="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Cartera completa</p>
-            <p class="mt-1 text-sm text-slate-600">Muestra vencimientos pasados y pendientes del mes actual hasta <strong>{{ $report['period_end']->format('d/m/Y') }}</strong>.</p>
+            <p class="mt-1 text-sm text-slate-600">Muestra vencimientos pasados y pendientes de {{ strtolower($filters['period_label'] ?? 'mes en curso') }} hasta <strong>{{ $report['period_end']->format('d/m/Y') }}</strong>.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             <a class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm" href="{{ route('portfolio-balances.export', $filterQuery) }}">Exportar CSV</a>
@@ -19,7 +19,7 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
-        <div class="grid gap-3 md:grid-cols-3 md:items-end">
+        <div class="grid gap-3 md:grid-cols-5 md:items-end">
             <div>
                 <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
@@ -31,6 +31,18 @@
                         <option value="{{ $operator->id }}" @selected((string) ($filters['operator_id'] ?? '') === (string) $operator->id)>{{ $operator->name }}</option>
                     @endforeach
                 </select>
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="month_mode">Mes</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month_mode" name="month_mode">
+                    <option value="current" @selected(($filters['month_mode'] ?? 'current') === 'current')>Mes en curso</option>
+                    <option value="next" @selected(($filters['month_mode'] ?? '') === 'next')>Mes siguiente</option>
+                    <option value="custom" @selected(($filters['month_mode'] ?? '') === 'custom')>Seleccionar mes</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="month">Mes especifico</label>
+                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
             </div>
             <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Filtrar</button>
             <a class="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-center text-sm font-bold text-slate-700" href="{{ route('portfolio-balances.index') }}">Todos</a>
@@ -235,7 +247,7 @@
         <div class="mb-3">
             <p class="text-[10px] text-slate-500">Fecha de exportacion: {{ CarbonImmutable::now('America/Merida')->format('d/m/Y H:i') }}</p>
             <h3 class="mt-1 text-base font-bold text-slate-950">Cartera y saldos</h3>
-            <p class="text-xs text-slate-600">Corte: {{ $report['cutoff']->format('d/m/Y') }}</p>
+            <p class="text-xs text-slate-600">{{ $filters['period_label'] ?? 'Mes en curso' }} · Corte: {{ $report['cutoff']->format('d/m/Y') }}</p>
         </div>
 
         <div class="mb-4">
