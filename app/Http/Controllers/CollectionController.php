@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
+use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
 use App\Models\Operator;
@@ -97,7 +98,12 @@ class CollectionController extends Controller
         ]);
     }
 
-    public function markPaid(Request $request, Installment $installment, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
+    public function markPaid(
+        Request $request,
+        Installment $installment,
+        WeeklyCutPeriodService $cutPeriodService,
+        PaymentApplicationService $paymentApplicationService,
+    ): RedirectResponse
     {
         $installment->load('loan.operator');
         $this->authorizeInstallmentAccess($request, $installment);
@@ -174,14 +180,16 @@ class CollectionController extends Controller
             'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
             'delinquency_amount' => Money::decimal($delinquencyAmountCents),
             'affects_investors' => $paymentEffect !== 'no_investors',
-            'origin_weekly_cut_id' => $selectedCut?->id,
+            'origin_weekly_cut_id' => $paymentEffect === 'no_investors' ? null : $selectedCut?->id,
             'type' => $movementType,
             'payment_method' => 'cash',
             'notes' => $data['notes'] ?? ($paymentEffect === 'capital_advance' ? 'Marcado como abono a capital desde cobranza' : 'Marcado pagado desde cobranza'),
             'confirmation_status' => 'reported',
         ]);
 
-        if (($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement)) {
+        if ($paymentEffect === 'no_investors') {
+            $paymentApplicationService->confirm($movement, $request->user()->id);
+        } elseif (($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement)) {
             $cutPeriodService->attachMovementToCut(
                 $movement,
                 $selectedCut,
@@ -201,12 +209,18 @@ class CollectionController extends Controller
             ]),
         };
 
-        return redirect($route)->with('status', ((($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement))
+        return redirect($route)->with('status', ($paymentEffect === 'no_investors'
+                ? 'Letra marcada como pagada sin efectos y aplicada directamente.'
+                : ((($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement))
                 ? 'Letra marcada como pagada y agregada a este corte.'
-                : 'Letra marcada como pagada y enviada al corte de la fecha seleccionada.'));
+                : 'Letra marcada como pagada y enviada al corte de la fecha seleccionada.')));
     }
 
-    public function markPaidBulk(Request $request, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
+    public function markPaidBulk(
+        Request $request,
+        WeeklyCutPeriodService $cutPeriodService,
+        PaymentApplicationService $paymentApplicationService,
+    ): RedirectResponse
     {
         $data = $request->validate([
             'installment_ids' => ['required', 'array', 'min:1', 'max:80'],
@@ -230,6 +244,7 @@ class CollectionController extends Controller
         abort_if($installments->isEmpty(), 422, 'Selecciona al menos una letra valida.');
 
         $created = 0;
+        $appliedDirectly = 0;
         foreach ($installments as $installment) {
             $this->authorizeInstallmentAccess($request, $installment);
 
@@ -285,7 +300,12 @@ class CollectionController extends Controller
                 'confirmation_status' => 'reported',
             ]);
 
-            $cutPeriodService->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
+            if ($paymentEffect === 'no_investors') {
+                $paymentApplicationService->confirm($movement, $request->user()->id);
+                $appliedDirectly++;
+            } else {
+                $cutPeriodService->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
+            }
 
             $created++;
         }
@@ -294,7 +314,9 @@ class CollectionController extends Controller
 
         return redirect()
             ->to(route('loans.show', $loan).'#calendar')
-            ->with('status', $created.' letra(s) marcadas como pagadas; apareceran al generar corte.');
+            ->with('status', $appliedDirectly > 0
+                ? $created.' letra(s) marcadas como pagadas sin efectos y aplicadas directamente.'
+                : $created.' letra(s) marcadas como pagadas; apareceran al generar corte.');
     }
 
     private function selectedOperatorId(Request $request): ?int
