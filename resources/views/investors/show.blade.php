@@ -120,14 +120,53 @@
                         <h3 class="font-bold text-slate-950">Reinvertir a capital</h3>
                         <form class="mt-4 space-y-3" method="POST" action="{{ route('investors.reinvest', $investor) }}">
                             @csrf
-                            <label class="flex items-center justify-between gap-3 rounded-md bg-slate-50 p-3 text-sm">
-                                <span>Capital retornado</span>
-                                <input name="include_returned_capital" type="checkbox" value="1">
-                            </label>
-                            <label class="flex items-center justify-between gap-3 rounded-md bg-slate-50 p-3 text-sm">
-                                <span>Interes generado</span>
-                                <input name="include_generated_interest" type="checkbox" value="1">
-                            </label>
+                            <div class="rounded-md bg-slate-50 p-3 text-sm">
+                                <label class="flex items-center justify-between gap-3">
+                                    <span>Capital retornado</span>
+                                    <input name="include_returned_capital" type="checkbox" value="1" @checked(old('include_returned_capital'))>
+                                </label>
+                                <label class="mt-3 block text-xs font-semibold text-slate-500" for="returned_capital_reinvest_amount">Monto a reinvertir</label>
+                                <input
+                                    class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                                    id="returned_capital_reinvest_amount"
+                                    name="returned_capital_amount"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max="{{ $investor->returned_capital_balance }}"
+                                    value="{{ old('returned_capital_amount') }}"
+                                    placeholder="Maximo {{ Money::mxn($investor->returned_capital_balance) }}"
+                                >
+                                <p class="mt-1 text-xs leading-snug text-slate-500">Escribe el monto a reinvertir, no debe pasar del maximo disponible de Capital generado: {{ Money::mxn($investor->returned_capital_balance) }}.</p>
+                                @error('returned_capital_amount')
+                                    <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            <div class="rounded-md bg-slate-50 p-3 text-sm">
+                                <label class="flex items-center justify-between gap-3">
+                                    <span>Interes generado</span>
+                                    <input name="include_generated_interest" type="checkbox" value="1" @checked(old('include_generated_interest'))>
+                                </label>
+                                <label class="mt-3 block text-xs font-semibold text-slate-500" for="generated_interest_reinvest_amount">Monto a reinvertir</label>
+                                <input
+                                    class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                                    id="generated_interest_reinvest_amount"
+                                    name="generated_interest_amount"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max="{{ $investor->generated_interest_balance }}"
+                                    value="{{ old('generated_interest_amount') }}"
+                                    placeholder="Maximo {{ Money::mxn($investor->generated_interest_balance) }}"
+                                >
+                                <p class="mt-1 text-xs leading-snug text-slate-500">Escribe el monto a reinvertir, no debe pasar del maximo disponible de Intereses generado: {{ Money::mxn($investor->generated_interest_balance) }}.</p>
+                                @error('generated_interest_amount')
+                                    <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            @error('reinvest')
+                                <p class="text-xs font-semibold text-red-600">{{ $message }}</p>
+                            @enderror
                             <button class="w-full rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">Convertir a capital</button>
                         </form>
                     </section>

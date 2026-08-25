@@ -11,6 +11,7 @@ use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -381,24 +382,61 @@ class InvestorController extends Controller
         $data = $request->validate([
             'include_returned_capital' => ['nullable', 'boolean'],
             'include_generated_interest' => ['nullable', 'boolean'],
+            'returned_capital_amount' => ['nullable', 'numeric', 'min:0'],
+            'generated_interest_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $returnedCapitalCents = $request->boolean('include_returned_capital') ? Money::cents($investor->returned_capital_balance) : 0;
-        $generatedInterestCents = $request->boolean('include_generated_interest') ? Money::cents($investor->generated_interest_balance) : 0;
+        $availableReturnedCapitalCents = Money::cents($investor->returned_capital_balance);
+        $availableGeneratedInterestCents = Money::cents($investor->generated_interest_balance);
+        $requestedReturnedCapitalCents = Money::cents($data['returned_capital_amount'] ?? 0);
+        $requestedGeneratedInterestCents = Money::cents($data['generated_interest_amount'] ?? 0);
+
+        $useReturnedCapital = $request->boolean('include_returned_capital') || $requestedReturnedCapitalCents > 0;
+        $useGeneratedInterest = $request->boolean('include_generated_interest') || $requestedGeneratedInterestCents > 0;
+
+        $returnedCapitalCents = $useReturnedCapital
+            ? ($requestedReturnedCapitalCents > 0 ? $requestedReturnedCapitalCents : $availableReturnedCapitalCents)
+            : 0;
+        $generatedInterestCents = $useGeneratedInterest
+            ? ($requestedGeneratedInterestCents > 0 ? $requestedGeneratedInterestCents : $availableGeneratedInterestCents)
+            : 0;
         $amountCents = $returnedCapitalCents + $generatedInterestCents;
 
         if ($amountCents <= 0) {
-            return back()->withErrors(['reinvest' => 'Selecciona capital retornado o interes generado con saldo.']);
+            return back()->withErrors(['reinvest' => 'Selecciona capital retornado o interes generado con saldo.'])->withInput();
+        }
+
+        if ($returnedCapitalCents > $availableReturnedCapitalCents) {
+            return back()->withErrors(['returned_capital_amount' => 'El monto no puede ser mayor al capital retornado disponible.'])->withInput();
+        }
+
+        if ($generatedInterestCents > $availableGeneratedInterestCents) {
+            return back()->withErrors(['generated_interest_amount' => 'El monto no puede ser mayor al interes generado disponible.'])->withInput();
         }
 
         DB::transaction(function () use ($request, $investor, $ledger, $returnedCapitalCents, $generatedInterestCents, $amountCents) {
             $investor = Investor::query()->whereKey($investor->id)->lockForUpdate()->firstOrFail();
+            $availableReturnedCapitalCents = Money::cents($investor->returned_capital_balance);
+            $availableGeneratedInterestCents = Money::cents($investor->generated_interest_balance);
+
+            if ($returnedCapitalCents > $availableReturnedCapitalCents || $generatedInterestCents > $availableGeneratedInterestCents) {
+                throw ValidationException::withMessages([
+                    'reinvest' => 'Los saldos disponibles cambiaron. Revisa los importes e intenta de nuevo.',
+                ]);
+            }
+
             $investor->forceFill([
-                'returned_capital_balance' => Money::decimal(Money::cents($investor->returned_capital_balance) - $returnedCapitalCents),
-                'generated_interest_balance' => Money::decimal(Money::cents($investor->generated_interest_balance) - $generatedInterestCents),
+                'returned_capital_balance' => Money::decimal($availableReturnedCapitalCents - $returnedCapitalCents),
+                'generated_interest_balance' => Money::decimal($availableGeneratedInterestCents - $generatedInterestCents),
             ])->save();
 
-            $ledger->creditAvailable($investor, $amountCents, 'returns_reinvested', $request->user()->id, notes: 'Retornos convertidos a capital disponible');
+            $ledger->creditAvailable(
+                $investor,
+                $amountCents,
+                'returns_reinvested',
+                $request->user()->id,
+                notes: 'Retornos convertidos a capital disponible. Capital retornado: '.Money::mxn(Money::decimal($returnedCapitalCents)).'. Interes generado: '.Money::mxn(Money::decimal($generatedInterestCents)).'.',
+            );
         });
 
         return back()->with('status', 'Retornos reinvertidos a capital disponible.');
