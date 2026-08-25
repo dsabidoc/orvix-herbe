@@ -35,10 +35,10 @@
                 <tr>
                     <th class="px-5 py-3">Operador</th>
                     <th class="px-5 py-3">Fecha de corte</th>
+                    <th class="px-5 py-3">Fecha de pago</th>
                     <th class="px-5 py-3">Generado</th>
                     <th class="px-5 py-3 text-right">Reportado</th>
                     <th class="px-5 py-3 text-right">Recibido</th>
-                    <th class="px-5 py-3 text-right">Diferencia</th>
                     <th class="px-5 py-3">Estado</th>
                     @can('weekly-cuts.confirm')
                         <th class="px-5 py-3 text-right">Acciones</th>
@@ -52,10 +52,10 @@
                             <a class="font-semibold text-[#0f766e]" href="{{ route('cuts.show', $cut) }}">{{ $cut->operator->name }}</a>
                         </td>
                         <td class="px-5 py-3">{{ $cut->period_starts_on->format('d/m/Y') }}</td>
+                        <td class="px-5 py-3">{{ $cut->confirmed_at?->format('d/m/Y') ?? '-' }}</td>
                         <td class="px-5 py-3">{{ ($cut->submitted_at ?? $cut->created_at)->format('d/m/Y H:i') }}</td>
                         <td class="px-5 py-3 text-right">{{ Money::mxn($cut->reported_total) }}</td>
                         <td class="px-5 py-3 text-right">{{ Money::mxn($cut->received_total) }}</td>
-                        <td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($cut->difference_total) }}</td>
                         <td class="px-5 py-3">{{ StatusLabels::cut($cut->status) }}</td>
                         @can('weekly-cuts.confirm')
                             <td class="px-5 py-3 text-right">

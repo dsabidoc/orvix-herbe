@@ -83,7 +83,7 @@
                         <dd>{{ Money::mxn($cut->received_total) }}</dd>
                     </div>
                     <div>
-                        <dt>Fecha de recibido</dt>
+                        <dt>Fecha de pago</dt>
                         <dd>{{ $cut->confirmed_at?->format('d/m/Y') ?? '-' }}</dd>
                     </div>
                     <div>
@@ -328,7 +328,7 @@
                         <dd class="font-bold">{{ Money::mxn($cut->received_total) }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
-                        <dt class="text-slate-500">Fecha de recibido</dt>
+                        <dt class="text-slate-500">Fecha de pago</dt>
                         <dd class="font-bold">{{ $cut->confirmed_at?->format('d/m/Y') ?? '-' }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
@@ -354,7 +354,7 @@
                                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="received_total" name="received_total" type="number" step="0.01" value="{{ Money::cents($cut->received_total) > 0 ? $cut->received_total : $cut->reported_total }}">
                             </div>
                             <div>
-                                <label class="text-sm font-semibold text-slate-700" for="received_on">Fecha de recibido</label>
+                                <label class="text-sm font-semibold text-slate-700" for="received_on">Fecha de pago</label>
                                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="received_on" name="received_on" type="date" value="{{ $cut->confirmed_at?->toDateString() ?? now('America/Merida')->toDateString() }}" required>
                             </div>
                             <div>
