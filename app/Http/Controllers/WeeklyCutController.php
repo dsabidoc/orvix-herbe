@@ -465,6 +465,8 @@ class WeeklyCutController extends Controller
 
     private function advanceLoansForCut(WeeklyCut $cut, LoanSettlementService $settlementService)
     {
+        $cutDate = $cut->period_starts_on->toDateString();
+
         return Loan::query()
             ->with([
                 'client',
@@ -472,6 +474,7 @@ class WeeklyCutController extends Controller
                 'installments' => fn ($query) => $query
                     ->with('reportedMovement')
                     ->where('remaining_amount', '>', 0)
+                    ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES))
                     ->orderBy('number'),
             ])
             ->where('operator_id', $cut->operator_id)
@@ -479,22 +482,37 @@ class WeeklyCutController extends Controller
             ->where('is_frozen', false)
             ->whereHas('installments', fn ($query) => $query
                 ->where('remaining_amount', '>', 0)
-                ->whereDate('due_date', '<=', $cut->period_starts_on->toDateString())
-                ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', ['reported', 'applied'])))
+                ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES)))
             ->get()
             ->filter(fn (Loan $loan) => $loan->installments->isNotEmpty())
             ->sort(function (Loan $first, Loan $second): int {
                 return [
                     (int) ($first->payment_day ?? 0),
                     (string) ($first->vehicle?->model ?? ''),
+                    $this->loanChronologyKey($first),
                     (string) $first->folio,
                 ] <=> [
                     (int) ($second->payment_day ?? 0),
                     (string) ($second->vehicle?->model ?? ''),
+                    $this->loanChronologyKey($second),
                     (string) $second->folio,
                 ];
             })
-            ->map(function (Loan $loan) use ($settlementService): Loan {
+            ->map(function (Loan $loan) use ($settlementService, $cutDate): Loan {
+                $loan->setRelation(
+                    'installments',
+                    $loan->installments
+                        ->sort(function (Installment $first, Installment $second) use ($cutDate): int {
+                            return [
+                                $first->due_date->toDateString() > $cutDate ? 1 : 0,
+                                (int) $first->number,
+                            ] <=> [
+                                $second->due_date->toDateString() > $cutDate ? 1 : 0,
+                                (int) $second->number,
+                            ];
+                        })
+                        ->values(),
+                );
                 $loan->setAttribute('cut_settlement_quote', $settlementService->quote($loan));
 
                 return $loan;

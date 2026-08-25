@@ -394,12 +394,12 @@
                 <div class="border-b border-slate-200 px-5 py-4">
                     <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Adelanto / liquidacion</p>
                     <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $cut->operator->name }} · {{ $cut->period_starts_on->format('d/m/Y') }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">Selecciona una cartera incluida en este corte para adelantar letras futuras o liquidarla sin salir de la pantalla.</p>
+                    <p class="mt-1 text-sm text-slate-500">Busca cualquier cartera activa del operador de este corte para adelantar letras o liquidarla sin salir de la pantalla.</p>
                 </div>
                 <div class="space-y-4 px-5 py-4">
                     @if ($advanceLoans->isEmpty())
                         <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                            No hay carteras disponibles para adelantos en este corte. Primero debe existir al menos un pago pendiente dentro del corte para poder seleccionar una cartera.
+                            No hay carteras activas con saldo pendiente para este operador.
                         </div>
                     @else
                         <div>

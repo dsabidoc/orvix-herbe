@@ -435,6 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 pendingPaidForm = null;
                 return;
             }
+            const confirmedAction = forceCapitalAdvance ? 'confirm-capital-advance' : dialog.returnValue;
 
             const paymentDateInput = dialog.querySelector('#confirm-paid-date');
             let formPaymentDateInput = pendingPaidForm.querySelector('input[name="operated_on"]');
@@ -466,11 +467,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 pendingPaidForm.appendChild(paymentEffectInput);
             }
 
-            affectsInvestorsInput.value = dialog.returnValue === 'confirm-no-investors' ? '0' : '1';
+            affectsInvestorsInput.value = confirmedAction === 'confirm-no-investors' ? '0' : '1';
             paymentEffectInput.value = {
                 'confirm-no-investors': 'no_investors',
                 'confirm-capital-advance': 'capital_advance',
-            }[dialog.returnValue] || 'normal';
+            }[confirmedAction] || 'normal';
 
             pendingPaidForm.dataset.confirmed = 'true';
             pendingPaidForm.requestSubmit();
