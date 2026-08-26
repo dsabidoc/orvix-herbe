@@ -29,7 +29,9 @@ class PortfolioBalanceService
     public function build(array $filters, User $user): array
     {
         $cutoff = $this->cutoffDate($filters['cutoff_date'] ?? null);
+        $periodStart = $cutoff->startOfMonth();
         $periodEnd = $cutoff->endOfMonth();
+        $includeOverdue = (bool) ($filters['include_overdue'] ?? true);
         $loans = $this->loanQuery($filters, $user)->get();
         $installmentIds = $loans->flatMap(fn (Loan $loan) => $loan->installments->pluck('id'))->values();
         $allocationAmounts = $this->allocationAmountsByInstallment($installmentIds, $cutoff);
@@ -37,7 +39,7 @@ class PortfolioBalanceService
         $allocationLastDates = $this->allocationLastDatesByInstallment($installmentIds, $cutoff);
 
         $loanRows = $loans
-            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $periodEnd, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
             ->filter(fn (array $row) => $row['pending_cents'] > 0 || $row['inconsistencies'] !== [])
             ->filter(fn (array $row) => $this->passesDerivedFilters($row, $filters))
             ->values();
@@ -51,7 +53,7 @@ class PortfolioBalanceService
             'upcoming_end' => $periodEnd,
             'loan_rows' => $loanRows,
             'detail_rows' => $detailRows,
-            'operator_rows' => $this->operatorRows($loanRows, $loans),
+            'operator_rows' => $this->operatorRows($loanRows),
             'kpis' => $this->kpis($loanRows),
             'filters' => $filters,
         ];
@@ -155,13 +157,13 @@ class PortfolioBalanceService
      * @param  array<int, string>  $allocationLastDates
      * @return array<string, mixed>
      */
-    private function loanRow(Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodEnd, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function loanRow(Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
     {
         $installmentRows = $loan->installments
-            ->map(fn ($installment) => $this->installmentRow($installment, $loan, $cutoff, $periodEnd, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn ($installment) => $this->installmentRow($installment, $loan, $cutoff, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
             ->values();
 
-        $pendingRows = $installmentRows->filter(fn (array $row) => $row['pending_cents'] > 0 && ! $row['is_excluded'] && $row['is_in_scope']);
+        $pendingRows = $installmentRows->filter(fn (array $row) => $row['pending_cents'] > 0 && ! $row['is_excluded'] && $row['is_balance_visible']);
         $overdueRows = $pendingRows->filter(fn (array $row) => $row['is_overdue']);
         $todayRows = $pendingRows->filter(fn (array $row) => $row['is_due_today']);
         $upcomingRows = $pendingRows->filter(fn (array $row) => $row['is_upcoming']);
@@ -234,7 +236,7 @@ class PortfolioBalanceService
      * @param  array<int, string>  $allocationLastDates
      * @return array<string, mixed>
      */
-    private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodEnd, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
     {
         $contractCents = $this->operationalCents($installment);
         $hasAllocations = ($allocationCounts[$installment->id] ?? 0) > 0;
@@ -250,6 +252,8 @@ class PortfolioBalanceService
         $isDueToday = ! $isExcluded && $dueDate->equalTo($cutoff) && $pendingCents > 0;
         $isUpcoming = ! $isExcluded && $dueDate->gt($cutoff) && $dueDate->lte($periodEnd) && $pendingCents > 0;
         $isInScope = ! $isExcluded && $dueDate->lte($periodEnd);
+        $isInSelectedMonth = ! $isExcluded && $dueDate->gte($periodStart) && $dueDate->lte($periodEnd);
+        $isBalanceVisible = $isInScope && ($includeOverdue || $isInSelectedMonth);
         $inconsistencies = [];
 
         if ($rawPendingCents < 0) {
@@ -280,6 +284,8 @@ class PortfolioBalanceService
             'last_payment_date' => $allocationLastDates[$installment->id] ?? null,
             'is_excluded' => $isExcluded,
             'is_in_scope' => $isInScope,
+            'is_in_selected_month' => $isInSelectedMonth,
+            'is_balance_visible' => $isBalanceVisible,
             'is_overdue' => $isOverdue,
             'is_due_today' => $isDueToday,
             'is_upcoming' => $isUpcoming,
@@ -297,7 +303,7 @@ class PortfolioBalanceService
             ->flatMap(function (array $loanRow) {
                 return collect($loanRow['installments'])
                     ->filter(fn (array $installment) => $installment['pending_cents'] > 0 && ! $installment['is_excluded'])
-                    ->filter(fn (array $installment) => $installment['is_in_scope'])
+                    ->filter(fn (array $installment) => $installment['is_balance_visible'])
                     ->map(fn (array $installment) => [
                         'loan_id' => $loanRow['loan_id'],
                         'loan_public_id' => $loanRow['loan_public_id'],
@@ -444,13 +450,9 @@ class PortfolioBalanceService
      * @param  Collection<int, array<string, mixed>>  $loanRows
      * @return Collection<int, array<string, mixed>>
      */
-    private function operatorRows(Collection $loanRows, Collection $loans): Collection
+    private function operatorRows(Collection $loanRows): Collection
     {
-        $loanCountsByOperator = $loans
-            ->groupBy(fn (Loan $loan) => $loan->operator_id ? (string) $loan->operator_id : 'none')
-            ->map(fn (Collection $loans) => $loans->count());
-
-        return $loanRows->groupBy('operator_key')->map(function (Collection $rows) use ($loanCountsByOperator) {
+        return $loanRows->groupBy('operator_key')->map(function (Collection $rows) {
             $first = $rows->first();
             $maxLateDays = (int) $rows->max('max_late_days');
             $overdueCents = (int) $rows->sum('overdue_cents');
@@ -460,7 +462,7 @@ class PortfolioBalanceService
                 'operator_id' => $first['operator_id'],
                 'operator_name' => $first['operator_name'],
                 'clients_count' => $rows->pluck('client_id')->unique()->count(),
-                'loans_count' => $loanCountsByOperator[$first['operator_key']] ?? $rows->pluck('loan_id')->unique()->count(),
+                'loans_count' => $rows->pluck('loan_id')->unique()->count(),
                 'pending_installments_count' => (int) $rows->sum('pending_installments_count'),
                 'overdue_installments_count' => (int) $rows->sum('overdue_installments_count'),
                 'vehicles_with_overdue_count' => $rows->filter(fn (array $row) => $row['overdue_installments_count'] > 0)->count(),

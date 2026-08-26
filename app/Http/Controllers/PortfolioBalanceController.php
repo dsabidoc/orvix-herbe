@@ -145,6 +145,7 @@ class PortfolioBalanceController extends Controller
             'operator_id' => ['nullable'],
             'month_mode' => ['nullable', 'in:current,next,custom'],
             'month' => ['nullable', 'regex:/^\d{4}-\d{2}$/'],
+            'include_overdue' => ['nullable', 'boolean'],
         ]);
 
         $monthMode = (string) ($validated['month_mode'] ?? 'current');
@@ -162,6 +163,10 @@ class PortfolioBalanceController extends Controller
 
         $validated['month_mode'] = $monthMode;
         $validated['month'] = $selectedMonth->format('Y-m');
+        // Mantiene el comportamiento historico al abrir Saldos sin parametros.
+        $validated['include_overdue'] = $request->has('include_overdue')
+            ? $request->boolean('include_overdue')
+            : true;
         $validated['period_label'] = match ($monthMode) {
             'next' => 'Mes siguiente '.$selectedMonth->format('m/Y'),
             'custom' => 'Mes seleccionado '.$selectedMonth->format('m/Y'),
