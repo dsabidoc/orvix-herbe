@@ -81,8 +81,11 @@ class LoanSettlementService
 
             if ($dueDate->lt($monthStart)) {
                 $bucket = 'overdue';
-                $amountCents = $components['remaining_cents'];
                 $interestCents = $components['interest_cents'];
+                $amountCents = min(
+                    $components['remaining_cents'],
+                    $components['principal_cents'] + $components['interest_cents'],
+                );
             } elseif ($dueDate->betweenIncluded($monthStart, $monthEnd)) {
                 $bucket = 'current_month';
                 $interestCents = $components['interest_cents'];

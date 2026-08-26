@@ -111,7 +111,7 @@
         <div class="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-center">
             <div>
                 <h3 class="font-bold text-slate-950">Resumen visual</h3>
-                <p class="mt-1 text-sm text-slate-500">Liquidacion, cobranza esperada y vencidos del periodo seleccionado.</p>
+                <p class="mt-1 text-sm text-slate-500">Liquidacion de hoy, cobranza del periodo y vencidos.</p>
                 <div class="mx-auto mt-5 grid size-56 place-items-center rounded-full" style="background: conic-gradient({{ implode(', ', $chartStops) }});">
                     <div class="grid size-28 place-items-center rounded-full bg-white text-center shadow-sm">
                         <div>
@@ -169,7 +169,12 @@
                         @foreach ($loans as $loan)
                             @php
                                 $next = $loan->installments->first(fn ($installment) => Money::cents($installment->remaining_amount) > 0);
-                                $balance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
+                                $balance = $loan->installments->sum(function ($installment) {
+                                    $remaining = Money::cents($installment->remaining_amount);
+                                    $operational = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+                                    return $operational > 0 ? min($remaining, $operational) : $remaining;
+                                });
                             @endphp
                             <tr class="hover:bg-slate-50">
                                 <td class="px-5 py-3">
@@ -189,7 +194,12 @@
                     @foreach ($loans as $loan)
                         @php
                             $next = $loan->installments->first(fn ($installment) => Money::cents($installment->remaining_amount) > 0);
-                            $balance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
+                            $balance = $loan->installments->sum(function ($installment) {
+                                $remaining = Money::cents($installment->remaining_amount);
+                                $operational = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
+
+                                return $operational > 0 ? min($remaining, $operational) : $remaining;
+                            });
                         @endphp
                         <a class="block p-4" href="{{ route('loans.show', $loan) }}">
                             <p class="font-semibold text-[#0f766e]">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</p>
