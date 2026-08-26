@@ -20,8 +20,8 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
-        <div class="grid gap-3 md:grid-cols-12 md:items-end">
-            <div>
+        <div class="grid gap-3 md:grid-cols-12 md:items-end lg:gap-2">
+            <div class="md:col-span-3">
                 <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
                     <option value="">Todos</option>
@@ -33,7 +33,7 @@
                     @endforeach
                 </select>
             </div>
-            <div>
+            <div class="md:col-span-2">
                 <label class="text-sm font-semibold text-slate-700" for="month_mode">Mes</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month_mode" name="month_mode">
                     <option value="current" @selected(($filters['month_mode'] ?? 'current') === 'current')>Mes en curso</option>
@@ -41,7 +41,7 @@
                     <option value="custom" @selected(($filters['month_mode'] ?? '') === 'custom')>Seleccionar mes</option>
                 </select>
             </div>
-            <div class="md:col-span-3">
+            <div class="md:col-span-2">
                 <label class="text-sm font-semibold text-slate-700" for="month">Mes especifico</label>
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
             </div>
@@ -50,8 +50,8 @@
                 <input class="h-4 w-4 accent-[#0d9488]" name="include_overdue" type="checkbox" value="1" @checked($includeOverdue)>
                 <span>Incluir vencidos y atrasados</span>
             </label>
-            <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white md:col-span-2" type="submit">Filtrar</button>
-            <a class="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-center text-sm font-bold text-slate-700 md:col-span-2" href="{{ route('portfolio-balances.index') }}">Todos</a>
+            <button class="w-full rounded-md bg-[#0d9488] px-3 py-2 text-sm font-bold text-white md:col-span-1" type="submit">Filtrar</button>
+            <a class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-center text-sm font-bold text-slate-700 md:col-span-1" href="{{ route('portfolio-balances.index') }}">Todos</a>
         </div>
     </form>
 
