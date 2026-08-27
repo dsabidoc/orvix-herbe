@@ -332,6 +332,7 @@ class PortfolioBalanceService
             })
             ->sort(fn (array $a, array $b) => ($a['payment_day'] <=> $b['payment_day'])
                 ?: strcmp($a['loan_start_date_sort'], $b['loan_start_date_sort'])
+                ?: strnatcasecmp((string) $a['folio'], (string) $b['folio'])
                 ?: strnatcasecmp($a['vehicle_name'], $b['vehicle_name'])
                 ?: strcmp($a['due_date_sort'], $b['due_date_sort'])
                 ?: ($a['installment_number'] <=> $b['installment_number']))
