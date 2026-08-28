@@ -26,6 +26,23 @@
     display: none;
 }
 
+@media (min-width: 64rem) and (hover: hover) and (pointer: fine) {
+    .app-shell {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+    }
+
+    .desktop-sidebar {
+        display: block;
+    }
+
+    .mobile-menu-overlay,
+    .mobile-menu-shell,
+    .mobile-menu-trigger {
+        display: none !important;
+    }
+}
+
 .investor-detail-grid {
     grid-template-columns: minmax(0, 1fr);
 }
