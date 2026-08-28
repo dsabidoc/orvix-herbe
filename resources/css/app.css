@@ -26,7 +26,7 @@
     display: none;
 }
 
-@media (min-width: 64rem) {
+@media (min-width: 48rem) {
     .app-shell {
         display: grid;
         grid-template-columns: 280px minmax(0, 1fr);
@@ -43,7 +43,7 @@
     }
 }
 
-@media (min-width: 64rem) and (hover: none) and (pointer: coarse) {
+@media (min-width: 48rem) and (hover: none) and (pointer: coarse) {
     .app-shell {
         display: block;
     }
