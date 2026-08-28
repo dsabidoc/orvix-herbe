@@ -26,6 +26,10 @@
     display: none;
 }
 
+.brand-logo-dark {
+    display: none;
+}
+
 /* Keep the workspace wide enough for tables; narrower windows use the drawer. */
 @media (min-width: 80rem) {
     .app-shell {
@@ -231,8 +235,16 @@ html[data-theme='dark'] ::selection {
 }
 
 html[data-theme='dark'] .brand-logo-shell {
-    background: #f8fafc;
-    padding: 0.35rem 0.5rem;
+    background: transparent;
+    padding: 0;
+}
+
+html[data-theme='dark'] .brand-logo-light {
+    display: none;
+}
+
+html[data-theme='dark'] .brand-logo-dark {
+    display: block;
 }
 
 html[data-theme='dark'] .theme-toggle {

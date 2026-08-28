@@ -19,7 +19,8 @@
             <div class="app-shell min-h-screen overflow-x-hidden">
                 <aside class="desktop-sidebar hidden border-r border-slate-200 bg-white px-5 py-6">
                     <a class="brand-logo-shell flex items-center gap-3 rounded-md" href="{{ route('dashboard') }}">
-                        <img class="h-12 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
+                        <img class="brand-logo-light h-12 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
+                        <img class="brand-logo-dark h-12 w-auto" src="{{ asset('assets/logo-orvix-dark.svg') }}" alt="Orvix Prestamos">
                     </a>
 
                     @php
@@ -171,7 +172,8 @@
                 <aside class="mobile-menu-shell fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-5 shadow-xl transition-transform duration-200" data-mobile-menu>
                     <div class="flex items-center justify-between gap-3">
                         <a class="brand-logo-shell flex items-center gap-3 rounded-md" href="{{ route('dashboard') }}">
-                            <img class="h-10 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
+                            <img class="brand-logo-light h-10 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
+                            <img class="brand-logo-dark h-10 w-auto" src="{{ asset('assets/logo-orvix-dark.svg') }}" alt="Orvix Prestamos">
                         </a>
                         <button class="grid size-9 place-items-center rounded-md border border-slate-200 text-slate-700" type="button" data-close-mobile-menu aria-label="Cerrar menu">
                             <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
