@@ -118,7 +118,7 @@
                 <div class="rounded-md bg-amber-50 p-3 ring-1 ring-amber-100"><dt class="text-sm text-amber-700">Interes retornado</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->generated_interest_balance) }}</dd></div>
                 <div class="rounded-md bg-cyan-50 p-3 ring-1 ring-cyan-100">
                     <dt class="text-sm text-cyan-700">Interes mensual generado</dt>
-                    <dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyGeneratedInterestCents)) }}</dd>
+                    <dd class="monthly-generated-interest-amount mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyGeneratedInterestCents)) }}</dd>
                     <p class="mt-2 text-xs font-semibold text-cyan-700">{{ number_format($monthlyGeneratedInterestRate, 2) }}% mensual sobre capital invertido</p>
                 </div>
             </dl>
