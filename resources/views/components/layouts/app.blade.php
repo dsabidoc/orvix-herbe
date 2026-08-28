@@ -16,8 +16,8 @@
     </head>
     <body class="min-h-screen bg-[#f4f7fb] text-[#172033] antialiased">
         @auth
-            <div class="min-h-screen overflow-x-hidden lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
-                <aside class="hidden border-r border-slate-200 bg-white px-5 py-6 lg:block">
+            <div class="min-h-screen overflow-x-hidden xl:grid xl:grid-cols-[280px_minmax(0,1fr)]">
+                <aside class="hidden border-r border-slate-200 bg-white px-5 py-6 xl:block">
                     <a class="brand-logo-shell flex items-center gap-3 rounded-md" href="{{ route('dashboard') }}">
                         <img class="h-12 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
                     </a>
@@ -167,8 +167,8 @@
                     </div>
                 </aside>
 
-                <div class="fixed inset-0 z-40 hidden bg-slate-950/40 lg:hidden" data-mobile-menu-overlay></div>
-                <aside class="fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-5 shadow-xl transition-transform duration-200 lg:hidden" data-mobile-menu>
+                <div class="fixed inset-0 z-40 hidden bg-slate-950/40 xl:hidden" data-mobile-menu-overlay></div>
+                <aside class="fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-5 shadow-xl transition-transform duration-200 xl:hidden" data-mobile-menu>
                     <div class="flex items-center justify-between gap-3">
                         <a class="brand-logo-shell flex items-center gap-3 rounded-md" href="{{ route('dashboard') }}">
                             <img class="h-10 w-auto" src="{{ asset('assets/logo-orvix.svg') }}" alt="Orvix Prestamos">
@@ -249,7 +249,7 @@
                                 <p class="text-sm font-semibold text-[#0f766e]">America/Merida · MXN · efectivo con confirmacion</p>
                                 <h2 class="mt-1 text-2xl font-bold text-slate-950">{{ $title ?? 'Orvix Prestamos' }}</h2>
                             </div>
-                            <button class="grid size-10 shrink-0 place-items-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm lg:hidden" type="button" data-open-mobile-menu aria-label="Abrir menu">
+                            <button class="grid size-10 shrink-0 place-items-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm xl:hidden" type="button" data-open-mobile-menu aria-label="Abrir menu">
                                 <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
                             </button>
                         </div>
