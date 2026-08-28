@@ -26,20 +26,38 @@
     display: none;
 }
 
-@media (min-width: 64rem) and (hover: hover) and (pointer: fine) {
+@media (min-width: 64rem) {
     .app-shell {
         display: grid;
         grid-template-columns: 280px minmax(0, 1fr);
     }
 
     .desktop-sidebar {
-        display: block;
+        display: block !important;
     }
 
     .mobile-menu-overlay,
     .mobile-menu-shell,
     .mobile-menu-trigger {
         display: none !important;
+    }
+}
+
+@media (min-width: 64rem) and (hover: none) and (pointer: coarse) {
+    .app-shell {
+        display: block;
+    }
+
+    .desktop-sidebar {
+        display: none !important;
+    }
+
+    .mobile-menu-shell {
+        display: flex !important;
+    }
+
+    .mobile-menu-trigger {
+        display: grid !important;
     }
 }
 
