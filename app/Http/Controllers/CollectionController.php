@@ -22,6 +22,8 @@ class CollectionController extends Controller
 {
     public function index(Request $request): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         app(InterestOnlyScheduleExtender::class)->ensureCoverageForScope($request);
 
         $selectedMonth = CarbonImmutable::parse($request->input('month', now('America/Merida')->format('Y-m').'-01'));
@@ -397,9 +399,16 @@ class CollectionController extends Controller
 
     private function authorizeInstallmentAccess(Request $request, Installment $installment): void
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         if ($request->user()->hasRole('operador-cartera') && $installment->loan->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 
     private function shouldApplyImmediately(Request $request): bool

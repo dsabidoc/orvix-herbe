@@ -17,6 +17,8 @@ class LoanSettlementController extends Controller
 {
     public function store(Request $request, Loan $loan, LoanSettlementService $service): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('settlements.authorize') || $request->user()->hasRole('operador-cartera'), 403);
 
         if ($request->user()->hasRole('operador-cartera') && $loan->operator_id !== $request->user()->operatorProfile?->id) {
@@ -72,6 +74,8 @@ class LoanSettlementController extends Controller
 
     public function reverse(Request $request, Loan $loan, PaymentApplicationService $service): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('settlements.authorize') && ! $request->user()->hasRole('operador-cartera'), 403);
 
         $movement = CollectionMovement::query()
@@ -93,5 +97,10 @@ class LoanSettlementController extends Controller
         }
 
         return redirect()->route('loans.show', $loan)->with('status', 'Liquidacion cancelada; el prestamo regreso a activo.');
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 }

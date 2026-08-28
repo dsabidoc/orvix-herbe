@@ -20,7 +20,7 @@
     $canManageLoanDetails = ! $isInvestorReadOnly && ! $isProviderUser;
     $canViewInvoice = ! $isInvestorReadOnly;
     $canManageInvoice = $canManageLoanDetails && ($loanUser->can('loans.formalize') || $loanUser->can('payments.confirm') || $loanUser->can('documents.manage'));
-    $canReverseInstallmentPayment = $loanUser->can('payments.confirm') && ! $isProviderUser;
+    $canReverseInstallmentPayment = ! $isInvestorReadOnly && $loanUser->can('payments.confirm') && ! $isProviderUser;
     $settlementTodayCents = $settlementQuote['total_cents'] ?? 0;
     $vehicleModelTitle = trim((string) ($loan->vehicle?->model ?? ''));
     $vehicleModelTitle = $vehicleModelTitle !== '' ? $vehicleModelTitle : 'Vehiculo sin modelo';
@@ -379,7 +379,7 @@
                                 <td class="px-3 py-2 font-semibold">{{ $installment->number }}</td>
                                 <td class="px-3 py-2">{{ $installment->due_date->format('d/m/Y') }}</td>
                                 <td class="px-3 py-2 text-right">
-                                    @if (Money::cents($installment->remaining_amount) > 0 && ! $movement)
+                                    @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}">
                                             @csrf
                                             <input name="return_to" type="hidden" value="loan">
@@ -454,7 +454,7 @@
                                 <dd class="font-bold">{{ Money::mxn($movement->delinquency_amount ?? 0) }}</dd>
                             </div>
                         </dl>
-                        @can('payments.confirm')
+                        @if (! $isInvestorReadOnly && $loanUser->can('payments.confirm'))
                             @if ($movement->confirmation_status === 'reported')
                                 <div class="mt-3 flex flex-wrap items-center gap-2">
                                     <form method="POST" action="{{ route('payments.confirm', $movement) }}">
@@ -467,8 +467,8 @@
                                     </form>
                                 </div>
                             @endif
-                        @endcan
-                        @if ($movement->type === 'settlement' && $movement->confirmation_status === 'applied' && $loanUser->can('settlements.authorize') && ! $isProviderUser)
+                        @endif
+                        @if ($movement->type === 'settlement' && $movement->confirmation_status === 'applied' && ! $isInvestorReadOnly && $loanUser->can('settlements.authorize') && ! $isProviderUser)
                             <form class="mt-3" method="POST" action="{{ route('loans.settlement.reverse', $loan) }}" data-confirm-delete data-confirm-title="¿Cancelar liquidacion?" data-confirm-message="El prestamo regresara a activo, las letras volveran a pendiente y se revertiran los retornos de inversionistas si no han sido usados o reinvertidos.">
                                 @csrf
                                 <button class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700" type="submit">Cancelar liquidacion</button>

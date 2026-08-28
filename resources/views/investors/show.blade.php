@@ -29,6 +29,29 @@
         }) ?? 0;
     });
     $capitalTotalCents = Money::cents($investor->available_capital) + $pendingReturnCapitalCents;
+    $monthlyGeneratedInterestCents = $activeInvestments->sum(function ($investment) {
+        $installments = $investment->loan?->installments;
+
+        if (! $installments) {
+            return 0;
+        }
+
+        $nextInstallment = $installments
+            ->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0)
+            ->sortBy('due_date')
+            ->first();
+
+        if (! $nextInstallment) {
+            return 0;
+        }
+
+        return (int) round(
+            Money::cents($nextInstallment->interest_amount) * (float) $investment->investor_share_rate
+        );
+    });
+    $monthlyGeneratedInterestRate = $investedCents > 0
+        ? ($monthlyGeneratedInterestCents / $investedCents) * 100
+        : 0;
     $activeTab = request('tab') === 'movimientos' ? 'movimientos' : 'prestamos';
     $movementLabels = [
         'available_capital_contribution' => 'Aportacion a capital disponible',
@@ -91,9 +114,13 @@
                     <p class="mt-2 text-xs leading-snug text-blue-700">Disponible mas capital pendiente de recuperar en prestamos activos. No incluye intereses.</p>
                 </div>
                 <div class="rounded-md bg-indigo-50 p-3 ring-1 ring-indigo-100"><dt class="text-sm text-indigo-700">Capital disponible</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->available_capital) }}</dd></div>
-                <div class="rounded-md bg-slate-50 p-3"><dt class="text-sm text-slate-500">Capital invertido</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($investedCents)) }}</dd></div>
                 <div class="rounded-md bg-emerald-50 p-3 ring-1 ring-emerald-100"><dt class="text-sm text-emerald-700">Capital retornado</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->returned_capital_balance) }}</dd></div>
-                <div class="rounded-md bg-amber-50 p-3 ring-1 ring-amber-100"><dt class="text-sm text-amber-700">Interes generado</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->generated_interest_balance) }}</dd></div>
+                <div class="rounded-md bg-amber-50 p-3 ring-1 ring-amber-100"><dt class="text-sm text-amber-700">Interes retornado</dt><dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn($investor->generated_interest_balance) }}</dd></div>
+                <div class="rounded-md bg-cyan-50 p-3 ring-1 ring-cyan-100">
+                    <dt class="text-sm text-cyan-700">Interes mensual generado</dt>
+                    <dd class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyGeneratedInterestCents)) }}</dd>
+                    <p class="mt-2 text-xs font-semibold text-cyan-700">{{ number_format($monthlyGeneratedInterestRate, 2) }}% mensual sobre capital invertido</p>
+                </div>
             </dl>
         </section>
 
@@ -103,7 +130,7 @@
         </nav>
 
         @if ($activeTab === 'prestamos')
-        <div class="investor-detail-grid grid gap-6">
+        <div class="{{ $canManage ? 'investor-detail-grid' : '' }} grid gap-6">
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 px-5 py-4">
                     <h3 class="font-bold text-slate-950">Prestamos asignados</h3>
@@ -147,9 +174,9 @@
                 </div>
             </section>
 
+            @if ($canManage)
             <aside class="space-y-6">
-                @if ($canManage)
-                    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                         <h3 class="font-bold text-slate-950">Registrar retornos</h3>
                         <form class="mt-4 space-y-3" method="POST" action="{{ route('investors.returns.credit', $investor) }}">
                             @csrf
@@ -223,18 +250,6 @@
                             <button class="w-full rounded-md bg-red-700 px-4 py-2 text-sm font-bold text-white">Registrar retiro</button>
                         </form>
                     </section>
-                @else
-                    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                        <h3 class="font-bold text-slate-950">Solicitar retiro</h3>
-                        <p class="mt-1 text-sm text-slate-500">Disponible: {{ Money::mxn($investor->available_capital) }}</p>
-                        <form class="mt-4 space-y-3" method="POST" action="{{ route('investors.withdrawals.request', $investor) }}">
-                            @csrf
-                            <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="amount" type="number" step="0.01" min="1" max="{{ $investor->available_capital }}" placeholder="Monto a retirar">
-                            <textarea class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="notes" rows="2" placeholder="Comentario opcional"></textarea>
-                            <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white">Enviar solicitud</button>
-                        </form>
-                    </section>
-                @endif
 
                 <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-5 py-4"><h3 class="font-bold text-slate-950">Solicitudes de retiro</h3></div>
@@ -265,6 +280,7 @@
                     </div>
                 </section>
             </aside>
+            @endif
         </div>
 
         @else

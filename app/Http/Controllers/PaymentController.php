@@ -74,6 +74,8 @@ class PaymentController extends Controller
 
     public function confirm(Request $request, CollectionMovement $movement, PaymentApplicationService $service): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('payments.confirm'), 403);
 
         try {
@@ -87,6 +89,8 @@ class PaymentController extends Controller
 
     public function reverse(Request $request, CollectionMovement $movement, PaymentApplicationService $service): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('payments.confirm') && ! $request->user()->hasRole('operador-cartera'), 403);
 
         try {
@@ -100,6 +104,8 @@ class PaymentController extends Controller
 
     public function cancel(Request $request, CollectionMovement $movement, PaymentApplicationService $payments, LoanSettlementService $settlements): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('payments.confirm') && ! $request->user()->hasRole('operador-cartera'), 403);
 
         if ($movement->confirmation_status !== 'reported') {
@@ -123,12 +129,17 @@ class PaymentController extends Controller
 
     private function authorizeLoanAccess(Request $request, Loan $loan): void
     {
-        if ($request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage')) {
+        if ($this->isInvestorReadOnly($request)) {
             abort(403);
         }
 
         if ($request->user()->hasRole('operador-cartera') && $loan->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 }

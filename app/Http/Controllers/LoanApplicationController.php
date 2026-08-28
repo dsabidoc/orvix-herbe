@@ -20,6 +20,8 @@ class LoanApplicationController extends Controller
 {
     public function index(Request $request): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         $query = LoanApplication::query()->with(['client', 'operator', 'loan']);
 
         if ($request->user()->hasRole('operador-cartera')) {
@@ -228,9 +230,16 @@ class LoanApplicationController extends Controller
 
     private function authorizeApplicationAccess(Request $request, LoanApplication $application): void
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         if ($request->user()->hasRole('operador-cartera') && $application->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 
     private function conditionsFor(LoanApplication $application): array

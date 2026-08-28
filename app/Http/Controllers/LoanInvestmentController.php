@@ -11,6 +11,8 @@ class LoanInvestmentController extends Controller
 {
     public function store(Request $request, Loan $loan, InvestmentAllocationService $allocator): RedirectResponse
     {
+        abort_if($request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage'), 403);
+
         abort_unless($request->user()->can('investors.manage') || $request->user()->can('loans.formalize'), 403);
 
         $data = $request->validate([

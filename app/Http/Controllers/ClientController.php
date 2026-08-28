@@ -15,6 +15,8 @@ class ClientController extends Controller
 {
     public function index(Request $request): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         $query = Client::query()
             ->with('operator')
             ->withCount(['loans', 'loans as active_loans_count' => fn ($query) => $query->where('status', 'active')])
@@ -75,6 +77,8 @@ class ClientController extends Controller
 
     public function show(Request $request, Client $client): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         if ($request->user()->hasRole('operador-cartera') && $client->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
@@ -137,5 +141,10 @@ class ClientController extends Controller
             ['title' => 'Prestamos', 'value' => number_format($loanScope->count()), 'caption' => 'Creditos totales visibles', 'color' => 'green'],
             ['title' => 'Prestamos activos', 'value' => number_format($activeLoans->count()), 'caption' => 'Creditos vivos', 'color' => 'orange'],
         ];
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 }

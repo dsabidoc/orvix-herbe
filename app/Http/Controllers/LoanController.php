@@ -46,6 +46,16 @@ class LoanController extends Controller
             $query->where('operator_id', $request->user()->operatorProfile?->id);
         }
 
+        if ($this->isInvestorReadOnly($request)) {
+            $investorId = $request->user()->investorProfile?->id;
+
+            abort_unless($investorId, 403);
+
+            $query->whereHas('investments', fn ($query) => $query
+                ->where('investor_id', $investorId)
+                ->where('status', 'active'));
+        }
+
         if ($request->filled('q')) {
             $search = '%'.$request->string('q')->toString().'%';
             $query->where(function ($query) use ($search) {
@@ -101,6 +111,16 @@ class LoanController extends Controller
             $query->where('operator_id', $request->user()->operatorProfile?->id);
         }
 
+        if ($this->isInvestorReadOnly($request)) {
+            $investorId = $request->user()->investorProfile?->id;
+
+            abort_unless($investorId, 403);
+
+            $query->whereHas('investments', fn ($query) => $query
+                ->where('investor_id', $investorId)
+                ->where('status', 'active'));
+        }
+
         if ($request->filled('q')) {
             $search = '%'.$request->string('q')->toString().'%';
             $query->where(function ($query) use ($search) {
@@ -122,7 +142,9 @@ class LoanController extends Controller
     {
         $this->authorizeLoanAccess($request, $loan);
 
-        $interestOnlyScheduleExtender->ensureCoverage($loan);
+        if (! $this->isInvestorReadOnly($request)) {
+            $interestOnlyScheduleExtender->ensureCoverage($loan);
+        }
 
         $loan = $loan->load([
             'client',
@@ -157,6 +179,8 @@ class LoanController extends Controller
 
     public function edit(Request $request, Loan $loan): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize'), 403);
         $this->authorizeLoanAccess($request, $loan);
 
@@ -335,6 +359,8 @@ class LoanController extends Controller
 
     public function update(Request $request, Loan $loan, LoanScheduleCalculator $calculator): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize'), 403);
         $this->authorizeLoanAccess($request, $loan);
 
@@ -481,6 +507,8 @@ class LoanController extends Controller
 
     public function destroy(Request $request, Loan $loan, LoanDeletionService $deletionService): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize') && ! $this->isProviderUser($request), 403);
         $this->authorizeLoanAccess($request, $loan);
 
@@ -495,7 +523,7 @@ class LoanController extends Controller
 
     private function authorizeLoanAccess(Request $request, Loan $loan): void
     {
-        if ($request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage')) {
+        if ($this->isInvestorReadOnly($request)) {
             abort_unless(
                 $request->user()->investorProfile
                     && $loan->investments()->where('investor_id', $request->user()->investorProfile->id)->exists(),
@@ -518,19 +546,26 @@ class LoanController extends Controller
 
     private function canManageLoanDetails(Request $request): bool
     {
-        return ! $this->isProviderUser($request)
+        return ! $this->isInvestorReadOnly($request)
+            && ! $this->isProviderUser($request)
             && ($request->user()->can('loans.formalize') || $request->user()->can('payments.confirm'));
     }
 
     private function canManageInvoice(Request $request): bool
     {
-        return ! $this->isProviderUser($request)
+        return ! $this->isInvestorReadOnly($request)
+            && ! $this->isProviderUser($request)
             && ($request->user()->can('loans.formalize') || $request->user()->can('payments.confirm') || $request->user()->can('documents.manage'));
     }
 
     private function isProviderUser(Request $request): bool
     {
         return $request->user()->hasRole('operador-cartera') || $request->user()->hasRole('proveedor');
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 
     private function financialConditionsChanged(Loan $loan, array $data, string $newMonthlyRate): bool

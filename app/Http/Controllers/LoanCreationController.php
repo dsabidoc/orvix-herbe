@@ -34,6 +34,8 @@ class LoanCreationController extends Controller
 {
     public function create(Request $request): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize'), 403);
         $weeklyCut = $request->filled('weekly_cut_id')
             ? WeeklyCut::query()->whereKey($request->integer('weekly_cut_id'))->first()
@@ -52,6 +54,8 @@ class LoanCreationController extends Controller
 
     public function restoreCreate(Request $request): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize'), 403);
 
         return redirect()->route('loans.create')->withInput($request->except('_token'));
@@ -59,6 +63,8 @@ class LoanCreationController extends Controller
 
     public function store(Request $request, LoanFormalizer $formalizer, InvestmentAllocationService $allocator): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize'), 403);
 
         $data = $request->validate(
@@ -190,6 +196,8 @@ class LoanCreationController extends Controller
 
     public function quote(Request $request, RoundedLoanQuoteCalculator $roundedCalculator, LoanScheduleCalculator $regularCalculator): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize'), 403);
 
         $data = $this->validatedRoundedData($request);
@@ -225,6 +233,8 @@ class LoanCreationController extends Controller
 
     public function confirmRounded(Request $request, RoundedLoanQuoteCalculator $calculator, InvestmentAllocationService $allocator, LoanFormalizer $formalizer): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('loans.formalize'), 403);
 
         $data = $this->validatedRoundedData($request) + $request->validate([
@@ -799,5 +809,10 @@ class LoanCreationController extends Controller
         $vin = Str::upper(trim((string) $vin));
 
         return $vin === '' ? null : $vin;
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 }

@@ -112,6 +112,8 @@ class InvoicePortfolioController extends Controller
     {
         $user = $request->user();
 
+        abort_if($user->can('investments.view-own') && ! $user->can('investors.manage'), 403);
+
         abort_unless(
             $user->can('portfolio.view')
                 || $user->can('reports.view-all')

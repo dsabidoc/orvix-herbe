@@ -25,6 +25,8 @@ class WeeklyCutController extends Controller
 {
     public function index(Request $request): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         return view('cuts.index', [
             'cuts' => WeeklyCut::query()
                 ->with('operator')
@@ -37,6 +39,8 @@ class WeeklyCutController extends Controller
 
     public function show(Request $request, WeeklyCut $cut, LoanSettlementService $settlementService): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         if ($request->user()->hasRole('operador-cartera') && $cut->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
@@ -71,6 +75,8 @@ class WeeklyCutController extends Controller
 
     public function store(Request $request, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         if (! $request->user()->hasRole('operador-cartera')) {
             $data = $request->validate([
                 'operator_id' => ['nullable', 'exists:operators,id'],
@@ -135,6 +141,8 @@ class WeeklyCutController extends Controller
 
     public function confirm(Request $request, WeeklyCut $cut, PaymentApplicationService $service, LoanSettlementService $settlementService): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
         $data = $request->validate([
@@ -227,6 +235,8 @@ class WeeklyCutController extends Controller
 
     public function settleBalance(Request $request, WeeklyCut $cut): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
         $data = $request->validate([
@@ -276,6 +286,8 @@ class WeeklyCutController extends Controller
 
     public function close(Request $request, WeeklyCut $cut): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
         DB::transaction(function () use ($cut, $request) {
@@ -304,6 +316,8 @@ class WeeklyCutController extends Controller
 
     public function reopen(Request $request, WeeklyCut $cut): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
         $data = $request->validate([
@@ -338,6 +352,8 @@ class WeeklyCutController extends Controller
 
     public function reverseMovement(Request $request, WeeklyCut $cut, CollectionMovement $movement, PaymentApplicationService $service, LoanSettlementService $settlementService): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
         abort_if($cut->status === 'closed', 422, 'No se puede revertir un movimiento en un corte cerrado sin reabrirlo.');
         abort_unless((int) $movement->weekly_cut_id === (int) $cut->id || (int) $movement->origin_weekly_cut_id === (int) $cut->id, 404);
@@ -363,6 +379,8 @@ class WeeklyCutController extends Controller
 
     public function destroy(Request $request, WeeklyCut $cut): RedirectResponse
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
         DB::transaction(function () use ($cut, $request): void {
@@ -528,5 +546,10 @@ class WeeklyCutController extends Controller
             ->value('balance_after');
 
         return Money::cents($latestBalance);
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 }

@@ -232,6 +232,11 @@ class InvestorController extends Controller
 
     public function requestWithdrawal(Request $request, Investor $investor): RedirectResponse
     {
+        abort_if(
+            $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage'),
+            403
+        );
+
         abort_unless(
             $request->user()->can('investor-withdrawals.request') && $request->user()->investorProfile?->id === $investor->id,
             403

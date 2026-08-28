@@ -15,6 +15,8 @@ class DocumentController extends Controller
 {
     public function index(Request $request): View
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         $query = Document::query()
             ->with(['client', 'loan.operator', 'loan.vehicle'])
             ->latest();
@@ -110,6 +112,8 @@ class DocumentController extends Controller
 
     private function authorizeLoanAccess(Request $request, Loan $loan): void
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         if ($request->user()->hasRole('operador-cartera') && $loan->operator_id !== $request->user()->operatorProfile?->id) {
             abort(403);
         }
@@ -123,6 +127,8 @@ class DocumentController extends Controller
 
     private function authorizeDocumentAccess(Request $request, Document $document): void
     {
+        abort_if($this->isInvestorReadOnly($request), 403);
+
         $document->loadMissing('loan');
 
         if ($request->user()->hasRole('operador-cartera') && $document->loan?->operator_id !== $request->user()->operatorProfile?->id) {
@@ -133,5 +139,10 @@ class DocumentController extends Controller
     private function disk(Document $document): string
     {
         return $document->disk === 'private' ? 'local' : $document->disk;
+    }
+
+    private function isInvestorReadOnly(Request $request): bool
+    {
+        return $request->user()->can('investments.view-own') && ! $request->user()->can('investors.manage');
     }
 }
