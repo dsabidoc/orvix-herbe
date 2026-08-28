@@ -131,6 +131,33 @@ class PortfolioBalanceServiceTest extends TestCase
         $this->assertSame($ownLoan->folio, $report['loan_rows']->first()['folio']);
     }
 
+    public function test_settled_loans_do_not_appear_in_next_month_portfolio_balances(): void
+    {
+        [$admin, $operator] = $this->admin();
+        $activeLoan = $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-09-10', 'amount' => '1000.00'],
+        ], $operator);
+        $settledLoan = $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-09-15', 'amount' => '5000.00'],
+        ], $operator);
+        $settledLoan->forceFill([
+            'status' => 'settled',
+            'settled_at' => CarbonImmutable::parse('2026-08-31', 'America/Merida')->endOfDay(),
+        ])->save();
+
+        $report = $this->service->build([
+            'operator_id' => $operator->id,
+            'month_mode' => 'next',
+            'month' => '2026-09',
+            'cutoff_date' => '2026-09-30',
+            'include_overdue' => false,
+        ], $admin);
+
+        $this->assertSame([$activeLoan->id], $report['loan_rows']->pluck('loan_id')->all());
+        $this->assertSame([$activeLoan->id], $report['detail_rows']->pluck('loan_id')->unique()->all());
+        $this->assertSame(1, $report['operator_rows']->first()['loans_count']);
+    }
+
     public function test_detail_rows_show_each_pending_installment_separately_without_future_months(): void
     {
         [$admin, $operator] = $this->admin();

@@ -75,7 +75,7 @@ class PortfolioBalanceService
                     ->where('confirmation_status', 'applied')
                     ->orderByDesc('operated_on'),
             ])
-            ->whereNotIn('status', ['cancelled', 'canceled']);
+            ->where('status', 'active');
 
         if ($user->hasRole('operador-cartera')) {
             $query->where('operator_id', $user->operatorProfile?->id);
