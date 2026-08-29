@@ -351,6 +351,10 @@ html[data-theme='dark'] .monthly-generated-interest-amount {
     color: #0e7490 !important;
 }
 
+html[data-theme='dark'] .monthly-return-actual-interest-amount {
+    color: #0e7490 !important;
+}
+
 html[data-theme='dark'] .text-\[\#0f766e\],
 html[data-theme='dark'] .text-\[\#0d9488\],
 html[data-theme='dark'] .hover\:text-\[\#0f766e\]:hover,

@@ -321,7 +321,7 @@
                     </div>
                     <div class="rounded-md bg-cyan-50 p-3 ring-1 ring-cyan-100">
                         <p class="text-sm text-cyan-700">Interes cobrado real</p>
-                        <p class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_interest_cents'])) }}</p>
+                        <p class="monthly-return-actual-interest-amount mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_interest_cents'])) }}</p>
                     </div>
                 </div>
 
