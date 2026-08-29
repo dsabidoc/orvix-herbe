@@ -96,6 +96,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/clientes', [ClientController::class, 'index'])->name('clients.index');
     Route::get('/clientes/nuevo', [ClientController::class, 'create'])->name('clients.create');
     Route::post('/clientes', [ClientController::class, 'store'])->name('clients.store');
+    Route::get('/clientes/{client}/editar', [ClientController::class, 'edit'])->name('clients.edit');
+    Route::put('/clientes/{client}', [ClientController::class, 'update'])->name('clients.update');
     Route::get('/clientes/{client}', [ClientController::class, 'show'])->name('clients.show');
 
     Route::get('/operadores', [OperatorController::class, 'index'])->name('operators.index');

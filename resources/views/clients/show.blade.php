@@ -4,6 +4,15 @@
 @endphp
 
 <x-layouts.app title="{{ $client->first_name }} {{ $client->last_name }}">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Perfil del cliente</p>
+            <p class="mt-1 text-sm text-slate-600">{{ $client->phone }} {{ $client->email ? '· '.$client->email : '' }}</p>
+        </div>
+        @can('clients.manage')
+            <a class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50" href="{{ route('clients.edit', $client) }}">Editar datos</a>
+        @endcan
+    </div>
     <div class="grid gap-6 xl:grid-cols-[1fr_340px]">
         <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div class="border-b border-slate-200 px-5 py-4">

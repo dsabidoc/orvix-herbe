@@ -204,7 +204,7 @@ class CollectionController extends Controller
         $route = match ($data['return_to'] ?? '') {
             'loan' => route('loans.show', $installment->loan).'#installment-'.$installment->id,
             'dashboard' => route('dashboard'),
-            'cut' => route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id'])).'#cut-payments',
+            'cut' => route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id'])).'#cut-pending-installments',
             default => route('collections.index', [
                 'month' => $data['return_month'] ?? now('America/Merida')->format('Y-m'),
                 'operator_id' => $installment->loan->operator_id,

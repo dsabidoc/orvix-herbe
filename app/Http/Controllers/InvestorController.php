@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Investors\InvestmentAllocationService;
+use App\Domain\Investors\InvestorMonthlyReturnReport;
 use App\Models\Investor;
 use App\Models\InvestorCapitalMovement;
 use App\Models\InvestorWithdrawalRequest;
@@ -204,7 +205,7 @@ class InvestorController extends Controller
         return redirect()->route('investors.index')->with('status', 'Inversionista eliminado.');
     }
 
-    public function show(Request $request, Investor $investor): View
+    public function show(Request $request, Investor $investor, InvestorMonthlyReturnReport $monthlyReturnReport): View
     {
         abort_if($investor->status === 'deleted', 404);
 
@@ -227,6 +228,7 @@ class InvestorController extends Controller
                 'withdrawalRequests' => fn ($query) => $query->latest()->limit(20),
             ]),
             'canManage' => $request->user()->can('investors.manage'),
+            'monthlyReturnReport' => $monthlyReturnReport->build($investor, $request->query('return_month')),
         ]);
     }
 

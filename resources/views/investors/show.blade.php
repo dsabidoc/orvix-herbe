@@ -52,7 +52,7 @@
     $monthlyGeneratedInterestRate = $investedCents > 0
         ? ($monthlyGeneratedInterestCents / $investedCents) * 100
         : 0;
-    $activeTab = request('tab') === 'movimientos' ? 'movimientos' : 'prestamos';
+    $activeTab = in_array(request('tab'), ['movimientos', 'corte-mensual'], true) ? request('tab') : 'prestamos';
     $movementLabels = [
         'available_capital_contribution' => 'Aportacion a capital disponible',
         'available_capital_adjusted' => 'Ajuste de capital disponible',
@@ -127,6 +127,7 @@
         <nav class="flex flex-wrap gap-2">
             <a class="rounded-md px-4 py-2 text-sm font-bold {{ $activeTab === 'prestamos' ? 'bg-slate-950 text-white' : 'border border-slate-300 bg-white text-slate-700' }}" href="{{ route('investors.show', $investor) }}">Prestamos</a>
             <a class="rounded-md px-4 py-2 text-sm font-bold {{ $activeTab === 'movimientos' ? 'bg-slate-950 text-white' : 'border border-slate-300 bg-white text-slate-700' }}" href="{{ route('investors.show', ['investor' => $investor, 'tab' => 'movimientos']) }}">Movimientos</a>
+            <a class="rounded-md px-4 py-2 text-sm font-bold {{ $activeTab === 'corte-mensual' ? 'bg-slate-950 text-white' : 'border border-slate-300 bg-white text-slate-700' }}" href="{{ route('investors.show', ['investor' => $investor, 'tab' => 'corte-mensual', 'return_month' => $monthlyReturnReport['month']->format('Y-m')]) }}">Corte mensual</a>
         </nav>
 
         @if ($activeTab === 'prestamos')
@@ -282,6 +283,82 @@
             </aside>
             @endif
         </div>
+
+        @elseif ($activeTab === 'corte-mensual')
+            @php
+                $expectedTotalCents = $monthlyReturnReport['expected_total_cents'];
+                $actualTotalCents = $monthlyReturnReport['actual_total_cents'];
+                $differenceCents = $actualTotalCents - $expectedTotalCents;
+            @endphp
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-950">Corte mensual de retornos</h3>
+                        <p class="mt-1 text-sm text-slate-500">Compara el capital e interes pactados contra los retornos registrados por cobros en el mes.</p>
+                    </div>
+                    <form class="flex flex-wrap items-end gap-2" method="GET">
+                        <input name="tab" type="hidden" value="corte-mensual">
+                        <label class="grid gap-1 text-sm font-semibold text-slate-700" for="return_month">
+                            <span>Mes</span>
+                            <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" id="return_month" name="return_month" type="month" value="{{ $monthlyReturnReport['month']->format('Y-m') }}">
+                        </label>
+                        <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white hover:bg-[#0f766e]" type="submit">Ver corte</button>
+                    </form>
+                </div>
+
+                <div class="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-md bg-blue-50 p-3 ring-1 ring-blue-100">
+                        <p class="text-sm text-blue-700">Capital esperado</p>
+                        <p class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['expected_capital_cents'])) }}</p>
+                    </div>
+                    <div class="rounded-md bg-amber-50 p-3 ring-1 ring-amber-100">
+                        <p class="text-sm text-amber-700">Interes esperado</p>
+                        <p class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['expected_interest_cents'])) }}</p>
+                    </div>
+                    <div class="rounded-md bg-emerald-50 p-3 ring-1 ring-emerald-100">
+                        <p class="text-sm text-emerald-700">Capital cobrado real</p>
+                        <p class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_capital_cents'])) }}</p>
+                    </div>
+                    <div class="rounded-md bg-cyan-50 p-3 ring-1 ring-cyan-100">
+                        <p class="text-sm text-cyan-700">Interes cobrado real</p>
+                        <p class="mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_interest_cents'])) }}</p>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border-t border-slate-200">
+                    <table class="w-full min-w-[640px] text-left text-sm">
+                        <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+                            <tr>
+                                <th class="px-5 py-3">Concepto</th>
+                                <th class="px-5 py-3 text-right">Esperado</th>
+                                <th class="px-5 py-3 text-right">Cobrado real</th>
+                                <th class="px-5 py-3 text-right">Diferencia</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr>
+                                <td class="px-5 py-3 font-semibold text-slate-950">Capital</td>
+                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($monthlyReturnReport['expected_capital_cents'])) }}</td>
+                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_capital_cents'])) }}</td>
+                                <td class="px-5 py-3 text-right font-semibold {{ $monthlyReturnReport['actual_capital_cents'] - $monthlyReturnReport['expected_capital_cents'] < 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_capital_cents'] - $monthlyReturnReport['expected_capital_cents'])) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="px-5 py-3 font-semibold text-slate-950">Interes</td>
+                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($monthlyReturnReport['expected_interest_cents'])) }}</td>
+                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_interest_cents'])) }}</td>
+                                <td class="px-5 py-3 text-right font-semibold {{ $monthlyReturnReport['actual_interest_cents'] - $monthlyReturnReport['expected_interest_cents'] < 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_interest_cents'] - $monthlyReturnReport['expected_interest_cents'])) }}</td>
+                            </tr>
+                            <tr class="bg-slate-50">
+                                <td class="px-5 py-3 font-bold text-slate-950">Total</td>
+                                <td class="px-5 py-3 text-right font-bold">{{ Money::mxn(Money::decimal($expectedTotalCents)) }}</td>
+                                <td class="px-5 py-3 text-right font-bold">{{ Money::mxn(Money::decimal($actualTotalCents)) }}</td>
+                                <td class="px-5 py-3 text-right font-bold {{ $differenceCents < 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ Money::mxn(Money::decimal($differenceCents)) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="border-t border-slate-200 px-5 py-3 text-sm text-slate-500">{{ $monthlyReturnReport['expected_installments'] }} pagares esperados y {{ $monthlyReturnReport['actual_returns'] }} retornos registrados en {{ $monthlyReturnReport['month']->format('m/Y') }}.</p>
+            </section>
 
         @else
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm">

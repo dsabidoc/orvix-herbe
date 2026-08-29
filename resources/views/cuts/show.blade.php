@@ -27,7 +27,7 @@
         @endcan
     </div>
 
-    <div class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div class="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <section class="print-sheet min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
             <div class="border-b border-slate-200 px-5 py-5">
                 <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Corte Orvix Prestamos</p>
@@ -108,28 +108,28 @@
                 <h3 class="font-bold text-slate-950">Cobros del corte</h3>
                 <p class="mt-1 text-sm text-slate-500">Cobros pagados vigentes incluidos al momento de generar este corte.</p>
             </div>
-            <div class="overflow-hidden">
-                <table class="cut-print-table w-full table-fixed text-left text-sm">
+            <div class="overflow-x-auto">
+                <table class="cut-print-table min-w-[780px] w-full table-fixed text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
-                            <th class="w-[24%] px-5 py-3">Cliente</th>
-                            <th class="w-[22%] px-5 py-3">Credito</th>
-                            <th class="w-[17%] px-5 py-3">Fechas</th>
-                            <th class="w-[15%] px-5 py-3 text-right">Importes</th>
-                            <th class="w-[12%] px-5 py-3">Estado</th>
+                            <th class="w-[23%] px-3 py-3">Cliente</th>
+                            <th class="w-[20%] px-3 py-3">Credito</th>
+                            <th class="w-[16%] px-3 py-3">Fechas</th>
+                            <th class="w-[16%] px-3 py-3 text-right">Importes</th>
+                            <th class="w-[13%] px-3 py-3">Estado</th>
                             @can('weekly-cuts.confirm')
-                                <th class="no-print w-[10%] px-5 py-3 text-right">Accion</th>
+                                <th class="no-print w-[12%] px-3 py-3 text-right">Accion</th>
                             @endcan
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @forelse ($cut->items as $item)
                             <tr>
-                                <td class="px-5 py-4 align-top">
+                                <td class="px-3 py-4 align-top">
                                     <a class="break-words font-semibold leading-5 text-[#0f766e]" href="{{ route('loans.show', $item->movement->loan) }}">{{ $item->movement->loan->client->first_name }} {{ $item->movement->loan->client->last_name }}</a>
                                     <p class="mt-1 break-all text-xs text-slate-500">{{ $item->movement->folio }}</p>
                                 </td>
-                                <td class="px-5 py-4 align-top">
+                                <td class="px-3 py-4 align-top">
                                     <p class="font-semibold text-slate-950">{{ $item->movement->loan->vehicle?->model ?? 'Vehiculo' }}</p>
                                     @if ($item->movement->targetInstallment)
                                         <p class="mt-1 text-xs text-slate-500">Letra {{ $item->movement->targetInstallment->number }} · vence {{ $item->movement->targetInstallment->due_date->format('d/m/Y') }}</p>
@@ -137,13 +137,13 @@
                                         <p class="mt-1 text-xs text-slate-500">Movimiento general</p>
                                     @endif
                                 </td>
-                                <td class="px-5 py-4 align-top">
+                                <td class="px-3 py-4 align-top">
                                     <p class="text-xs text-slate-500">Declarada</p>
                                     <p class="font-semibold text-slate-950">{{ $item->movement->operated_on->format('d/m/Y') }}</p>
                                     <p class="mt-2 text-xs text-slate-500">Registro</p>
                                     <p class="font-semibold text-slate-950">{{ ($item->movement->registered_at ?? $item->movement->created_at)->format('d/m/Y H:i') }}</p>
                                 </td>
-                                <td class="px-5 py-4 text-right align-top">
+                                <td class="px-3 py-4 text-right align-top">
                                     <p class="text-xs text-slate-500">Pagaré</p>
                                     <p class="font-semibold">{{ Money::mxn($item->movement->contract_amount) }}</p>
                                     <p class="mt-2 text-xs text-slate-500">Recargos/otros</p>
@@ -151,17 +151,17 @@
                                     <p class="mt-2 text-xs text-slate-500">Total</p>
                                     <p class="font-bold text-slate-950">{{ Money::mxn($item->reported_amount) }}</p>
                                 </td>
-                                <td class="px-5 py-4 align-top">
+                                <td class="px-3 py-4 align-top">
                                     <span class="inline-flex rounded bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{{ StatusLabels::movement($item->movement->confirmation_status) }}</span>
                                     <p class="mt-2 text-xs text-slate-500">Registró</p>
                                     <p class="font-semibold text-slate-950">{{ $item->movement->registeredBy?->name ?? '-' }}</p>
                                 </td>
                                 @can('weekly-cuts.confirm')
-                                    <td class="no-print px-5 py-4 text-right align-top">
+                                    <td class="no-print px-3 py-4 text-right align-top">
                                         @if ($cut->status !== 'closed')
                                             <form method="POST" action="{{ route('cuts.movements.reverse', [$cut, $item->movement]) }}" data-confirm-delete data-confirm-title="¿Revertir este movimiento?" data-confirm-message="Se quitara del corte y regresara como pendiente si la letra aun tiene saldo.">
                                                 @csrf
-                                                <button class="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700" type="submit">Revertir</button>
+                                                <button class="whitespace-nowrap rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700" type="submit">Revertir</button>
                                             </form>
                                         @else
                                             <span class="text-xs font-semibold text-slate-400">-</span>
@@ -171,7 +171,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td class="px-5 py-6 text-sm text-slate-500" colspan="@can('weekly-cuts.confirm') 6 @else 5 @endcan">No hay cobros registrados en este corte.</td>
+                                <td class="px-3 py-6 text-sm text-slate-500" colspan="@can('weekly-cuts.confirm') 6 @else 5 @endcan">No hay cobros registrados en este corte.</td>
                             </tr>
                         @endforelse
                     </tbody>

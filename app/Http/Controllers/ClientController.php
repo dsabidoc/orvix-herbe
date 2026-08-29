@@ -92,6 +92,33 @@ class ClientController extends Controller
         ]);
     }
 
+    public function edit(Request $request, Client $client): View
+    {
+        $this->authorizeClientUpdate($request, $client);
+
+        return view('clients.edit', [
+            'client' => $client,
+        ]);
+    }
+
+    public function update(Request $request, Client $client): RedirectResponse
+    {
+        $this->authorizeClientUpdate($request, $client);
+
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:120'],
+            'last_name' => ['required', 'string', 'max:120'],
+            'phone' => ['required', 'string', 'max:40'],
+            'alternate_phone' => ['nullable', 'string', 'max:40'],
+            'email' => ['nullable', 'email', 'max:160'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $client->update($data);
+
+        return redirect()->route('clients.show', $client)->with('status', 'Datos del cliente actualizados.');
+    }
+
     private function summary(Client $client): array
     {
         $loans = $client->loans;
@@ -141,6 +168,16 @@ class ClientController extends Controller
             ['title' => 'Prestamos', 'value' => number_format($loanScope->count()), 'caption' => 'Creditos totales visibles', 'color' => 'green'],
             ['title' => 'Prestamos activos', 'value' => number_format($activeLoans->count()), 'caption' => 'Creditos vivos', 'color' => 'orange'],
         ];
+    }
+
+    private function authorizeClientUpdate(Request $request, Client $client): void
+    {
+        abort_if($this->isInvestorReadOnly($request), 403);
+        abort_unless($request->user()->can('clients.manage'), 403);
+
+        if ($request->user()->hasRole('operador-cartera') && $client->operator_id !== $request->user()->operatorProfile?->id) {
+            abort(403);
+        }
     }
 
     private function isInvestorReadOnly(Request $request): bool

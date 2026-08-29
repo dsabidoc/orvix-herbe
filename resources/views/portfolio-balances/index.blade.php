@@ -20,8 +20,8 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
-        <div class="grid gap-3 md:grid-cols-12 md:items-end lg:gap-2">
-            <div class="min-w-0 md:col-span-3 xl:col-span-4">
+        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(220px,1.6fr)_minmax(150px,1fr)_minmax(170px,1fr)_auto_auto_auto] 2xl:items-end">
+            <div class="min-w-0">
                 <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
                     <option value="">Todos</option>
@@ -33,7 +33,7 @@
                     @endforeach
                 </select>
             </div>
-            <div class="min-w-0 md:col-span-2 xl:col-span-2">
+            <div class="min-w-0">
                 <label class="text-sm font-semibold text-slate-700" for="month_mode">Mes</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month_mode" name="month_mode">
                     <option value="current" @selected(($filters['month_mode'] ?? 'current') === 'current')>Mes en curso</option>
@@ -41,17 +41,17 @@
                     <option value="custom" @selected(($filters['month_mode'] ?? '') === 'custom')>Seleccionar mes</option>
                 </select>
             </div>
-            <div class="min-w-0 md:col-span-2 xl:col-span-2">
+            <div class="min-w-0">
                 <label class="text-sm font-semibold text-slate-700" for="month">Mes especifico</label>
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
             </div>
-            <label class="flex min-h-[42px] min-w-0 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 md:col-span-3 xl:col-span-2 xl:w-fit xl:max-w-full xl:whitespace-nowrap xl:px-2 xl:text-xs">
+            <label title="Incluir vencidos y atrasados" class="flex min-h-[42px] min-w-0 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 2xl:w-fit 2xl:whitespace-nowrap">
                 <input type="hidden" name="include_overdue" value="0">
                 <input class="h-4 w-4 accent-[#0d9488]" name="include_overdue" type="checkbox" value="1" @checked($includeOverdue)>
-                <span>Incluir vencidos y atrasados</span>
+                <span>Incluir</span>
             </label>
-            <button class="w-full rounded-md bg-[#0d9488] px-3 py-2 text-sm font-bold text-white md:col-span-1 xl:w-auto xl:justify-self-start xl:px-2 xl:text-xs" type="submit">Filtrar</button>
-            <a class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-center text-sm font-bold text-slate-700 md:col-span-1 xl:w-auto xl:justify-self-start xl:px-2 xl:text-xs" href="{{ route('portfolio-balances.index') }}">Todos</a>
+            <button class="w-full rounded-md bg-[#0d9488] px-3 py-2 text-sm font-bold text-white 2xl:w-auto" type="submit">Filtrar</button>
+            <a class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-center text-sm font-bold text-slate-700 2xl:w-auto" href="{{ route('portfolio-balances.index') }}">Todos</a>
         </div>
     </form>
 
