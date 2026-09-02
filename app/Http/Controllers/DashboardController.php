@@ -49,7 +49,7 @@ class DashboardController extends Controller
 
         $collectedPeriodCents = (int) round(CollectionMovement::query()
             ->whereIn('loan_id', $collectableLoanIds)
-            ->where('confirmation_status', 'applied')
+            ->whereIn('confirmation_status', ['reported', 'applied'])
             ->whereBetween('operated_on', [$periodStart->toDateString(), $periodEnd->toDateString()])
             ->sum('contract_amount') * 100);
         $pendingPeriodCents = $expectedPeriodCents - $collectedPeriodCents;

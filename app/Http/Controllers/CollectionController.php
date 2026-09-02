@@ -61,11 +61,12 @@ class CollectionController extends Controller
         $monthOperationalCents = (clone $monthInstallments)
             ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
             ->value('subtotal') * 100;
-        $reportedPendingCents = CollectionMovement::query()
+        $collectedMonthCents = CollectionMovement::query()
             ->whereHas('loan', $loanScope)
-            ->where('confirmation_status', 'reported')
-            ->whereBetween(DB::raw('COALESCE(registered_at, created_at)'), [$monthStart->startOfDay(), $monthEnd->endOfDay()])
+            ->whereIn('confirmation_status', ['reported', 'applied'])
+            ->whereBetween('operated_on', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->sum('contract_amount') * 100;
+        $pendingMonthCents = $monthOperationalCents - $collectedMonthCents;
         $overdueCents = Installment::query()
             ->whereHas('loan', $loanScope)
             ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
@@ -80,8 +81,8 @@ class CollectionController extends Controller
         $expectedWeekCents = Installment::query()
             ->whereHas('loan', $loanScope)
             ->whereBetween('due_date', [$weekStart, $weekEnd])
-            ->where('remaining_amount', '>', 0)
-            ->sum('remaining_amount') * 100;
+            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
+            ->value('subtotal') * 100;
 
         return view('collections.index', [
             'installments' => $installments,
@@ -89,7 +90,8 @@ class CollectionController extends Controller
                 ['title' => 'Cartera del mes', 'value' => Money::mxn(Money::decimal((int) ((clone $monthInstallments)->sum('remaining_amount') * 100))), 'caption' => 'Saldo de letras del mes', 'color' => 'blue'],
                 ['title' => 'Esperado semanal', 'value' => Money::mxn(Money::decimal((int) $expectedWeekCents)), 'caption' => 'Letras del mes en esta semana', 'color' => 'orange'],
                 ['title' => 'Esperado del mes', 'value' => Money::mxn(Money::decimal((int) $monthOperationalCents)), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
-                ['title' => 'Reportado pendiente', 'value' => Money::mxn(Money::decimal((int) $reportedPendingCents)), 'caption' => 'Cobros aun por confirmar', 'color' => 'green'],
+                ['title' => 'Cobrado del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthCents)), 'caption' => 'Pagos reportados o aplicados', 'color' => 'green'],
+                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingMonthCents)), 'caption' => 'Esperado menos cobrado', 'color' => 'orange'],
                 ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas del mes', 'color' => 'red'],
             ],
             'month' => $selectedMonth,
