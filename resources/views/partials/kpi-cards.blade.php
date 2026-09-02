@@ -17,7 +17,7 @@
     ];
 @endphp
 
-<div class="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+<div class="{{ $gridClass ?? 'grid-cols-2 md:grid-cols-2 xl:grid-cols-5' }} mb-4 grid gap-4">
     @foreach ($kpis as $kpi)
         @php
             $color = $kpi['color'] ?? 'slate';

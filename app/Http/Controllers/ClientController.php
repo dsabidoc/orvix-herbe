@@ -31,7 +31,12 @@ class ClientController extends Controller
 
         $query = Client::query()
             ->with('operator')
-            ->withCount(['loans', 'loans as active_loans_count' => fn ($query) => $query->where('status', 'active')])
+            ->withCount([
+                'loans',
+                'loans as active_loans_count' => fn ($query) => $query->where('status', 'active')->where('is_frozen', false),
+                'loans as frozen_loans_count' => fn ($query) => $query->where('status', 'active')->where('is_frozen', true),
+                'loans as concluded_loans_count' => fn ($query) => $query->where('status', '!=', 'active'),
+            ])
             ->where('status', '!=', 'merged');
 
         if ($request->user()->hasRole('operador-cartera')) {
@@ -191,20 +196,48 @@ class ClientController extends Controller
 
     private function indexKpis(Request $request): array
     {
-        $clientScope = Client::query()
-            ->where('status', '!=', 'merged')
-            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id));
-        $activeLoans = Loan::query()
-            ->where('status', 'active')
-            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id));
-        $loanScope = Loan::query()
-            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id));
+        $clientScope = $this->clientScope($request);
+        $visibleClientIds = (clone $clientScope)->pluck('id');
+        $activeClients = (clone $clientScope)->whereHas('loans', fn ($query) => $query->where('status', 'active'));
+        $concludedClients = (clone $clientScope)->whereDoesntHave('loans', fn ($query) => $query->where('status', 'active'));
+        $loanScope = Loan::query()->whereIn('client_id', $visibleClientIds);
+        $activeLoans = (clone $loanScope)->where('status', 'active')->where('is_frozen', false);
+        $frozenLoans = (clone $loanScope)->where('status', 'active')->where('is_frozen', true);
+        $concludedLoans = (clone $loanScope)->where('status', '!=', 'active');
 
         return [
-            ['title' => 'Clientes', 'value' => number_format((clone $clientScope)->count()), 'caption' => 'Total en cartera visible', 'color' => 'blue'],
-            ['title' => 'Prestamos', 'value' => number_format($loanScope->count()), 'caption' => 'Creditos totales visibles', 'color' => 'green'],
-            ['title' => 'Prestamos activos', 'value' => number_format($activeLoans->count()), 'caption' => 'Creditos vivos', 'color' => 'orange'],
+            ['title' => 'Clientes', 'value' => number_format($activeClients->count() + $concludedClients->count()), 'caption' => 'Activos y no activos', 'color' => 'blue'],
+            ['title' => 'Clientes activos', 'value' => number_format($activeClients->count()), 'caption' => 'Con credito activo', 'color' => 'green'],
+            ['title' => 'Clientes no activos', 'value' => number_format($concludedClients->count()), 'caption' => 'Sin credito activo o concluido', 'color' => 'slate'],
+            ['title' => 'Prestamos', 'value' => number_format($loanScope->count()), 'caption' => 'Creditos totales visibles', 'color' => 'blue'],
+            ['title' => 'Prestamos activos', 'value' => number_format($activeLoans->count()), 'caption' => 'Creditos activos y cobrables', 'color' => 'green'],
+            ['title' => 'Prestamos congelados', 'value' => number_format($frozenLoans->count()), 'caption' => 'Creditos temporalmente detenidos', 'color' => 'yellow'],
+            ['title' => 'Prestamos concluidos', 'value' => number_format($concludedLoans->count()), 'caption' => 'Creditos liquidados o concluidos', 'color' => 'orange'],
         ];
+    }
+
+    private function clientScope(Request $request)
+    {
+        $query = Client::query()->where('status', '!=', 'merged');
+
+        if ($request->user()->hasRole('operador-cartera')) {
+            $query->where('operator_id', $request->user()->operatorProfile?->id);
+        }
+
+        if ($request->filled('q')) {
+            $search = '%'.$request->string('q')->toString().'%';
+            $query->where(fn ($query) => $query
+                ->where('first_name', 'like', $search)
+                ->orWhere('last_name', 'like', $search)
+                ->orWhere('phone', 'like', $search)
+                ->orWhere('email', 'like', $search));
+        }
+
+        if ($request->filled('operator_id') && ! $request->user()->hasRole('operador-cartera')) {
+            $query->where('operator_id', $request->integer('operator_id'));
+        }
+
+        return $query;
     }
 
     private function authorizeClientUpdate(Request $request, Client $client): void

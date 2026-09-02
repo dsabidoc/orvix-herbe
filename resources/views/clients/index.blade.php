@@ -31,20 +31,22 @@
         @endcanany
     </div>
 
-    @include('partials.kpi-cards', ['kpis' => $kpis])
+    @include('partials.kpi-cards', ['kpis' => $kpis, 'gridClass' => 'grid-cols-2 md:grid-cols-4 xl:grid-cols-4'])
 
     <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-5 py-3">
             @include('partials.table-pagination', ['paginator' => $clients])
         </div>
         <div class="overflow-x-auto">
-        <table class="w-full min-w-[760px] text-left text-sm">
+        <table class="w-full min-w-[980px] text-left text-sm">
             <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
                     <th class="px-5 py-3">Cliente</th>
                     <th class="px-5 py-3">Operador</th>
                     <th class="px-5 py-3">Creditos</th>
                     <th class="px-5 py-3">Activos</th>
+                    <th class="px-5 py-3">Congelados</th>
+                    <th class="px-5 py-3">Concluidos</th>
                     <th class="px-5 py-3">Estado</th>
                 </tr>
             </thead>
@@ -58,12 +60,14 @@
                         <td class="px-5 py-3">{{ $client->operator?->name ?? 'Sin operador' }}</td>
                         <td class="px-5 py-3">{{ $client->loans_count }}</td>
                         <td class="px-5 py-3">{{ $client->active_loans_count }}</td>
+                        <td class="px-5 py-3">{{ $client->frozen_loans_count }}</td>
+                        <td class="px-5 py-3">{{ $client->concluded_loans_count }}</td>
                         <td class="px-5 py-3">
-                            <span class="rounded px-2 py-1 text-xs font-bold {{ $client->active_loans_count > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $client->active_loans_count > 0 ? 'Activo' : 'No activo' }}</span>
+                            <span class="rounded px-2 py-1 text-xs font-bold {{ $client->active_loans_count + $client->frozen_loans_count > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $client->active_loans_count + $client->frozen_loans_count > 0 ? 'Activo' : 'No activo' }}</span>
                         </td>
                     </tr>
                 @empty
-                    <tr><td class="px-5 py-6 text-slate-500" colspan="5">No hay clientes para mostrar.</td></tr>
+                    <tr><td class="px-5 py-6 text-slate-500" colspan="7">No hay clientes para mostrar.</td></tr>
                 @endforelse
             </tbody>
         </table>
