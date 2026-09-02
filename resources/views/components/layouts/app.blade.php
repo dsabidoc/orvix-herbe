@@ -32,7 +32,6 @@
                             ]
                             : [
                                 ['Dashboard', 'dashboard', 'chart'],
-                                ['Simulador', 'simulator.index', 'calculator'],
                                 [
                                     'Carteras',
                                     null,
@@ -145,6 +144,19 @@
                                 </div>
                             </details>
                         @endcan
+                        @if (! $isInvestorOnly)
+                            <a class="{{ request()->routeIs('simulator.index') ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} flex items-center justify-between rounded-md px-3 py-2.5" href="{{ route('simulator.index') }}">
+                                <span class="flex items-center gap-2.5">
+                                    <span class="grid size-5 place-items-center rounded bg-[#e6f7f4] text-[#0d9488]">
+                                        <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>
+                                    </span>
+                                    <span>Simulador</span>
+                                </span>
+                                @if (request()->routeIs('simulator.index'))
+                                    <span class="size-2 rounded-full bg-[#0d9488]"></span>
+                                @endif
+                            </a>
+                        @endif
                     </nav>
 
                     <button class="theme-toggle mt-6 flex w-full items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700" type="button" data-theme-toggle aria-label="Cambiar tema">
@@ -221,6 +233,14 @@
                                 </div>
                             </details>
                         @endcan
+                        @if (! $isInvestorOnly)
+                            <a class="{{ request()->routeIs('simulator.index') ? 'bg-[#e6f7f4] text-[#0f766e]' : 'hover:bg-slate-100' }} flex items-center justify-between rounded-md px-3 py-3" href="{{ route('simulator.index') }}">
+                                <span class="flex items-center gap-2.5"><span class="size-2 rounded-full bg-[#0d9488]"></span>{{ 'Simulador' }}</span>
+                                @if (request()->routeIs('simulator.index'))
+                                    <span class="size-2 rounded-full bg-[#0d9488]"></span>
+                                @endif
+                            </a>
+                        @endif
                     </nav>
 
                     <button class="theme-toggle mt-5 flex w-full items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700" type="button" data-theme-toggle aria-label="Cambiar tema">
