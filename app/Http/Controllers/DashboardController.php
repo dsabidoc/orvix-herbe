@@ -26,7 +26,11 @@ class DashboardController extends Controller
         }
 
         $periodType = $request->string('period_type')->toString() === 'year' ? 'year' : 'month';
-        $period = $request->string('period')->toString() ?: CarbonImmutable::now('America/Merida')->format($periodType === 'year' ? 'Y' : 'Y-m');
+        $requestedPeriod = $request->string('period')->toString();
+        $currentPeriod = CarbonImmutable::now('America/Merida');
+        $period = $periodType === 'year'
+            ? (preg_match('/^(19|20|21)\d{2}(?:-\d{2})?$/', $requestedPeriod) ? substr($requestedPeriod, 0, 4) : $currentPeriod->format('Y'))
+            : (preg_match('/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/', $requestedPeriod) ? $requestedPeriod : $currentPeriod->format('Y-m'));
         $periodDate = $periodType === 'year'
             ? CarbonImmutable::createFromFormat('Y-m-d', $period.'-01-01', 'America/Merida')
             : CarbonImmutable::createFromFormat('Y-m-d', $period.'-01', 'America/Merida');
