@@ -7,6 +7,7 @@ use App\Models\Installment;
 use App\Models\Investor;
 use App\Models\Loan;
 use App\Models\Operator;
+use App\Models\CollectionMovement;
 use App\Models\WeeklyCut;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -40,12 +41,18 @@ class DashboardController extends Controller
             ->get()
             ->sum(fn (Loan $loan) => (int) $settlementService->quote($loan, $today)['total_cents']);
 
-        $expectedPeriodCents = $this->operationalPendingCents(
+        $expectedPeriodCents = $this->operationalScheduledCents(
             Installment::query()
                 ->whereIn('loan_id', $collectableLoanIds)
                 ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-                ->where('remaining_amount', '>', 0)
         );
+
+        $collectedPeriodCents = (int) round(CollectionMovement::query()
+            ->whereIn('loan_id', $collectableLoanIds)
+            ->where('confirmation_status', 'applied')
+            ->whereBetween('operated_on', [$periodStart->toDateString(), $periodEnd->toDateString()])
+            ->sum('contract_amount') * 100);
+        $pendingPeriodCents = $expectedPeriodCents - $collectedPeriodCents;
 
         $overdueCents = $this->operationalPendingCents(
             Installment::query()
@@ -92,7 +99,9 @@ class DashboardController extends Controller
             'kpis' => [
                 ['title' => 'Total de prestamos activos', 'value' => number_format($activeLoansCount), 'caption' => 'Prestamos activos filtrados', 'cents' => 0, 'color' => 'green', 'chartable' => false],
                 ['title' => 'Total a liquidar hoy', 'value' => Money::mxn(Money::decimal((int) $settleTodayCents)), 'caption' => 'Capital futuro e intereses vigentes', 'cents' => (int) $settleTodayCents, 'color' => 'blue'],
-                ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => 'Abono e interes del periodo', 'cents' => (int) $expectedPeriodCents, 'color' => 'yellow'],
+                ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => 'Total programado originalmente', 'cents' => (int) $expectedPeriodCents, 'color' => 'yellow'],
+                ['title' => 'Cobrado del periodo', 'value' => Money::mxn(Money::decimal((int) $collectedPeriodCents)), 'caption' => 'Pagos aplicados en el periodo', 'cents' => (int) $collectedPeriodCents, 'color' => 'green'],
+                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingPeriodCents)), 'caption' => 'Esperado menos cobrado', 'cents' => (int) $pendingPeriodCents, 'color' => 'orange'],
                 ['title' => 'Total vencidos', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Abono e interes vencido', 'cents' => (int) $overdueCents, 'color' => 'red'],
             ],
             'loans' => $loans,
@@ -138,6 +147,13 @@ class DashboardController extends Controller
         return (int) $query
             ->get(['principal_amount', 'interest_amount', 'contract_amount', 'remaining_amount'])
             ->sum(fn (Installment $installment) => $this->installmentOperationalPendingCents($installment));
+    }
+
+    private function operationalScheduledCents($query): int
+    {
+        return (int) $query
+            ->get(['principal_amount', 'interest_amount'])
+            ->sum(fn (Installment $installment) => Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount));
     }
 
     private function installmentOperationalPendingCents(Installment $installment): int
