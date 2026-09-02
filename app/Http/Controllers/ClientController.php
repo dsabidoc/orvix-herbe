@@ -17,6 +17,18 @@ class ClientController extends Controller
     {
         abort_if($this->isInvestorReadOnly($request), 403);
 
+        $sort = $request->input('sort', 'name');
+        $direction = $request->input('direction', 'asc');
+        $statusFilter = $request->input('client_status', '');
+
+        if (! in_array($sort, ['name', 'loans_count', 'active_loans_count'], true)) {
+            $sort = 'name';
+        }
+
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
+
         $query = Client::query()
             ->with('operator')
             ->withCount(['loans', 'loans as active_loans_count' => fn ($query) => $query->where('status', 'active')])
@@ -35,9 +47,34 @@ class ClientController extends Controller
                 ->orWhere('email', 'like', $search));
         }
 
+        if ($request->filled('operator_id') && ! $request->user()->hasRole('operador-cartera')) {
+            $query->where('operator_id', $request->integer('operator_id'));
+        }
+
+        if ($statusFilter === 'active') {
+            $query->whereHas('loans', fn ($query) => $query->where('status', 'active'));
+        } elseif ($statusFilter === 'inactive') {
+            $query->whereDoesntHave('loans', fn ($query) => $query->where('status', 'active'));
+        }
+
+        if ($sort === 'name') {
+            $query->orderBy('first_name', $direction)->orderBy('last_name', $direction);
+        } else {
+            $query->orderBy($sort, $direction)->orderBy('first_name');
+        }
+
         return view('clients.index', [
-            'clients' => $query->latest()->paginate(15)->withQueryString(),
+            'clients' => $query->paginate(15)->withQueryString(),
             'kpis' => $this->indexKpis($request),
+            'operators' => $request->user()->hasRole('operador-cartera')
+                ? collect()
+                : Operator::query()->where('status', 'active')->orderBy('name')->get(),
+            'clientFilters' => [
+                'operator_id' => $request->input('operator_id'),
+                'client_status' => $statusFilter,
+                'sort' => $sort,
+                'direction' => $direction,
+            ],
         ]);
     }
 
