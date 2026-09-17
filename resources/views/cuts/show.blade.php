@@ -402,7 +402,10 @@
                     @else
                         <div>
                             <label class="text-sm font-semibold text-slate-700" for="cut_advance_loan_search">Buscar cartera</label>
-                            <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_advance_loan_search" type="search" placeholder="Buscar por modelo, dia, folio o cliente" data-quick-payment-search="cut_advance_loan">
+                            <div class="mt-1 flex gap-2">
+                                <input class="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_advance_loan_search" type="search" placeholder="Buscar por modelo, dia, folio o cliente" data-quick-payment-search="cut_advance_loan">
+                                <button class="shrink-0 rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="button" data-quick-payment-search-button="cut_advance_loan">Buscar</button>
+                            </div>
                             <label class="text-sm font-semibold text-slate-700" for="cut_advance_loan">Cartera</label>
                             <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_advance_loan" data-quick-payment-select>
                                 <option value="">Seleccionar cartera</option>
@@ -451,6 +454,9 @@
                                                     <option value="dejo_de_pagar">Dejo de pagar; cobrador liquida</option>
                                                 </select>
                                                 <p class="mt-1 text-xs text-red-700">Monto a liquidar: <strong>{{ Money::mxn(Money::decimal($quote['total_cents'] ?? 0)) }}</strong></p>
+                                                @if ($loan->getAttribute('cut_pending_payment_count') > 0)
+                                                    <p class="mt-1 text-xs font-semibold text-amber-700">Incluye los pagos reportados en este corte; se aplicaran al confirmarlo.</p>
+                                                @endif
                                             </div>
                                             <button class="rounded-md bg-red-700 px-4 py-2 text-sm font-bold text-white" type="submit">Liquidar</button>
                                         </div>

@@ -42,12 +42,21 @@ class LoanSettlementController extends Controller
             abort_if($selectedCut->operator_id !== $loan->operator_id, 422, 'La liquidacion no pertenece al operador de este corte.');
         }
 
+        $pendingCutMovements = $selectedCut
+            ? CollectionMovement::query()
+                ->where('weekly_cut_id', $selectedCut->id)
+                ->where('loan_id', $loan->id)
+                ->where('confirmation_status', 'reported')
+                ->get()
+            : null;
+
         $service->settle(
             $loan,
             $data['settlement_reason'],
             $request->user()->id,
             CarbonImmutable::parse($data['settled_on'] ?? now('America/Merida')->toDateString(), 'America/Merida'),
             true,
+            $pendingCutMovements,
         );
 
         $movement = CollectionMovement::query()

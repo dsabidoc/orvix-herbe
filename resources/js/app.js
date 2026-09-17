@@ -833,7 +833,19 @@ document.addEventListener('DOMContentLoaded', () => {
             select.classList.toggle('border-amber-300', needle !== '' && visibleMatches === 0);
         };
 
-        input.addEventListener('input', filterOptions);
+        const searchButton = document.querySelector(`[data-quick-payment-search-button="${selectId}"]`);
+
+        if (searchButton instanceof HTMLButtonElement) {
+            searchButton.addEventListener('click', filterOptions);
+        }
+
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                filterOptions();
+            }
+        });
+
         filterOptions();
     });
 

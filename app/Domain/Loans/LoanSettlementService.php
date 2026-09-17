@@ -9,6 +9,7 @@ use App\Models\PaymentAllocation;
 use App\Models\WeeklyCutItem;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -19,13 +20,13 @@ class LoanSettlementService
     /**
      * @return array{settled_on:string,total_cents:int,rows:array<int,array<string,mixed>>}
      */
-    public function quote(Loan $loan, CarbonImmutable|string|null $settledOn = null): array
+    public function quote(Loan $loan, CarbonImmutable|string|null $settledOn = null, ?Collection $pendingMovements = null): array
     {
         $settledOn = $this->settledOn($settledOn);
         $monthStart = $settledOn->startOfMonth();
         $monthEnd = $settledOn->endOfMonth();
         $rows = [];
-        $unpaidInstallments = $loan->installments()->where('remaining_amount', '>', 0)->orderBy('number')->get();
+        $unpaidInstallments = $this->installmentsAfterPendingMovements($loan, $pendingMovements);
 
         if (($loan->calculation_method ?? 'regular') === 'interest_only') {
             $anchor = $unpaidInstallments->first();
@@ -113,15 +114,15 @@ class LoanSettlementService
         ];
     }
 
-    public function settle(Loan $loan, string $reason, int $userId, CarbonImmutable|string|null $settledOn = null, bool $deferToCut = false): Loan
+    public function settle(Loan $loan, string $reason, int $userId, CarbonImmutable|string|null $settledOn = null, bool $deferToCut = false, ?Collection $pendingMovements = null): Loan
     {
-        return DB::transaction(function () use ($loan, $reason, $userId, $settledOn, $deferToCut) {
+        return DB::transaction(function () use ($loan, $reason, $userId, $settledOn, $deferToCut, $pendingMovements) {
             $loan = Loan::query()
                 ->with(['investments'])
                 ->whereKey($loan->id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $quote = $this->quote($loan, $settledOn);
+            $quote = $this->quote($loan, $settledOn, $pendingMovements);
             $settledOn = CarbonImmutable::parse($quote['settled_on'], 'America/Merida');
             $movement = null;
 
@@ -180,7 +181,15 @@ class LoanSettlementService
             $reason = str_contains((string) $movement->notes, 'Motivo=dejo_de_pagar')
                 ? 'dejo_de_pagar'
                 : 'pronto_pago_cliente';
-            $quote = $this->quote($loan, $settledOn);
+            $pendingMovements = $movement->weekly_cut_id
+                ? CollectionMovement::query()
+                    ->where('weekly_cut_id', $movement->weekly_cut_id)
+                    ->where('loan_id', $movement->loan_id)
+                    ->where('confirmation_status', 'reported')
+                    ->whereKeyNot($movement->id)
+                    ->get()
+                : collect();
+            $quote = $this->quote($loan, $settledOn, $pendingMovements);
 
             $movement->update([
                 'contract_amount' => Money::decimal($quote['total_cents']),
@@ -292,5 +301,36 @@ class LoanSettlementService
         $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
 
         return $operationalCents > 0 ? $operationalCents : Money::cents($installment->contract_amount);
+    }
+
+    private function installmentsAfterPendingMovements(Loan $loan, ?Collection $pendingMovements): Collection
+    {
+        $unpaidInstallments = $loan->installments()
+            ->where('remaining_amount', '>', 0)
+            ->orderBy('number')
+            ->get();
+
+        if (! $pendingMovements || $pendingMovements->isEmpty()) {
+            return $unpaidInstallments;
+        }
+
+        $pendingByInstallment = $pendingMovements
+            ->filter(fn (CollectionMovement $movement) => filled($movement->target_installment_id))
+            ->groupBy('target_installment_id')
+            ->map(fn (Collection $movements) => $movements->sum(fn (CollectionMovement $movement) => Money::cents($movement->contract_amount)));
+
+        return $unpaidInstallments
+            ->map(function ($installment) use ($pendingByInstallment) {
+                $pendingCents = (int) ($pendingByInstallment[$installment->id] ?? 0);
+
+                if ($pendingCents > 0) {
+                    $remainingCents = max(0, Money::cents($installment->remaining_amount) - $pendingCents);
+                    $installment->setAttribute('remaining_amount', Money::decimal($remainingCents));
+                }
+
+                return $installment;
+            })
+            ->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0)
+            ->values();
     }
 }

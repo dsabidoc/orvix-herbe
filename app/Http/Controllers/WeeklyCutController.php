@@ -485,6 +485,12 @@ class WeeklyCutController extends Controller
     private function advanceLoansForCut(WeeklyCut $cut, LoanSettlementService $settlementService)
     {
         $cutDate = $cut->period_starts_on->toDateString();
+        $pendingCutMovements = $cut->items
+            ->map(fn ($item) => $item->movement)
+            ->filter(fn ($movement) => $movement
+                && $movement->confirmation_status === 'reported'
+                && filled($movement->target_installment_id))
+            ->values();
 
         return Loan::query()
             ->with([
@@ -517,7 +523,7 @@ class WeeklyCutController extends Controller
                     (string) $second->folio,
                 ];
             })
-            ->map(function (Loan $loan) use ($settlementService, $cutDate): Loan {
+            ->map(function (Loan $loan) use ($settlementService, $cutDate, $pendingCutMovements): Loan {
                 $loan->setRelation(
                     'installments',
                     $loan->installments
@@ -532,7 +538,18 @@ class WeeklyCutController extends Controller
                         })
                         ->values(),
                 );
-                $loan->setAttribute('cut_settlement_quote', $settlementService->quote($loan));
+                $loan->setAttribute(
+                    'cut_settlement_quote',
+                    $settlementService->quote(
+                        $loan,
+                        $cutDate,
+                        $pendingCutMovements->where('loan_id', $loan->id)->values(),
+                    ),
+                );
+                $loan->setAttribute(
+                    'cut_pending_payment_count',
+                    $pendingCutMovements->where('loan_id', $loan->id)->count(),
+                );
 
                 return $loan;
             })
