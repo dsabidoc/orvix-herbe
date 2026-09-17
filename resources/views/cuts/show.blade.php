@@ -1,6 +1,7 @@
 @php
     use App\Support\Money;
     use App\Support\StatusLabels;
+    use App\Domain\Loans\DelinquencyCalculator;
 
     $pendingDeliveryCents = max(0, Money::cents($cut->reported_total) - Money::cents($cut->received_total));
     $adjustmentEntries = $cut->ledgerEntries->filter(fn ($entry) => in_array($entry->type, ['regularization', 'overage', 'adjustment_in'], true));
@@ -206,10 +207,7 @@
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($pendingInstallments as $installment)
                                 @php
-                                    $graceLimit = $installment->due_date->copy()->addDays((int) ($installment->loan->delinquency_grace_days ?? 0))->toDateString();
-                                    $delinquencyCents = ((float) ($installment->loan->delinquency_rate ?? 0) > 0 && $graceLimit < $cut->period_starts_on->toDateString())
-                                        ? (int) round(Money::cents($installment->contract_amount) * ((float) $installment->loan->delinquency_rate / 100))
-                                        : 0;
+                                    $delinquencyCents = app(DelinquencyCalculator::class)->forInstallment($installment, $cut->period_starts_on);
                                     $vehicleLabel = trim((string) ($installment->loan->vehicle?->model ?? 'Vehiculo'));
                                     $searchText = implode(' ', [
                                         $vehicleLabel,
@@ -443,6 +441,7 @@
                                         @csrf
                                         <input name="return_to" type="hidden" value="cut">
                                         <input name="cut_id" type="hidden" value="{{ $cut->id }}">
+                                        <input name="advance_loan_id" type="hidden" value="{{ $loan->id }}">
                                         <input name="settled_on" type="hidden" value="{{ $cutDateString }}">
                                         <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
                                             <div>
@@ -476,10 +475,9 @@
                                                     $isCapitalAdvance = $installment->due_date->toDateString() > $cutMonthEndString;
                                                     $hasLaterPending = $loan->installments->contains(fn ($candidate) => $candidate->number > $installment->number && Money::cents($candidate->remaining_amount) > 0 && ! $candidate->reportedMovement);
                                                     $canAdvanceCapital = $isCapitalAdvance && ! $hasLaterPending;
-                                                    $graceLimit = $installment->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
-                                                    $delinquencyCents = (! $isAfterCutDate && (float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < $cutDateString)
-                                                        ? (int) round(Money::cents($installment->contract_amount) * ((float) $loan->delinquency_rate / 100))
-                                                        : 0;
+                                                    $delinquencyCents = $isAfterCutDate
+                                                        ? 0
+                                                        : app(DelinquencyCalculator::class)->forInstallment($installment, $cutDateString);
                                                 @endphp
                                                 <tr>
                                                     <td class="px-4 py-3 font-semibold">{{ $installment->number }}/{{ $loan->term_months }}</td>
@@ -495,6 +493,7 @@
                                                             @csrf
                                                             <input name="return_to" type="hidden" value="cut">
                                                             <input name="cut_id" type="hidden" value="{{ $cut->id }}">
+                                                            <input name="advance_loan_id" type="hidden" value="{{ $loan->id }}">
                                                             <input name="operated_on" type="hidden" value="{{ $cutDateString }}">
                                                             <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
                                                             <input name="operator_surcharge_amount" type="hidden" value="0">

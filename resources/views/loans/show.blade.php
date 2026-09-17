@@ -2,6 +2,7 @@
     use App\Support\Money;
     use App\Support\StatusLabels;
     use App\Support\InvoiceHolders;
+    use App\Domain\Loans\DelinquencyCalculator;
 
     $operationalTotal = $loan->installments->sum(fn ($installment) => Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount));
     $operationalBalance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
@@ -31,13 +32,9 @@
         : ((int) $loan->term_months.' meses');
     $vehicleVinLabel = filled($loan->vehicle?->vin) ? $loan->vehicle->vin : 'N/A';
     $vehiclePlatesLabel = filled($loan->vehicle?->plates) ? $loan->vehicle->plates : 'N/A';
-    $nextDelinquencyCents = 0;
-    if ($next && (float) ($loan->delinquency_rate ?? 0) > 0) {
-        $graceLimit = $next->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
-        if ($graceLimit < $today) {
-            $nextDelinquencyCents = (int) round(Money::cents($next->contract_amount) * ((float) $loan->delinquency_rate / 100));
-        }
-    }
+    $nextDelinquencyCents = $next
+        ? app(DelinquencyCalculator::class)->forInstallment($next, $today)
+        : 0;
 @endphp
 
 <x-layouts.app title="{{ $loan->folio }} · {{ $loan->client->first_name }} {{ $loan->client->last_name }}">
@@ -356,10 +353,9 @@
                                 $statusClass = $movement && $movement->confirmation_status === 'reported'
                                     ? 'bg-amber-50 text-amber-700'
                                     : ($isOverdue ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700');
-                                $graceLimit = $installment->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
                                 $subtotalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
-                                $rowDelinquencyCents = (! $movement && Money::cents($installment->remaining_amount) > 0 && (float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < $today)
-                                    ? (int) round(Money::cents($installment->contract_amount) * ((float) $loan->delinquency_rate / 100))
+                                $rowDelinquencyCents = (! $movement && Money::cents($installment->remaining_amount) > 0)
+                                    ? app(DelinquencyCalculator::class)->forInstallment($installment, $today)
                                     : 0;
                                 $capitalAdvanceAllowed = $canOperateLoan
                                     && ! $movement

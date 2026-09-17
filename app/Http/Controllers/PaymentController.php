@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Loans\DelinquencyCalculator;
 use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
@@ -15,7 +16,7 @@ use RuntimeException;
 
 class PaymentController extends Controller
 {
-    public function store(Request $request, Loan $loan, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
+    public function store(Request $request, Loan $loan, WeeklyCutPeriodService $cutPeriodService, DelinquencyCalculator $delinquencyCalculator): RedirectResponse
     {
         $this->authorizeLoanAccess($request, $loan);
 
@@ -40,6 +41,17 @@ class PaymentController extends Controller
             $data['reference'] ?? '',
         ]));
 
+        $delinquencyAmountCents = $data['delinquency_amount'] ?? null;
+        if ($delinquencyAmountCents === null && in_array($data['type'], ['ordinary', 'partial'], true)) {
+            $nextInstallment = $loan->installments()
+                ->where('remaining_amount', '>', 0)
+                ->orderBy('number')
+                ->first();
+            $delinquencyAmountCents = $nextInstallment
+                ? $delinquencyCalculator->forInstallment($nextInstallment, $data['operated_on'])
+                : 0;
+        }
+
         $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
         $movement = CollectionMovement::query()->firstOrCreate(
             ['idempotency_key' => $idempotencyKey],
@@ -55,7 +67,7 @@ class PaymentController extends Controller
                 'operator_surcharge_amount' => Money::decimal(Money::cents($data['operator_surcharge_amount'] ?? 0)),
                 'external_concepts_amount' => Money::decimal(Money::cents($data['external_concepts_amount'] ?? 0)),
                 'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
-                'delinquency_amount' => Money::decimal(Money::cents($data['delinquency_amount'] ?? 0)),
+                'delinquency_amount' => Money::decimal(Money::cents($delinquencyAmountCents ?? 0)),
                 'affects_investors' => (bool) ($data['affects_investors'] ?? true),
                 'type' => $data['type'],
                 'payment_method' => $data['payment_method'] ?? 'cash',

@@ -776,6 +776,29 @@ document.addEventListener('DOMContentLoaded', () => {
         syncPanels();
     });
 
+    const advanceLoanId = new URLSearchParams(window.location.search).get('advance_loan_id');
+    const advanceModal = document.getElementById('cut-advance-modal');
+    const advanceSelect = document.querySelector('#cut-advance-modal [data-quick-payment-select]');
+
+    if (advanceLoanId && advanceModal instanceof HTMLDialogElement && advanceSelect instanceof HTMLSelectElement) {
+        advanceSelect.value = `cut-advance-loan-${advanceLoanId}`;
+        advanceSelect.dispatchEvent(new Event('change'));
+        advanceModal.showModal();
+    }
+
+    if (advanceModal instanceof HTMLDialogElement) {
+        advanceModal.addEventListener('close', () => {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('advance_loan_id');
+
+            if (url.hash === '#cut-advance-modal') {
+                url.hash = '';
+            }
+
+            window.history.replaceState({}, document.title, url);
+        });
+    }
+
     document.querySelectorAll('[data-quick-payment-search]').forEach((input) => {
         const selectId = input.getAttribute('data-quick-payment-search');
         const select = selectId ? document.getElementById(selectId) : null;

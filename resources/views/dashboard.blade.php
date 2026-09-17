@@ -292,10 +292,8 @@
                                         @foreach ($loan->installments as $installment)
                                             @php
                                                 $isOverdue = $installment->due_date->toDateString() < now('America/Merida')->toDateString();
-                                                $graceLimit = $installment->due_date->copy()->addDays((int) ($loan->delinquency_grace_days ?? 0))->toDateString();
-                                                $delinquencyCents = ((float) ($loan->delinquency_rate ?? 0) > 0 && $graceLimit < now('America/Merida')->toDateString())
-                                                    ? (int) round(Money::cents($installment->contract_amount) * ((float) $loan->delinquency_rate / 100))
-                                                    : 0;
+                                                $delinquencyCents = app(\App\Domain\Loans\DelinquencyCalculator::class)
+                                                    ->forInstallment($installment, now('America/Merida')->toDateString());
                                             @endphp
                                             <tr class="{{ $isOverdue ? 'bg-red-50/40' : '' }}">
                                                 <td class="px-4 py-3 font-semibold">{{ $installment->number }}</td>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Loans\DelinquencyCalculator;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
@@ -107,6 +108,7 @@ class CollectionController extends Controller
         Installment $installment,
         WeeklyCutPeriodService $cutPeriodService,
         PaymentApplicationService $paymentApplicationService,
+        DelinquencyCalculator $delinquencyCalculator,
     ): RedirectResponse
     {
         $installment->load('loan.operator');
@@ -138,6 +140,7 @@ class CollectionController extends Controller
             'return_to' => ['nullable', 'string', 'max:20'],
             'return_month' => ['nullable', 'date_format:Y-m'],
             'cut_id' => ['nullable', 'exists:weekly_cuts,id'],
+            'advance_loan_id' => ['nullable', 'exists:loans,id'],
         ]);
 
         $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
@@ -162,7 +165,7 @@ class CollectionController extends Controller
             : Money::cents($data['contract_amount']);
         $delinquencyAmountCents = $paymentEffect === 'capital_advance'
             ? 0
-            : $this->calculatedDelinquencyCents($installment, $data['operated_on']);
+            : $delinquencyCalculator->forInstallment($installment, $data['operated_on']);
 
         abort_if($contractAmountCents <= 0, 422, 'Esta letra no tiene abono a capital disponible.');
 
@@ -206,7 +209,7 @@ class CollectionController extends Controller
         $route = match ($data['return_to'] ?? '') {
             'loan' => route('loans.show', $installment->loan).'#installment-'.$installment->id,
             'dashboard' => route('dashboard'),
-            'cut' => route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id'])).'#cut-pending-installments',
+            'cut' => $this->cutReturnRoute($data),
             default => route('collections.index', [
                 'month' => $data['return_month'] ?? now('America/Merida')->format('Y-m'),
                 'operator_id' => $installment->loan->operator_id,
@@ -224,6 +227,7 @@ class CollectionController extends Controller
         Request $request,
         WeeklyCutPeriodService $cutPeriodService,
         PaymentApplicationService $paymentApplicationService,
+        DelinquencyCalculator $delinquencyCalculator,
     ): RedirectResponse
     {
         $data = $request->validate([
@@ -272,7 +276,7 @@ class CollectionController extends Controller
                 : Money::cents($installment->remaining_amount);
             $delinquencyAmountCents = $paymentEffect === 'capital_advance'
                 ? 0
-                : $this->calculatedDelinquencyCents($installment, $data['operated_on']);
+                : $delinquencyCalculator->forInstallment($installment, $data['operated_on']);
 
             if ($contractAmountCents <= 0) {
                 continue;
@@ -365,24 +369,15 @@ class CollectionController extends Controller
         return min($remainingCents, (int) round(Money::cents($installment->principal_amount) * $ratio));
     }
 
-    private function calculatedDelinquencyCents(Installment $installment, string $operatedOn): int
+    private function cutReturnRoute(array $data): string
     {
-        $rate = (float) ($installment->loan->delinquency_rate ?? 0);
+        $route = route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id']));
 
-        if ($rate <= 0) {
-            return 0;
+        if (filled($data['advance_loan_id'] ?? null)) {
+            return $route.'?advance_loan_id='.(int) $data['advance_loan_id'].'#cut-advance-modal';
         }
 
-        $graceLimit = $installment->due_date
-            ->copy()
-            ->addDays((int) ($installment->loan->delinquency_grace_days ?? 0))
-            ->toDateString();
-
-        if ($graceLimit >= CarbonImmutable::parse($operatedOn, WeeklyCutPeriodService::TIMEZONE)->toDateString()) {
-            return 0;
-        }
-
-        return (int) round(Money::cents($installment->contract_amount) * ($rate / 100));
+        return $route.'#cut-pending-installments';
     }
 
     private function isCapitalAdvanceEligible(Installment $installment): bool

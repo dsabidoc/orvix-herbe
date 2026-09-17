@@ -31,7 +31,8 @@ class WeeklyCutController extends Controller
             'cuts' => WeeklyCut::query()
                 ->with('operator')
                 ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
-                ->latest()
+                ->orderByDesc('period_starts_on')
+                ->orderByDesc('id')
                 ->paginate(15),
             'operators' => Operator::query()->where('status', 'active')->get(),
         ]);

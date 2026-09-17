@@ -30,6 +30,7 @@ class LoanSettlementController extends Controller
             'settled_on' => ['nullable', 'date'],
             'return_to' => ['nullable', 'string', 'max:20'],
             'cut_id' => ['nullable', 'exists:weekly_cuts,id'],
+            'advance_loan_id' => ['nullable', 'exists:loans,id'],
         ]);
 
         $selectedCut = null;
@@ -62,7 +63,13 @@ class LoanSettlementController extends Controller
                 app(WeeklyCutPeriodService::class)->attachMovementToCut($movement, $selectedCut, $request->user()->id);
             }
 
-            return redirect()->route('cuts.show', $selectedCut)->with('status', 'Credito liquidado y agregado a este corte.');
+            $route = route('cuts.show', $selectedCut);
+
+            if (filled($data['advance_loan_id'] ?? null)) {
+                $route .= '?advance_loan_id='.(int) $data['advance_loan_id'].'#cut-advance-modal';
+            }
+
+            return redirect($route)->with('status', 'Credito liquidado y agregado a este corte.');
         }
 
         if ($movement) {
