@@ -1,6 +1,26 @@
 let pendingPaidForm = null;
 let pendingDeleteForm = null;
 
+const saveCutPendingPosition = (form) => {
+    const target = form.dataset.cutPendingForm;
+
+    if (!target) {
+        return;
+    }
+
+    const search = document.querySelector(`[data-cut-pending-search="${target}"]`);
+    const state = {
+        scrollY: window.scrollY,
+        search: search instanceof HTMLInputElement ? search.value : '',
+    };
+
+    try {
+        sessionStorage.setItem(`orvix-cut-pending-state-${target}`, JSON.stringify(state));
+    } catch {
+        // La restauración es opcional; nunca debe impedir confirmar el pago.
+    }
+};
+
 const applyTheme = (theme) => {
     const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
 
@@ -474,6 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }[confirmedAction] || 'normal';
 
             pendingPaidForm.dataset.confirmed = 'true';
+            saveCutPendingPosition(pendingPaidForm);
             pendingPaidForm.requestSubmit();
             pendingPaidForm = null;
         });
@@ -872,6 +893,26 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         input.addEventListener('input', filterRows);
+        const stateKey = `orvix-cut-pending-state-${target}`;
+        let savedState = null;
+
+        try {
+            savedState = JSON.parse(sessionStorage.getItem(stateKey) || 'null');
+        } catch {
+            savedState = null;
+        }
+
+        if (savedState && window.location.hash === '#cut-pending-installments') {
+            input.value = savedState.search || '';
+        }
+
         filterRows();
+
+        if (savedState && window.location.hash === '#cut-pending-installments') {
+            requestAnimationFrame(() => {
+                window.scrollTo(0, Number(savedState.scrollY) || 0);
+                sessionStorage.removeItem(stateKey);
+            });
+        }
     });
 });
