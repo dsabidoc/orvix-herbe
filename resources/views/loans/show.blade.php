@@ -6,7 +6,7 @@
 
     $operationalTotal = $loan->installments->sum(fn ($installment) => Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount));
     $operationalBalance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
-    $operationalPaid = max(0, $operationalTotal - $operationalBalance);
+    $operationalPaid = $loan->installments->sum(fn ($installment) => Money::cents($installment->applied_amount));
     $next = $loan->installments->first(fn ($installment) => Money::cents($installment->remaining_amount) > 0);
     $today = now('America/Merida')->toDateString();
     $overdueInstallments = $loan->installments->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0 && $installment->due_date->toDateString() < $today);
