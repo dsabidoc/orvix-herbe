@@ -112,12 +112,16 @@
                     <dd class="mt-1 font-bold">{{ Money::mxn($loan->capital) }}</dd>
                 </div>
                 <div class="rounded-md bg-slate-50 p-3">
-                    <dt class="text-sm text-slate-500">{{ ($loan->calculation_method ?? 'regular') === 'interest_only' ? 'Interes proyectado' : 'Contrato' }}</dt>
+                    <dt class="text-sm text-slate-500">{{ ($loan->calculation_method ?? 'regular') === 'interest_only' ? 'Interes proyectado' : 'Contrato programado' }}</dt>
                     <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($operationalTotal)) }}</dd>
+                    @if (($loan->calculation_method ?? 'regular') !== 'interest_only')
+                        <p class="mt-1 text-xs text-slate-500">Capital mas intereses de todas las letras.</p>
+                    @endif
                 </div>
                 <div class="rounded-md bg-slate-50 p-3">
-                    <dt class="text-sm text-slate-500">Aplicado</dt>
+                    <dt class="text-sm text-slate-500">Aplicado al calendario</dt>
                     <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($operationalPaid)) }}</dd>
+                    <p class="mt-1 text-xs text-slate-500">Pagos, adelantos o liquidacion distribuidos.</p>
                 </div>
                 <div class="rounded-md bg-slate-50 p-3">
                     <dt class="text-sm text-slate-500">{{ ($loan->calculation_method ?? 'regular') === 'interest_only' ? 'Interes pendiente' : 'Saldo' }}</dt>

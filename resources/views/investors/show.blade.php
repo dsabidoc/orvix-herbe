@@ -289,6 +289,9 @@
                 $expectedTotalCents = $monthlyReturnReport['expected_total_cents'];
                 $actualTotalCents = $monthlyReturnReport['actual_total_cents'];
                 $differenceCents = $actualTotalCents - $expectedTotalCents;
+                $actualInterestRate = $capitalTotalCents > 0
+                    ? ($monthlyReturnReport['actual_interest_cents'] / $capitalTotalCents) * 100
+                    : 0;
             @endphp
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
@@ -321,7 +324,11 @@
                     </div>
                     <div class="rounded-md bg-cyan-50 p-3 ring-1 ring-cyan-100">
                         <p class="text-sm text-cyan-700">Interes cobrado real</p>
-                        <p class="monthly-return-actual-interest-amount mt-1 text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_interest_cents'])) }}</p>
+                        <div class="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <p class="monthly-return-actual-interest-amount text-xl font-bold text-slate-950">{{ Money::mxn(Money::decimal($monthlyReturnReport['actual_interest_cents'])) }}</p>
+                            <span class="rounded bg-slate-50 px-2 py-1 text-xs font-bold text-cyan-700 ring-1 ring-cyan-100">{{ number_format($actualInterestRate, 2) }}%</span>
+                        </div>
+                        <p class="mt-2 text-xs font-semibold text-cyan-700">Rendimiento del mes sobre capital total</p>
                     </div>
                 </div>
 
