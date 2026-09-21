@@ -144,18 +144,32 @@ class InvestorDashboardMetrics
             ->filter()
             ->unique()
             ->values();
-        $collectionDates = $collectionMovementIds->isEmpty()
+        $collectionMovements = $collectionMovementIds->isEmpty()
             ? collect()
             : CollectionMovement::query()
+                ->with('targetInstallment')
                 ->whereIn('id', $collectionMovementIds)
-                ->pluck('operated_on', 'id');
+                ->get()
+                ->keyBy('id');
         $collectedCents = 0;
 
         foreach ($returnMovements as $movement) {
             $collectionMovementId = (int) data_get($movement->metadata, 'collection_movement_id', 0);
-            $operatedOn = CarbonImmutable::parse($collectionDates->get($collectionMovementId) ?? $movement->created_at, 'America/Merida')->startOfDay();
+            $collectionMovement = $collectionMovements->get($collectionMovementId);
 
-            if (! $operatedOn->betweenIncluded($periodStart, $periodEnd)) {
+            if (! $collectionMovement
+                || $collectionMovement->type !== 'ordinary'
+                || ! $collectionMovement->targetInstallment
+            ) {
+                continue;
+            }
+
+            $operatedOn = CarbonImmutable::parse($collectionMovement->operated_on, 'America/Merida')->startOfDay();
+            $dueOn = CarbonImmutable::parse($collectionMovement->targetInstallment->due_date, 'America/Merida')->startOfDay();
+
+            if (! $operatedOn->betweenIncluded($periodStart, $periodEnd)
+                || ! $dueOn->betweenIncluded($periodStart, $periodEnd)
+            ) {
                 continue;
             }
 

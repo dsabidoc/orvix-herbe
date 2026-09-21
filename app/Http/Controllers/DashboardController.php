@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Investors\InvestorDashboardMetrics;
+use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Loans\LoanSettlementService;
-use App\Models\CollectionMovement;
 use App\Models\Installment;
 use App\Models\Investor;
 use App\Models\Loan;
@@ -18,7 +18,7 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, LoanSettlementService $settlementService, InvestorDashboardMetrics $investorMetrics): View|RedirectResponse
+    public function __invoke(Request $request, LoanSettlementService $settlementService, InvestorDashboardMetrics $investorMetrics, PeriodCollectionService $periodCollectionService): View|RedirectResponse
     {
         $user = $request->user();
 
@@ -62,11 +62,7 @@ class DashboardController extends Controller
                     ->whereIn('loan_id', $collectableLoanIds)
                     ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
             );
-            $collectedPeriodCents = (int) round(CollectionMovement::query()
-                ->whereIn('loan_id', $collectableLoanIds)
-                ->whereIn('confirmation_status', ['reported', 'applied'])
-                ->whereBetween('operated_on', [$periodStart->toDateString(), $periodEnd->toDateString()])
-                ->sum('contract_amount') * 100);
+            $collectedPeriodCents = $periodCollectionService->amountForLoans($collectableLoanIds, $periodStart, $periodEnd);
             $overdueCents = $this->operationalPendingCents(
                 Installment::query()
                     ->whereIn('loan_id', $collectableLoanIds)

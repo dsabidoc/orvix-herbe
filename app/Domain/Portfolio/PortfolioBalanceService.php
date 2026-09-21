@@ -248,7 +248,7 @@ class PortfolioBalanceService
         $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
         $isExcluded = in_array((string) $installment->status, self::EXCLUDED_INSTALLMENT_STATUSES, true);
         $lateDays = $dueDate->lt($cutoff) ? (int) $dueDate->diffInDays($cutoff) : 0;
-        $isOverdue = ! $isExcluded && $dueDate->lt($cutoff) && $pendingCents > 0;
+        $isOverdue = ! $isExcluded && $dueDate->lte($cutoff) && $pendingCents > 0;
         $isDueToday = ! $isExcluded && $dueDate->equalTo($cutoff) && $pendingCents > 0;
         $isUpcoming = ! $isExcluded && $dueDate->gt($cutoff) && $dueDate->lte($periodEnd) && $pendingCents > 0;
         $isInScope = ! $isExcluded && $dueDate->lte($periodEnd);

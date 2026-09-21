@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
+use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Loans\DelinquencyCalculator;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\PaymentApplicationService;
@@ -62,11 +63,9 @@ class CollectionController extends Controller
         $monthOperationalCents = (clone $monthInstallments)
             ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
             ->value('subtotal') * 100;
-        $collectedMonthCents = CollectionMovement::query()
-            ->whereHas('loan', $loanScope)
-            ->whereIn('confirmation_status', ['reported', 'applied'])
-            ->whereBetween('operated_on', [$monthStart->toDateString(), $monthEnd->toDateString()])
-            ->sum('contract_amount') * 100;
+        $monthLoanIds = (clone $monthInstallments)->select('loan_id')->distinct()->pluck('loan_id');
+        $collectedMonthCents = app(PeriodCollectionService::class)
+            ->amountForLoans($monthLoanIds, $monthStart, $monthEnd);
         $pendingMonthCents = $monthOperationalCents - $collectedMonthCents;
         $overdueCents = Installment::query()
             ->whereHas('loan', $loanScope)
