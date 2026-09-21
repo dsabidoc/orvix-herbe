@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Loans\DelinquencyCalculator;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
@@ -64,34 +63,28 @@ class CollectionController extends Controller
             ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
             ->value('subtotal') * 100;
         $monthLoanIds = (clone $monthInstallments)->select('loan_id')->distinct()->pluck('loan_id');
-        $collectedMonthCents = app(PeriodCollectionService::class)
+        $collectedMonthLettersCents = app(PeriodCollectionService::class)
             ->amountForLoans($monthLoanIds, $monthStart, $monthEnd);
-        $pendingMonthCents = $monthOperationalCents - $collectedMonthCents;
+        $collectedMonthCents = CollectionMovement::query()
+            ->whereHas('loan', $loanScope)
+            ->whereIn('confirmation_status', ['reported', 'applied'])
+            ->whereBetween('operated_on', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->sum('contract_amount') * 100;
+        $pendingMonthCents = $monthOperationalCents - $collectedMonthLettersCents;
         $overdueCents = Installment::query()
             ->whereHas('loan', $loanScope)
             ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->whereDate('due_date', '<', now('America/Merida')->toDateString())
             ->where('remaining_amount', '>', 0)
             ->sum('remaining_amount') * 100;
-        $cutPeriod = app(WeeklyCutPeriodService::class)->periodFor(now('America/Merida'));
-        $weekStart = $cutPeriod['start']->toDateString();
-        $weekEnd = $cutPeriod['end']->toDateString();
-        $weekStart = max($weekStart, $monthStart->toDateString());
-        $weekEnd = min($weekEnd, $monthEnd->toDateString());
-        $expectedWeekCents = Installment::query()
-            ->whereHas('loan', $loanScope)
-            ->whereBetween('due_date', [$weekStart, $weekEnd])
-            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
-            ->value('subtotal') * 100;
-
         return view('collections.index', [
             'installments' => $installments,
             'kpis' => [
                 ['title' => 'Cartera del mes', 'value' => Money::mxn(Money::decimal((int) ((clone $monthInstallments)->sum('remaining_amount') * 100))), 'caption' => 'Saldo de letras del mes', 'color' => 'blue'],
-                ['title' => 'Esperado semanal', 'value' => Money::mxn(Money::decimal((int) $expectedWeekCents)), 'caption' => 'Letras del mes en esta semana', 'color' => 'orange'],
+                ['title' => 'Letras cobradas del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthLettersCents)), 'caption' => 'Pagos de letras con vencimiento en este mes', 'color' => 'orange'],
                 ['title' => 'Esperado del mes', 'value' => Money::mxn(Money::decimal((int) $monthOperationalCents)), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
                 ['title' => 'Cobrado del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthCents)), 'caption' => 'Pagos reportados o aplicados', 'color' => 'green'],
-                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingMonthCents)), 'caption' => 'Esperado menos cobrado', 'color' => 'orange'],
+                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingMonthCents)), 'caption' => 'Esperado menos letras cobradas', 'color' => 'orange'],
                 ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas del mes', 'color' => 'red'],
             ],
             'month' => $selectedMonth,

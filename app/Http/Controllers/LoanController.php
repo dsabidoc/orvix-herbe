@@ -77,9 +77,40 @@ class LoanController extends Controller
             $query->where('is_frozen', $request->input('collection_status') === 'frozen');
         }
 
+        $sort = $request->input('sort', 'latest');
+
+        if (! in_array($sort, ['latest', 'payment_day_asc', 'payment_day_desc', 'next_due_asc', 'next_due_desc', 'balance_asc', 'balance_desc'], true)) {
+            $sort = 'latest';
+        }
+
+        match ($sort) {
+            'payment_day_asc' => $query
+                ->orderByRaw('COALESCE(loans.payment_day, 99) ASC')
+                ->orderBy('loans.folio'),
+            'payment_day_desc' => $query
+                ->orderByRaw('COALESCE(loans.payment_day, 0) DESC')
+                ->orderBy('loans.folio'),
+            'next_due_asc' => $query
+                ->orderByRaw("(SELECT MIN(due_date) FROM installments WHERE installments.loan_id = loans.id AND installments.remaining_amount > 0) IS NULL")
+                ->orderByRaw("(SELECT MIN(due_date) FROM installments WHERE installments.loan_id = loans.id AND installments.remaining_amount > 0) ASC")
+                ->orderBy('loans.folio'),
+            'next_due_desc' => $query
+                ->orderByRaw("(SELECT MIN(due_date) FROM installments WHERE installments.loan_id = loans.id AND installments.remaining_amount > 0) IS NULL")
+                ->orderByRaw("(SELECT MIN(due_date) FROM installments WHERE installments.loan_id = loans.id AND installments.remaining_amount > 0) DESC")
+                ->orderBy('loans.folio'),
+            'balance_asc' => $query
+                ->orderByRaw("(SELECT COALESCE(SUM(remaining_amount), 0) FROM installments WHERE installments.loan_id = loans.id) ASC")
+                ->orderBy('loans.folio'),
+            'balance_desc' => $query
+                ->orderByRaw("(SELECT COALESCE(SUM(remaining_amount), 0) FROM installments WHERE installments.loan_id = loans.id) DESC")
+                ->orderBy('loans.folio'),
+            default => $query->latest('loans.id'),
+        };
+
         return view('loans.index', [
-            'loans' => $query->latest()->paginate(15)->withQueryString(),
+            'loans' => $query->paginate(15)->withQueryString(),
             'today' => CarbonImmutable::now('America/Merida')->toDateString(),
+            'sort' => $sort,
         ]);
     }
 
