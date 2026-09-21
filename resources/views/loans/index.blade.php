@@ -9,12 +9,12 @@
         </div>
     @endcan
 
-    <form class="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_180px_180px_220px_auto] md:items-end" method="GET">
-        <div class="flex-1">
+    <form class="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:flex-nowrap lg:items-end" method="GET">
+        <div class="min-w-0 lg:flex-1">
             <label class="text-sm font-semibold text-slate-700" for="q">Buscar cliente, folio, vehiculo, placas o VIN</label>
             <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="q" name="q" value="{{ request('q') }}">
         </div>
-        <div>
+        <div class="lg:w-[180px] lg:shrink-0">
             <label class="text-sm font-semibold text-slate-700" for="bucket">Vista</label>
             <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="bucket" name="bucket">
                 <option value="">Todos</option>
@@ -22,7 +22,7 @@
                 <option value="overdue" @selected(request('bucket') === 'overdue')>Vencidos</option>
             </select>
         </div>
-        <div>
+        <div class="lg:w-[180px] lg:shrink-0">
             <label class="text-sm font-semibold text-slate-700" for="collection_status">Estado</label>
             <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="collection_status" name="collection_status">
                 <option value="">Todos</option>
@@ -30,7 +30,7 @@
                 <option value="frozen" @selected(request('collection_status') === 'frozen')>Congelados</option>
             </select>
         </div>
-        <div>
+        <div class="lg:w-[250px] lg:shrink-0">
             <label class="text-sm font-semibold text-slate-700" for="sort">Ordenar</label>
             <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="sort" name="sort">
                 <option value="latest" @selected($sort === 'latest')>Mas recientes</option>
@@ -42,7 +42,7 @@
                 <option value="balance_desc" @selected($sort === 'balance_desc')>Saldo: mayor a menor</option>
             </select>
         </div>
-        <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Filtrar</button>
+        <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white lg:shrink-0" type="submit">Filtrar</button>
     </form>
 
     <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
