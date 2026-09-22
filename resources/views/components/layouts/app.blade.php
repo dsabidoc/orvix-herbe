@@ -299,7 +299,7 @@
                 </main>
             </div>
 
-            <dialog id="confirm-paid-dialog" class="w-[min(92vw,420px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+            <dialog id="confirm-paid-dialog" class="w-[min(92vw,520px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
                 <form method="dialog">
                     <div class="border-b border-slate-200 px-5 py-4">
                         <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Confirmar pago</p>
@@ -310,6 +310,17 @@
                         <div>
                             <label class="text-sm font-semibold text-slate-700" for="confirm-paid-date">Fecha de pago y envio al corte</label>
                             <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-date" type="date" value="{{ now('America/Merida')->toDateString() }}">
+                        </div>
+                        <div class="rounded-md border border-amber-200 bg-amber-50 p-3">
+                            <label class="flex items-center gap-2 text-sm font-semibold text-amber-900" for="confirm-paid-include-delinquency">
+                                <input class="rounded border-amber-400 text-[#0f766e] focus:ring-[#0d9488]" id="confirm-paid-include-delinquency" type="checkbox">
+                                Incluir moratorio
+                            </label>
+                            <div class="mt-3 hidden" data-confirm-paid-delinquency-fields>
+                                <label class="text-sm font-semibold text-amber-900" for="confirm-paid-delinquency-amount">Monto moratorio</label>
+                                <input class="mt-1 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-delinquency-amount" name="confirm-paid-delinquency-amount" type="text" inputmode="decimal" data-money-input value="0.00">
+                                <p class="mt-1 text-xs text-amber-800">Importe sugerido según la morosidad del crédito. Puedes editarlo.</p>
+                            </div>
                         </div>
                     </div>
                     <div class="flex flex-col justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:flex-wrap">

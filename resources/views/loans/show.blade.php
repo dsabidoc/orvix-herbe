@@ -380,7 +380,7 @@
                                 <td class="px-3 py-2">{{ $installment->due_date->format('d/m/Y') }}</td>
                                 <td class="px-3 py-2 text-right">
                                     @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
-                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}">
+                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-delinquency="{{ Money::decimal($rowDelinquencyCents) }}" data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}">
                                             @csrf
                                             <input name="return_to" type="hidden" value="loan">
                                             <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
@@ -388,7 +388,7 @@
                                             <input name="operator_surcharge_amount" type="hidden" value="0">
                                             <input name="external_concepts_amount" type="hidden" value="0">
                                             <input name="additional_charge_amount" type="hidden" value="0">
-                                            <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($rowDelinquencyCents) }}">
+                                            <input name="delinquency_amount" type="hidden" value="0">
                                             <button class="rounded-md bg-[#0d9488] px-2 py-1 text-xs font-bold text-white" type="submit">Pagado</button>
                                         </form>
                                     @elseif ($movement && $canReverseInstallmentPayment)

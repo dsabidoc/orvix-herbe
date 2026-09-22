@@ -94,6 +94,25 @@ document.addEventListener('submit', (event) => {
 
     const paymentDateInput = dialog.querySelector('#confirm-paid-date');
     const formPaymentDateInput = form.querySelector('input[name="operated_on"]');
+    const delinquencyToggle = dialog.querySelector('#confirm-paid-include-delinquency');
+    const delinquencyAmountInput = dialog.querySelector('#confirm-paid-delinquency-amount');
+    const delinquencyFields = dialog.querySelector('[data-confirm-paid-delinquency-fields]');
+    const suggestedDelinquency = form.dataset.suggestedDelinquency || '0.00';
+    const canIncludeDelinquency = !forceCapitalAdvance && !form.matches('[data-bulk-payment-form]');
+
+    if (delinquencyToggle instanceof HTMLInputElement) {
+        delinquencyToggle.checked = false;
+        delinquencyToggle.disabled = !canIncludeDelinquency;
+    }
+
+    if (delinquencyAmountInput instanceof HTMLInputElement) {
+        delinquencyAmountInput.value = suggestedDelinquency;
+        delinquencyAmountInput.disabled = !canIncludeDelinquency;
+    }
+
+    if (delinquencyFields instanceof HTMLElement) {
+        delinquencyFields.hidden = true;
+    }
 
     if (paymentDateInput instanceof HTMLInputElement && formPaymentDateInput instanceof HTMLInputElement) {
         paymentDateInput.value = formPaymentDateInput.value || new Date().toISOString().slice(0, 10);
@@ -443,6 +462,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const dialog = document.getElementById('confirm-paid-dialog');
 
     if (dialog instanceof HTMLDialogElement) {
+        const delinquencyToggle = dialog.querySelector('#confirm-paid-include-delinquency');
+        const delinquencyFields = dialog.querySelector('[data-confirm-paid-delinquency-fields]');
+
+        delinquencyToggle?.addEventListener('change', () => {
+            if (!(delinquencyToggle instanceof HTMLInputElement) || !(delinquencyFields instanceof HTMLElement)) {
+                return;
+            }
+
+            delinquencyFields.hidden = !delinquencyToggle.checked;
+        });
+
         dialog.addEventListener('close', () => {
             if (!['confirm', 'confirm-no-investors', 'confirm-capital-advance'].includes(dialog.returnValue) || !pendingPaidForm) {
                 pendingPaidForm = null;
@@ -461,6 +491,9 @@ document.addEventListener('DOMContentLoaded', () => {
             let formPaymentDateInput = pendingPaidForm.querySelector('input[name="operated_on"]');
             let affectsInvestorsInput = pendingPaidForm.querySelector('input[name="affects_investors"]');
             let paymentEffectInput = pendingPaidForm.querySelector('input[name="payment_effect"]');
+            let formDelinquencyAmountInput = pendingPaidForm.querySelector('input[name="delinquency_amount"]');
+            const includeDelinquency = dialog.querySelector('#confirm-paid-include-delinquency');
+            const selectedDelinquencyAmount = dialog.querySelector('#confirm-paid-delinquency-amount');
 
             if (!(formPaymentDateInput instanceof HTMLInputElement)) {
                 formPaymentDateInput = document.createElement('input');
@@ -487,11 +520,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 pendingPaidForm.appendChild(paymentEffectInput);
             }
 
+            if (!(formDelinquencyAmountInput instanceof HTMLInputElement)) {
+                formDelinquencyAmountInput = document.createElement('input');
+                formDelinquencyAmountInput.type = 'hidden';
+                formDelinquencyAmountInput.name = 'delinquency_amount';
+                pendingPaidForm.appendChild(formDelinquencyAmountInput);
+            }
+
             affectsInvestorsInput.value = confirmedAction === 'confirm-no-investors' ? '0' : '1';
             paymentEffectInput.value = {
                 'confirm-no-investors': 'no_investors',
                 'confirm-capital-advance': 'capital_advance',
             }[confirmedAction] || 'normal';
+
+            const shouldIncludeDelinquency = confirmedAction === 'confirm'
+                && includeDelinquency instanceof HTMLInputElement
+                && includeDelinquency.checked
+                && selectedDelinquencyAmount instanceof HTMLInputElement
+                && !pendingPaidForm.matches('[data-bulk-payment-form]');
+
+            formDelinquencyAmountInput.value = shouldIncludeDelinquency
+                ? selectedDelinquencyAmount.value.replace(/,/g, '')
+                : '0';
 
             pendingPaidForm.dataset.confirmed = 'true';
             saveCutPendingPosition(pendingPaidForm);

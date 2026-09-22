@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Cuts\WeeklyCutPeriodService;
-use App\Domain\Loans\DelinquencyCalculator;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
@@ -104,7 +103,6 @@ class CollectionController extends Controller
         Installment $installment,
         WeeklyCutPeriodService $cutPeriodService,
         PaymentApplicationService $paymentApplicationService,
-        DelinquencyCalculator $delinquencyCalculator,
     ): RedirectResponse {
         $installment->load('loan.operator');
         $this->authorizeInstallmentAccess($request, $installment);
@@ -158,9 +156,9 @@ class CollectionController extends Controller
         $contractAmountCents = $paymentEffect === 'capital_advance'
             ? $this->capitalAdvanceAmountCents($installment)
             : Money::cents($data['contract_amount']);
-        $delinquencyAmountCents = $paymentEffect === 'capital_advance'
+        $delinquencyAmountCents = in_array($paymentEffect, ['capital_advance', 'no_investors'], true)
             ? 0
-            : $delinquencyCalculator->forInstallment($installment, $data['operated_on']);
+            : Money::cents($data['delinquency_amount'] ?? 0);
 
         abort_if($contractAmountCents <= 0, 422, 'Esta letra no tiene abono a capital disponible.');
 
@@ -222,7 +220,6 @@ class CollectionController extends Controller
         Request $request,
         WeeklyCutPeriodService $cutPeriodService,
         PaymentApplicationService $paymentApplicationService,
-        DelinquencyCalculator $delinquencyCalculator,
     ): RedirectResponse {
         $data = $request->validate([
             'installment_ids' => ['required', 'array', 'min:1', 'max:80'],
@@ -268,9 +265,8 @@ class CollectionController extends Controller
             $contractAmountCents = $paymentEffect === 'capital_advance'
                 ? $this->capitalAdvanceAmountCents($installment)
                 : Money::cents($installment->remaining_amount);
-            $delinquencyAmountCents = $paymentEffect === 'capital_advance'
-                ? 0
-                : $delinquencyCalculator->forInstallment($installment, $data['operated_on']);
+            // Los pagos masivos no permiten seleccionar un moratorio por letra.
+            $delinquencyAmountCents = 0;
 
             if ($contractAmountCents <= 0) {
                 continue;

@@ -231,7 +231,7 @@
                                     <td class="whitespace-nowrap px-3 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
                                     @can('weekly-cuts.confirm')
                                         <td class="whitespace-nowrap px-3 py-3 text-right">
-                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-cut-pending-form="cut-pending-{{ $cut->id }}">
+                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}">
                                                 @csrf
                                                 <input name="return_to" type="hidden" value="cut">
                                                 <input name="cut_id" type="hidden" value="{{ $cut->id }}">
@@ -240,7 +240,7 @@
                                                 <input name="operator_surcharge_amount" type="hidden" value="0">
                                                 <input name="external_concepts_amount" type="hidden" value="0">
                                                 <input name="additional_charge_amount" type="hidden" value="0">
-                                                <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($delinquencyCents) }}">
+                                                <input name="delinquency_amount" type="hidden" value="0">
                                                 <input name="notes" type="hidden" value="Marcado pagado desde atrasados del corte">
                                                 <button class="rounded-md bg-[#0d9488] px-3 py-1.5 text-xs font-bold text-white" type="submit">Pagado</button>
                                             </form>
@@ -494,6 +494,7 @@
                                                     <td class="px-4 py-3 text-right">
                                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}"
                                                             data-confirm-paid
+                                                            data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}"
                                                             @if ($isCapitalAdvance) data-force-capital-advance="true" @endif
                                                             @if ($canAdvanceCapital) data-capital-advance-allowed="true" @endif>
                                                             @csrf
@@ -505,7 +506,7 @@
                                                             <input name="operator_surcharge_amount" type="hidden" value="0">
                                                             <input name="external_concepts_amount" type="hidden" value="0">
                                                             <input name="additional_charge_amount" type="hidden" value="0">
-                                                            <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($delinquencyCents) }}">
+                                                            <input name="delinquency_amount" type="hidden" value="0">
                                                             <input name="notes" type="hidden" value="{{ $isCapitalAdvance ? 'Adelanto registrado desde corte' : 'Cobro registrado desde corte' }}">
                                                             <button class="rounded-md px-3 py-1.5 text-xs font-bold {{ $isCapitalAdvance && ! $canAdvanceCapital ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'bg-[#0d9488] text-white' }}" type="submit" @disabled($isCapitalAdvance && ! $canAdvanceCapital)>
                                                                 {{ $isCapitalAdvance ? 'Abonar capital' : 'Pagado' }}

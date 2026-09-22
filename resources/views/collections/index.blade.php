@@ -80,14 +80,14 @@
                             </td>
                             <td class="px-5 py-3 text-right">
                                 @if (! $isCovered && ! $movement)
-                                    <form class="inline-flex items-center gap-2" method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid>
+                                    <form class="inline-flex items-center gap-2" method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
                                         @csrf
                                         <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
                                         <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
                                         <input name="operator_surcharge_amount" type="hidden" value="0">
                                         <input name="external_concepts_amount" type="hidden" value="0">
                                         <input name="additional_charge_amount" type="hidden" value="0">
-                                        <input name="delinquency_amount" type="hidden" value="{{ Money::decimal($delinquencyCents) }}">
+                                        <input name="delinquency_amount" type="hidden" value="0">
                                         <input name="return_month" type="hidden" value="{{ $month->format('Y-m') }}">
                                         <button class="rounded-md bg-[#0d9488] px-3 py-2 text-xs font-bold text-white" type="submit">Pagado</button>
                                     </form>
