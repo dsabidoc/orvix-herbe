@@ -678,6 +678,7 @@
                                 <th class="px-3 py-2 text-right">Disponible</th>
                                 <th class="px-3 py-2 text-right">Capital que aporta</th>
                                 <th class="px-3 py-2 text-right">% de intereses</th>
+                                <th class="px-3 py-2 text-center">Moratorio</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -685,6 +686,7 @@
                                 @php
                                     $investment = $loan->investments->values()->get($index);
                                     $oldInvestorId = old("investors.$index.investor_id", $investment?->investor_id);
+                                    $oldDelinquencyShare = old("investors.$index.delinquency_share", data_get($investment?->agreement_snapshot, 'delinquency_share', false));
                                 @endphp
                                 <tr>
                                     <td class="px-3 py-2">
@@ -708,12 +710,18 @@
                                     <td class="px-3 py-2">
                                         <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-right text-sm" name="investors[{{ $index }}][interest_share_percent]" type="number" step="0.0001" min="0" max="100" placeholder="0" value="{{ old("investors.$index.interest_share_percent", $investment ? number_format((float) $investment->investor_share_rate * 100, 4, '.', '') : null) }}">
                                     </td>
+                                    <td class="px-3 py-2 text-center">
+                                        <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                                            <input name="investors[{{ $index }}][delinquency_share]" type="checkbox" value="1" @checked($oldDelinquencyShare)>
+                                            Recibe
+                                        </label>
+                                    </td>
                                 </tr>
                             @endfor
                         </tbody>
                     </table>
                 </div>
-                <p class="text-sm text-slate-500">La suma de capital debe ser exactamente {{ Money::mxn($loan->capital) }} y la suma de porcentajes debe ser exactamente 100%. Si dejas todos los inversionistas en blanco, el prestamo quedara sin inversionistas asignados.</p>
+                <p class="text-sm text-slate-500">La suma de capital debe ser exactamente {{ Money::mxn($loan->capital) }} y la suma de porcentajes debe ser exactamente 100%. El moratorio se repartira en partes iguales entre quienes tengan marcado "Recibe".</p>
             </div>
             <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
                 <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cancelar</button>

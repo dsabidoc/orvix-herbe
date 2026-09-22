@@ -172,6 +172,10 @@
                                         <div class="grid grid-cols-2 gap-2">
                                             <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][capital_amount]" type="number" step="0.01" min="0" placeholder="Capital">
                                             <input class="rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][interest_share_percent]" type="number" step="0.0001" min="0" max="100" placeholder="% interes">
+                                            <label class="col-span-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                                                <input name="investors[{{ $index }}][delinquency_share]" type="checkbox" value="1">
+                                                Recibe moratorio
+                                            </label>
                                         </div>
                                     </div>
                                 @endfor

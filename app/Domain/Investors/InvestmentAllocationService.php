@@ -2,8 +2,8 @@
 
 namespace App\Domain\Investors;
 
-use App\Models\Investment;
 use App\Models\CollectionMovement;
+use App\Models\Investment;
 use App\Models\Investor;
 use App\Models\InvestorCapitalMovement;
 use App\Models\Loan;
@@ -20,7 +20,7 @@ class InvestmentAllocationService
 
     /**
      * @param  array<int, array<string, mixed>>  $input
-     * @return Collection<int, array{investor:Investor, investor_id:int, capital_cents:int, interest_share_percent:float}>
+     * @return Collection<int, array{investor:Investor, investor_id:int, capital_cents:int, interest_share_percent:float, delinquency_share:bool}>
      */
     public function participants(array $input, int $capitalCents, ?Loan $loan = null, bool $allowEmpty = false): Collection
     {
@@ -34,6 +34,7 @@ class InvestmentAllocationService
                     'investor_id' => (int) ($row['investor_id'] ?? 0),
                     'capital_cents' => Money::cents($row['capital_amount'] ?? 0),
                     'interest_share_percent' => (float) ($row['interest_share_percent'] ?? 0),
+                    'delinquency_share' => filter_var($row['delinquency_share'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 ];
             })
             ->values();
@@ -44,7 +45,7 @@ class InvestmentAllocationService
     }
 
     /**
-     * @param  Collection<int, array{investor:Investor|null, investor_id:int, capital_cents:int, interest_share_percent:float}>  $participants
+     * @param  Collection<int, array{investor:Investor|null, investor_id:int, capital_cents:int, interest_share_percent:float, delinquency_share:bool}>  $participants
      */
     public function validateParticipants(Collection $participants, int $capitalCents, ?Loan $loan = null, bool $allowEmpty = false): void
     {
@@ -129,6 +130,7 @@ class InvestmentAllocationService
                         'role' => 'inversionista',
                         'capital_percent' => round(($participant['capital_cents'] / Money::cents($loan->capital)) * 100, 4),
                         'interest_share_percent' => $participant['interest_share_percent'],
+                        'delinquency_share' => $participant['delinquency_share'],
                     ],
                 ]);
 
@@ -306,7 +308,15 @@ class InvestmentAllocationService
                     $interestCents = (int) round(Money::cents($installment->interest_amount) * $paidRatio);
                 }
 
-                $this->investorReturnRecorder->record($movement->loan, $installment, $principalCents, $interestCents, $movement, $userId ?? $movement->confirmed_by ?? $movement->registered_by ?? 0);
+                $this->investorReturnRecorder->record(
+                    $movement->loan,
+                    $installment,
+                    $principalCents,
+                    $interestCents,
+                    $movement,
+                    $userId ?? $movement->confirmed_by ?? $movement->registered_by ?? 0,
+                    $movement->target_installment_id === $installment->id,
+                );
             }
         }
     }

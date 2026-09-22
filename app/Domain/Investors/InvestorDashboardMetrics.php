@@ -31,7 +31,9 @@ class InvestorDashboardMetrics
         CarbonImmutable $today,
         CarbonImmutable $periodStart,
         CarbonImmutable $periodEnd,
+        ?CarbonImmutable $overdueThrough = null,
     ): array {
+        $overdueThrough ??= $periodEnd->lt($today) ? $periodEnd : $today;
         $loans->load([
             'installments',
             'investments' => fn ($query) => $query
@@ -75,7 +77,7 @@ class InvestorDashboardMetrics
                     $expectedPeriodCents += $this->shareCents($loan, $investment, $principalCents, $interestCents);
                 }
 
-                if ($dueDate->lt($today) && Money::cents($installment->remaining_amount) > 0) {
+                if ($dueDate->lt($overdueThrough) && Money::cents($installment->remaining_amount) > 0) {
                     $operationalCents = $principalCents + $interestCents;
                     $pendingOperationalCents = min(Money::cents($installment->remaining_amount), $operationalCents);
 

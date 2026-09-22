@@ -531,7 +531,15 @@ class PaymentApplicationService
         $principalCents = (int) round(Money::cents($installment->principal_amount) * $paidRatio);
         $interestCents = (int) round(Money::cents($installment->interest_amount) * $paidRatio);
 
-        $this->investorReturnRecorder->record($movement->loan, $installment, $principalCents, $interestCents, $movement, $userId);
+        $this->investorReturnRecorder->record(
+            $movement->loan,
+            $installment,
+            $principalCents,
+            $interestCents,
+            $movement,
+            $userId,
+            $movement->target_installment_id === $installment->id,
+        );
     }
 
     private function operationalCents($installment): int

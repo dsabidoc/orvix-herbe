@@ -10,7 +10,7 @@ use App\Support\Money;
 
 class InvestorReturnRecorder
 {
-    public function record(Loan $loan, $installment, int $principalCents, int $interestCents, CollectionMovement $movement, int $userId): void
+    public function record(Loan $loan, $installment, int $principalCents, int $interestCents, CollectionMovement $movement, int $userId, bool $includeDelinquency = false): void
     {
         $loan->loadMissing('investments.investor');
         $capitalCents = Money::cents($loan->capital);
@@ -19,10 +19,14 @@ class InvestorReturnRecorder
             return;
         }
 
-        foreach ($loan->investments as $investment) {
-            if ($investment->status !== 'active') {
-                continue;
-            }
+        $activeInvestments = $loan->investments->filter(fn ($investment) => $investment->status === 'active')->values();
+        $delinquencyCents = $includeDelinquency ? Money::cents($movement->delinquency_amount ?? 0) : 0;
+        $delinquencyRecipients = $activeInvestments
+            ->filter(fn ($investment) => (bool) data_get($investment->agreement_snapshot, 'delinquency_share', false))
+            ->values();
+        $delinquencyRecipientCount = $delinquencyRecipients->count();
+
+        foreach ($activeInvestments as $investment) {
 
             $investor = Investor::query()->whereKey($investment->investor_id)->lockForUpdate()->first();
 
@@ -33,6 +37,14 @@ class InvestorReturnRecorder
             $capitalShareRate = Money::cents($investment->amount) / $capitalCents;
             $returnedCapitalCents = (int) round($principalCents * $capitalShareRate);
             $generatedInterestCents = (int) round($interestCents * (float) $investment->investor_share_rate);
+            $delinquencyForInvestmentCents = 0;
+            $delinquencyRecipientIndex = $delinquencyRecipients->search(fn ($recipient) => $recipient->id === $investment->id);
+
+            if ($delinquencyRecipientIndex !== false && $delinquencyRecipientCount > 0) {
+                $delinquencyForInvestmentCents = intdiv($delinquencyCents, $delinquencyRecipientCount)
+                    + ($delinquencyRecipientIndex < ($delinquencyCents % $delinquencyRecipientCount) ? 1 : 0);
+                $generatedInterestCents += $delinquencyForInvestmentCents;
+            }
             $totalCents = $returnedCapitalCents + $generatedInterestCents;
 
             if ($totalCents <= 0) {
@@ -61,6 +73,7 @@ class InvestorReturnRecorder
                     'installment_number' => $installment->number,
                     'returned_capital' => Money::decimal($returnedCapitalCents),
                     'generated_interest' => Money::decimal($generatedInterestCents),
+                    'delinquency' => Money::decimal($delinquencyForInvestmentCents),
                     'administration_fee_excluded' => $installment->administration_fee_amount,
                     'interest_vat_excluded' => $installment->interest_vat_amount,
                 ],

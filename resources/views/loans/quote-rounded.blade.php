@@ -65,7 +65,7 @@
                                 <p class="mt-1 text-sm text-slate-500">Opcional al crear. Si los capturas ahora, deben cubrir {{ Money::mxn(Money::decimal($quote['input']['capital_cents'])) }} de capital y 100% de intereses; tambien puedes asignarlos despues desde el detalle del prestamo.</p>
                                 <div class="mt-3 space-y-2">
                                     @for ($index = 0; $index < 4; $index++)
-                                        <div class="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(105px,135px)_minmax(88px,112px)]">
+                                        <div class="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(105px,135px)_minmax(88px,112px)_minmax(88px,112px)]">
                                             <select class="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" name="investors[{{ $index }}][investor_id]">
                                                 <option value="">Seleccionar inversionista</option>
                                                 @foreach ($investors as $investor)
@@ -74,6 +74,10 @@
                                             </select>
                                             <input class="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][capital_amount]" type="number" step="0.01" min="0" placeholder="Capital">
                                             <input class="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm" name="investors[{{ $index }}][interest_share_percent]" type="number" step="0.0001" min="0" max="100" placeholder="% interes">
+                                            <label class="inline-flex items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-2 text-xs font-semibold text-slate-600">
+                                                <input name="investors[{{ $index }}][delinquency_share]" type="checkbox" value="1">
+                                                Moratorio
+                                            </label>
                                         </div>
                                     @endfor
                                 </div>

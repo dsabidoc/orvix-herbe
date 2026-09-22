@@ -44,12 +44,13 @@ class DashboardController extends Controller
         $collectableLoans = (clone $activeLoansQuery)->where('is_frozen', false)->get();
         $collectableLoanIds = $collectableLoans->modelKeys();
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
+        $overdueThrough = $periodEnd->lt($today) ? $periodEnd : $today;
         $selectedInvestor = ! $user->hasRole('operador-cartera') && $request->filled('investor_id')
             ? Investor::query()->find($request->integer('investor_id'))
             : null;
 
         if ($selectedInvestor) {
-            $metrics = $investorMetrics->calculate($selectedInvestor, $collectableLoans, $today, $periodStart, $periodEnd);
+            $metrics = $investorMetrics->calculate($selectedInvestor, $collectableLoans, $today, $periodStart, $periodEnd, $overdueThrough);
             $settleTodayCents = $metrics['settle_today_cents'];
             $expectedPeriodCents = $metrics['expected_period_cents'];
             $collectedPeriodCents = $metrics['collected_period_cents'];
@@ -66,7 +67,7 @@ class DashboardController extends Controller
             $overdueCents = $this->operationalPendingCents(
                 Installment::query()
                     ->whereIn('loan_id', $collectableLoanIds)
-                    ->whereDate('due_date', '<', $today->toDateString())
+                    ->whereDate('due_date', '<', $overdueThrough->toDateString())
                     ->where('remaining_amount', '>', 0)
             );
         }

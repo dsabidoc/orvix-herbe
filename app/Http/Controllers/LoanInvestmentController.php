@@ -20,6 +20,7 @@ class LoanInvestmentController extends Controller
             'investors.*.investor_id' => ['nullable', 'exists:investors,id'],
             'investors.*.capital_amount' => ['nullable', 'numeric', 'min:0'],
             'investors.*.interest_share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'investors.*.delinquency_share' => ['nullable', 'boolean'],
         ]);
 
         $allocator->assignFromInput($loan, $data['investors'] ?? [], $request->user()->id);
