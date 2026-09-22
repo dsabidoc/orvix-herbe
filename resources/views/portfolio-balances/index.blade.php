@@ -4,7 +4,7 @@
 
     $money = fn (int $cents) => Money::mxn(Money::decimal($cents));
     $includeOverdue = (bool) ($filters['include_overdue'] ?? true);
-    $filterQuery = collect(request()->only(['operator_id', 'date_mode', 'month_mode', 'month', 'specific_date', 'include_overdue']))->filter(fn ($value) => $value !== null && $value !== '')->all();
+    $filterQuery = collect(request()->only(['operator_id', 'date_mode', 'month', 'specific_date', 'include_overdue']))->filter(fn ($value) => $value !== null && $value !== '')->all();
 @endphp
 
 <x-layouts.app title="Cartera y saldos">
@@ -20,7 +20,7 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
-        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(200px,1.4fr)_minmax(140px,1fr)_minmax(160px,1fr)_minmax(150px,1fr)_auto_auto_auto] 2xl:items-end">
+        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(200px,1.4fr)_minmax(160px,1fr)_minmax(150px,1fr)_minmax(150px,1fr)_auto_auto_auto] 2xl:items-end">
             <div class="min-w-0">
                 <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
@@ -31,14 +31,6 @@
                     @foreach ($operators as $operator)
                         <option value="{{ $operator->id }}" @selected((string) ($filters['operator_id'] ?? '') === (string) $operator->id)>{{ $operator->name }}</option>
                     @endforeach
-                </select>
-            </div>
-            <div class="min-w-0">
-                <label class="text-sm font-semibold text-slate-700" for="month_mode">Mes</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month_mode" name="month_mode">
-                    <option value="current" @selected(($filters['month_mode'] ?? 'current') === 'current')>Mes en curso</option>
-                    <option value="next" @selected(($filters['month_mode'] ?? '') === 'next')>Mes siguiente</option>
-                    <option value="custom" @selected(($filters['month_mode'] ?? '') === 'custom')>Seleccionar mes</option>
                 </select>
             </div>
             <div class="min-w-0">

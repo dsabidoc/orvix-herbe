@@ -144,34 +144,24 @@ class PortfolioBalanceController extends Controller
         $validated = $request->validate([
             'operator_id' => ['nullable'],
             'date_mode' => ['nullable', 'in:month,date'],
-            'month_mode' => ['nullable', 'in:current,next,custom'],
             'month' => ['nullable', 'regex:/^\d{4}-\d{2}$/'],
             'specific_date' => ['nullable', 'date'],
             'include_overdue' => ['nullable', 'boolean'],
         ]);
 
         $dateMode = (string) ($validated['date_mode'] ?? 'month');
-        $monthMode = (string) ($validated['month_mode'] ?? 'current');
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
         $specificDate = $dateMode === 'date' && ! empty($validated['specific_date'])
             ? CarbonImmutable::parse($validated['specific_date'], 'America/Merida')->startOfDay()
             : null;
-        $selectedMonth = $specificDate?->startOfMonth() ?? match ($monthMode) {
-            'next' => $today->addMonthNoOverflow()->startOfMonth(),
-            'custom' => $this->selectedMonth($validated['month'] ?? null, $today),
-            default => $today->startOfMonth(),
-        };
+        $selectedMonth = $specificDate?->startOfMonth() ?? $this->selectedMonth($validated['month'] ?? null, $today);
 
         if ($dateMode === 'date' && ! $specificDate) {
             $dateMode = 'month';
             $selectedMonth = $today->startOfMonth();
-        } elseif ($dateMode === 'month' && $monthMode === 'custom' && empty($validated['month'])) {
-            $monthMode = 'current';
-            $selectedMonth = $today->startOfMonth();
         }
 
         $cutoff = $specificDate && $dateMode === 'date' ? $specificDate : $selectedMonth->endOfMonth();
-        $validated['month_mode'] = $monthMode;
         $validated['date_mode'] = $dateMode;
         $validated['month'] = $selectedMonth->format('Y-m');
         $validated['specific_date'] = $specificDate?->toDateString();
@@ -181,11 +171,7 @@ class PortfolioBalanceController extends Controller
             : true;
         $validated['period_label'] = $dateMode === 'date'
             ? 'Fecha seleccionada '.$cutoff->format('d/m/Y')
-            : match ($monthMode) {
-                'next' => 'Mes siguiente '.$selectedMonth->format('m/Y'),
-                'custom' => 'Mes seleccionado '.$selectedMonth->format('m/Y'),
-                default => 'Mes en curso '.$selectedMonth->format('m/Y'),
-            };
+            : 'Mes seleccionado '.$selectedMonth->format('m/Y');
         $validated['cutoff_date'] = $cutoff->toDateString();
         $validated['as_of_date'] = $dateMode === 'date' ? $cutoff->toDateString() : null;
         $validated['mode'] = 'complete';
