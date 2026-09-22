@@ -29,6 +29,7 @@ class PortfolioBalanceService
     public function build(array $filters, User $user): array
     {
         $cutoff = $this->cutoffDate($filters['cutoff_date'] ?? null);
+        $today = CarbonImmutable::now('America/Merida')->startOfDay();
         $periodStart = $cutoff->startOfMonth();
         $periodEnd = $cutoff->endOfMonth();
         $includeOverdue = (bool) ($filters['include_overdue'] ?? true);
@@ -39,7 +40,7 @@ class PortfolioBalanceService
         $allocationLastDates = $this->allocationLastDatesByInstallment($installmentIds, $cutoff);
 
         $loanRows = $loans
-            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $today, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
             ->filter(fn (array $row) => $row['pending_cents'] > 0 || $row['inconsistencies'] !== [])
             ->filter(fn (array $row) => $this->passesDerivedFilters($row, $filters))
             ->values();
@@ -158,10 +159,10 @@ class PortfolioBalanceService
      * @param  array<int, string>  $allocationLastDates
      * @return array<string, mixed>
      */
-    private function loanRow(Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function loanRow(Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $today, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
     {
         $installmentRows = $loan->installments
-            ->map(fn ($installment) => $this->installmentRow($installment, $loan, $cutoff, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn ($installment) => $this->installmentRow($installment, $loan, $cutoff, $today, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
             ->values();
 
         $pendingRows = $installmentRows->filter(fn (array $row) => $row['pending_cents'] > 0 && ! $row['is_excluded'] && $row['is_balance_visible']);
@@ -239,7 +240,7 @@ class PortfolioBalanceService
      * @param  array<int, string>  $allocationLastDates
      * @return array<string, mixed>
      */
-    private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $today, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
     {
         $contractCents = $this->operationalCents($installment);
         $hasAllocations = ($allocationCounts[$installment->id] ?? 0) > 0;
@@ -250,10 +251,10 @@ class PortfolioBalanceService
         $pendingCents = max(0, $rawPendingCents);
         $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
         $isExcluded = in_array((string) $installment->status, self::EXCLUDED_INSTALLMENT_STATUSES, true);
-        $lateDays = $dueDate->lt($cutoff) ? (int) $dueDate->diffInDays($cutoff) : 0;
-        $isOverdue = ! $isExcluded && $dueDate->lte($cutoff) && $pendingCents > 0;
-        $isDueToday = ! $isExcluded && $dueDate->equalTo($cutoff) && $pendingCents > 0;
-        $isUpcoming = ! $isExcluded && $dueDate->gt($cutoff) && $dueDate->lte($periodEnd) && $pendingCents > 0;
+        $lateDays = $dueDate->lt($today) ? (int) $dueDate->diffInDays($today) : 0;
+        $isOverdue = ! $isExcluded && $dueDate->lt($today) && $pendingCents > 0;
+        $isDueToday = ! $isExcluded && $dueDate->equalTo($today) && $pendingCents > 0;
+        $isUpcoming = ! $isExcluded && $dueDate->gt($today) && $dueDate->lte($periodEnd) && $pendingCents > 0;
         $isInScope = ! $isExcluded && $dueDate->lte($periodEnd);
         $isInSelectedMonth = ! $isExcluded && $dueDate->gte($periodStart) && $dueDate->lte($periodEnd);
         $isBalanceVisible = $isInScope && ($includeOverdue || $isInSelectedMonth);
@@ -283,7 +284,7 @@ class PortfolioBalanceService
             'pending_cents' => $pendingCents,
             'late_days' => $lateDays,
             'overdue_cents' => $isOverdue ? $pendingCents : 0,
-            'status' => $this->installmentState($isExcluded, $pendingCents, $appliedCents, $isOverdue, $isDueToday, $dueDate, $cutoff, (string) $installment->status),
+            'status' => $this->installmentState($isExcluded, $pendingCents, $appliedCents, $isOverdue, $isDueToday, $dueDate, $today, (string) $installment->status),
             'last_payment_date' => $allocationLastDates[$installment->id] ?? null,
             'is_excluded' => $isExcluded,
             'is_in_scope' => $isInScope,
