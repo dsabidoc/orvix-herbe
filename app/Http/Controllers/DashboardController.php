@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Domain\Investors\InvestorDashboardMetrics;
 use App\Domain\Collections\PeriodCollectionService;
+use App\Domain\Investors\InvestorDashboardMetrics;
 use App\Domain\Loans\LoanSettlementService;
 use App\Models\Installment;
 use App\Models\Investor;
@@ -66,7 +66,7 @@ class DashboardController extends Controller
             $overdueCents = $this->operationalPendingCents(
                 Installment::query()
                     ->whereIn('loan_id', $collectableLoanIds)
-                    ->whereDate('due_date', '<', $periodStart->toDateString())
+                    ->whereDate('due_date', '<', $today->toDateString())
                     ->where('remaining_amount', '>', 0)
             );
         }

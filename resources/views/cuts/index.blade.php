@@ -26,6 +26,74 @@
         </form>
     </div>
 
+    <div class="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <form class="flex flex-col gap-3 md:flex-row md:items-end" method="GET" action="{{ route('cuts.index') }}">
+            <div>
+                <label class="text-sm font-semibold text-slate-700" for="summary_month">Mes de pago o corte</label>
+                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="summary_month" name="month" type="month" value="{{ request('month') }}">
+            </div>
+            @unless (auth()->user()->hasRole('operador-cartera'))
+                <div class="min-w-0 flex-1">
+                    <label class="text-sm font-semibold text-slate-700" for="summary_operator_id">Operador</label>
+                    <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="summary_operator_id" name="operator_id">
+                        <option value="">Todos los operadores</option>
+                        @foreach ($operators as $operator)
+                            <option value="{{ $operator->id }}" @selected($selectedOperatorId === $operator->id)>{{ $operator->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endunless
+            <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Filtrar</button>
+            <a class="rounded-md border border-slate-300 px-4 py-2 text-center text-sm font-bold text-slate-700" href="{{ route('cuts.index') }}">Total</a>
+        </form>
+    </div>
+
+    <div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        @foreach ([
+            ['title' => 'Cortes', 'value' => number_format($summary['cuts']), 'caption' => 'Incluidos en el filtro', 'color' => 'blue'],
+            ['title' => 'Total reportado', 'value' => Money::mxn(Money::decimal($summary['reported_cents'])), 'caption' => 'Cobros registrados en cortes', 'color' => 'yellow'],
+            ['title' => 'Total cobrado', 'value' => Money::mxn(Money::decimal($summary['received_cents'])), 'caption' => 'Cortes concluidos por fecha de pago', 'color' => 'green'],
+            ['title' => 'Operadores', 'value' => number_format($summary['operators']), 'caption' => 'Con cortes en el filtro', 'color' => 'orange'],
+        ] as $card)
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-sm font-semibold text-slate-500">{{ $card['title'] }}</p>
+                <p class="mt-2 text-2xl font-black text-slate-950">{{ $card['value'] }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ $card['caption'] }}</p>
+            </div>
+        @endforeach
+    </div>
+
+    @if ($operatorSummaries->isNotEmpty())
+        <section class="mb-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 px-5 py-3">
+                <h3 class="font-bold text-slate-950">Resumen por operador</h3>
+                <p class="mt-1 text-sm text-slate-500">El total cobrado considera solamente cortes concluidos y su fecha de pago.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[700px] text-left text-sm">
+                    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+                        <tr>
+                            <th class="px-5 py-3">Operador</th>
+                            <th class="px-5 py-3 text-right">Cortes</th>
+                            <th class="px-5 py-3 text-right">Reportado</th>
+                            <th class="px-5 py-3 text-right">Cobrado</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($operatorSummaries as $operatorSummary)
+                            <tr>
+                                <td class="px-5 py-3 font-semibold">{{ $operatorSummary['operator']?->name ?? 'Sin operador' }}</td>
+                                <td class="px-5 py-3 text-right">{{ number_format($operatorSummary['cuts']) }}</td>
+                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($operatorSummary['reported_cents'])) }}</td>
+                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($operatorSummary['received_cents'])) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
+
     <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-5 py-3">
             @include('partials.table-pagination', ['paginator' => $cuts])

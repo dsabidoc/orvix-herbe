@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Collections\PeriodCollectionService;
+use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\DelinquencyCalculator;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\PaymentApplicationService;
@@ -16,7 +16,6 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -66,11 +65,14 @@ class CollectionController extends Controller
         $monthLoanIds = (clone $monthInstallments)->select('loan_id')->distinct()->pluck('loan_id');
         $collectedMonthLettersCents = app(PeriodCollectionService::class)
             ->amountForLoans($monthLoanIds, $monthStart, $monthEnd);
-        $collectedMonthCents = CollectionMovement::query()
-            ->whereHas('loan', $loanScope)
-            ->whereIn('confirmation_status', ['reported', 'applied'])
-            ->whereBetween('operated_on', [$monthStart->toDateString(), $monthEnd->toDateString()])
-            ->sum('contract_amount') * 100;
+        $collectedMonthCents = WeeklyCut::query()
+            ->where('status', 'closed')
+            ->whereNotNull('confirmed_at')
+            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
+            ->when(! $request->user()->hasRole('operador-cartera') && $operatorId, fn ($query) => $query->where('operator_id', $operatorId))
+            ->whereBetween('confirmed_at', [$monthStart, $monthEnd->endOfDay()])
+            ->get(['confirmed_total'])
+            ->sum(fn (WeeklyCut $cut) => Money::cents($cut->confirmed_total));
         $pendingMonthCents = $monthOperationalCents - $collectedMonthLettersCents;
         $overdueCents = Installment::query()
             ->whereHas('loan', $loanScope)
@@ -78,6 +80,7 @@ class CollectionController extends Controller
             ->whereDate('due_date', '<', now('America/Merida')->toDateString())
             ->where('remaining_amount', '>', 0)
             ->sum('remaining_amount') * 100;
+
         return view('collections.index', [
             'installments' => $installments,
             'kpis' => [
@@ -102,8 +105,7 @@ class CollectionController extends Controller
         WeeklyCutPeriodService $cutPeriodService,
         PaymentApplicationService $paymentApplicationService,
         DelinquencyCalculator $delinquencyCalculator,
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $installment->load('loan.operator');
         $this->authorizeInstallmentAccess($request, $installment);
 
@@ -221,8 +223,7 @@ class CollectionController extends Controller
         WeeklyCutPeriodService $cutPeriodService,
         PaymentApplicationService $paymentApplicationService,
         DelinquencyCalculator $delinquencyCalculator,
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $data = $request->validate([
             'installment_ids' => ['required', 'array', 'min:1', 'max:80'],
             'installment_ids.*' => ['integer', 'exists:installments,id'],

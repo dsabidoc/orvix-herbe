@@ -75,7 +75,7 @@ class InvestorDashboardMetrics
                     $expectedPeriodCents += $this->shareCents($loan, $investment, $principalCents, $interestCents);
                 }
 
-                if ($dueDate->lt($periodStart) && Money::cents($installment->remaining_amount) > 0) {
+                if ($dueDate->lt($today) && Money::cents($installment->remaining_amount) > 0) {
                     $operationalCents = $principalCents + $interestCents;
                     $pendingOperationalCents = min(Money::cents($installment->remaining_amount), $operationalCents);
 

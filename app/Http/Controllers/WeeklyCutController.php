@@ -27,14 +27,57 @@ class WeeklyCutController extends Controller
     {
         abort_if($this->isInvestorReadOnly($request), 403);
 
+        $selectedMonth = preg_match('/^(19|20|21)\\d{2}-(0[1-9]|1[0-2])$/', $request->input('month', ''))
+            ? CarbonImmutable::createFromFormat('Y-m-d', $request->input('month').'-01', 'America/Merida')
+            : null;
+        $selectedOperatorId = $request->filled('operator_id') ? $request->integer('operator_id') : null;
+        $baseQuery = WeeklyCut::query()
+            ->with('operator')
+            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
+            ->when(! $request->user()->hasRole('operador-cartera') && $selectedOperatorId, fn ($query) => $query->where('operator_id', $selectedOperatorId))
+            ->when($selectedMonth, function ($query) use ($selectedMonth) {
+                $start = $selectedMonth->startOfMonth();
+                $end = $selectedMonth->endOfMonth();
+
+                $query->where(function ($query) use ($start, $end) {
+                    $query
+                        ->whereBetween('period_starts_on', [$start->toDateString(), $end->toDateString()])
+                        ->orWhereBetween('confirmed_at', [$start, $end->endOfDay()]);
+                });
+            });
+        $summaryCuts = (clone $baseQuery)->get();
+        $operatorSummaries = $summaryCuts
+            ->groupBy('operator_id')
+            ->map(function ($operatorCuts) {
+                $closedCuts = $operatorCuts->where('status', 'closed')->whereNotNull('confirmed_at');
+
+                return [
+                    'operator' => $operatorCuts->first()->operator,
+                    'cuts' => $operatorCuts->count(),
+                    'reported_cents' => $operatorCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->reported_total)),
+                    'received_cents' => $closedCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->confirmed_total)),
+                ];
+            })
+            ->sortBy(fn (array $summary) => $summary['operator']?->name ?? '')
+            ->values();
+        $closedSummaryCuts = $summaryCuts->where('status', 'closed')->whereNotNull('confirmed_at');
+
         return view('cuts.index', [
-            'cuts' => WeeklyCut::query()
-                ->with('operator')
-                ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
+            'cuts' => $baseQuery
                 ->orderByDesc('period_starts_on')
                 ->orderByDesc('id')
-                ->paginate(15),
-            'operators' => Operator::query()->where('status', 'active')->get(),
+                ->paginate(15)
+                ->withQueryString(),
+            'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
+            'selectedMonth' => $selectedMonth,
+            'selectedOperatorId' => $selectedOperatorId,
+            'summary' => [
+                'cuts' => $summaryCuts->count(),
+                'reported_cents' => $summaryCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->reported_total)),
+                'received_cents' => $closedSummaryCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->confirmed_total)),
+                'operators' => $operatorSummaries->count(),
+            ],
+            'operatorSummaries' => $operatorSummaries,
         ]);
     }
 
