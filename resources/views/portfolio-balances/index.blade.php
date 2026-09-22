@@ -4,7 +4,7 @@
 
     $money = fn (int $cents) => Money::mxn(Money::decimal($cents));
     $includeOverdue = (bool) ($filters['include_overdue'] ?? true);
-    $filterQuery = collect(request()->only(['operator_id', 'month_mode', 'month', 'include_overdue']))->filter(fn ($value) => $value !== null && $value !== '')->all();
+    $filterQuery = collect(request()->only(['operator_id', 'date_mode', 'month_mode', 'month', 'specific_date', 'include_overdue']))->filter(fn ($value) => $value !== null && $value !== '')->all();
 @endphp
 
 <x-layouts.app title="Cartera y saldos">
@@ -20,7 +20,7 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
-        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(220px,1.6fr)_minmax(150px,1fr)_minmax(170px,1fr)_auto_auto_auto] 2xl:items-end">
+        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(200px,1.4fr)_minmax(140px,1fr)_minmax(160px,1fr)_minmax(150px,1fr)_auto_auto_auto] 2xl:items-end">
             <div class="min-w-0">
                 <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
@@ -44,6 +44,17 @@
             <div class="min-w-0">
                 <label class="text-sm font-semibold text-slate-700" for="month">Mes especifico</label>
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
+            </div>
+            <div class="min-w-0">
+                <label class="text-sm font-semibold text-slate-700" for="date_mode">Referencia</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="date_mode" name="date_mode">
+                    <option value="month" @selected(($filters['date_mode'] ?? 'month') === 'month')>Por mes</option>
+                    <option value="date" @selected(($filters['date_mode'] ?? '') === 'date')>Fecha especifica</option>
+                </select>
+            </div>
+            <div class="min-w-0">
+                <label class="text-sm font-semibold text-slate-700" for="specific_date">Fecha especifica</label>
+                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="specific_date" name="specific_date" type="date" value="{{ $filters['specific_date'] ?? '' }}">
             </div>
             <label title="Incluir vencidos y atrasados" class="flex min-h-[42px] min-w-0 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 2xl:w-fit 2xl:whitespace-nowrap">
                 <input type="hidden" name="include_overdue" value="0">

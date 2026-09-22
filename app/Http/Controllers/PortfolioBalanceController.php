@@ -143,36 +143,51 @@ class PortfolioBalanceController extends Controller
     {
         $validated = $request->validate([
             'operator_id' => ['nullable'],
+            'date_mode' => ['nullable', 'in:month,date'],
             'month_mode' => ['nullable', 'in:current,next,custom'],
             'month' => ['nullable', 'regex:/^\d{4}-\d{2}$/'],
+            'specific_date' => ['nullable', 'date'],
             'include_overdue' => ['nullable', 'boolean'],
         ]);
 
+        $dateMode = (string) ($validated['date_mode'] ?? 'month');
         $monthMode = (string) ($validated['month_mode'] ?? 'current');
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
-        $selectedMonth = match ($monthMode) {
+        $specificDate = $dateMode === 'date' && ! empty($validated['specific_date'])
+            ? CarbonImmutable::parse($validated['specific_date'], 'America/Merida')->startOfDay()
+            : null;
+        $selectedMonth = $specificDate?->startOfMonth() ?? match ($monthMode) {
             'next' => $today->addMonthNoOverflow()->startOfMonth(),
             'custom' => $this->selectedMonth($validated['month'] ?? null, $today),
             default => $today->startOfMonth(),
         };
 
-        if ($monthMode === 'custom' && empty($validated['month'])) {
+        if ($dateMode === 'date' && ! $specificDate) {
+            $dateMode = 'month';
+            $selectedMonth = $today->startOfMonth();
+        } elseif ($dateMode === 'month' && $monthMode === 'custom' && empty($validated['month'])) {
             $monthMode = 'current';
             $selectedMonth = $today->startOfMonth();
         }
 
+        $cutoff = $specificDate && $dateMode === 'date' ? $specificDate : $selectedMonth->endOfMonth();
         $validated['month_mode'] = $monthMode;
+        $validated['date_mode'] = $dateMode;
         $validated['month'] = $selectedMonth->format('Y-m');
+        $validated['specific_date'] = $specificDate?->toDateString();
         // Mantiene el comportamiento historico al abrir Saldos sin parametros.
         $validated['include_overdue'] = $request->has('include_overdue')
             ? $request->boolean('include_overdue')
             : true;
-        $validated['period_label'] = match ($monthMode) {
-            'next' => 'Mes siguiente '.$selectedMonth->format('m/Y'),
-            'custom' => 'Mes seleccionado '.$selectedMonth->format('m/Y'),
-            default => 'Mes en curso '.$selectedMonth->format('m/Y'),
-        };
-        $validated['cutoff_date'] = $selectedMonth->endOfMonth()->toDateString();
+        $validated['period_label'] = $dateMode === 'date'
+            ? 'Fecha seleccionada '.$cutoff->format('d/m/Y')
+            : match ($monthMode) {
+                'next' => 'Mes siguiente '.$selectedMonth->format('m/Y'),
+                'custom' => 'Mes seleccionado '.$selectedMonth->format('m/Y'),
+                default => 'Mes en curso '.$selectedMonth->format('m/Y'),
+            };
+        $validated['cutoff_date'] = $cutoff->toDateString();
+        $validated['as_of_date'] = $dateMode === 'date' ? $cutoff->toDateString() : null;
         $validated['mode'] = 'complete';
         $validated['upcoming_range'] = 'month';
         $validated['per_page'] = (int) $request->integer('per_page', 15);

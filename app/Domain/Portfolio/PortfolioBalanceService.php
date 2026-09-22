@@ -30,8 +30,11 @@ class PortfolioBalanceService
     {
         $cutoff = $this->cutoffDate($filters['cutoff_date'] ?? null);
         $today = CarbonImmutable::now('America/Merida')->startOfDay();
+        $asOfDate = ! empty($filters['as_of_date'])
+            ? CarbonImmutable::parse($filters['as_of_date'], 'America/Merida')->startOfDay()
+            : $today;
         $periodStart = $cutoff->startOfMonth();
-        $periodEnd = $cutoff->endOfMonth();
+        $periodEnd = ! empty($filters['as_of_date']) ? $cutoff : $cutoff->endOfMonth();
         $includeOverdue = (bool) ($filters['include_overdue'] ?? true);
         $loans = $this->loanQuery($filters, $user)->get();
         $installmentIds = $loans->flatMap(fn (Loan $loan) => $loan->installments->pluck('id'))->values();
@@ -40,7 +43,7 @@ class PortfolioBalanceService
         $allocationLastDates = $this->allocationLastDatesByInstallment($installmentIds, $cutoff);
 
         $loanRows = $loans
-            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $today, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $asOfDate, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
             ->filter(fn (array $row) => $row['pending_cents'] > 0 || $row['inconsistencies'] !== [])
             ->filter(fn (array $row) => $this->passesDerivedFilters($row, $filters))
             ->values();
@@ -580,5 +583,4 @@ class PortfolioBalanceService
     {
         return CarbonImmutable::parse($date ?: CarbonImmutable::now('America/Merida')->toDateString(), 'America/Merida')->startOfDay();
     }
-
 }
