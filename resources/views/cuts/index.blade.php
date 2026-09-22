@@ -63,37 +63,6 @@
         @endforeach
     </div>
 
-    @if ($operatorSummaries->isNotEmpty())
-        <section class="mb-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-200 px-5 py-3">
-                <h3 class="font-bold text-slate-950">Resumen por operador</h3>
-                <p class="mt-1 text-sm text-slate-500">El total cobrado considera solamente cortes concluidos y su fecha de pago.</p>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[700px] text-left text-sm">
-                    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
-                        <tr>
-                            <th class="px-5 py-3">Operador</th>
-                            <th class="px-5 py-3 text-right">Cortes</th>
-                            <th class="px-5 py-3 text-right">Reportado</th>
-                            <th class="px-5 py-3 text-right">Cobrado</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @foreach ($operatorSummaries as $operatorSummary)
-                            <tr>
-                                <td class="px-5 py-3 font-semibold">{{ $operatorSummary['operator']?->name ?? 'Sin operador' }}</td>
-                                <td class="px-5 py-3 text-right">{{ number_format($operatorSummary['cuts']) }}</td>
-                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($operatorSummary['reported_cents'])) }}</td>
-                                <td class="px-5 py-3 text-right">{{ Money::mxn(Money::decimal($operatorSummary['received_cents'])) }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    @endif
-
     <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-5 py-3">
             @include('partials.table-pagination', ['paginator' => $cuts])
