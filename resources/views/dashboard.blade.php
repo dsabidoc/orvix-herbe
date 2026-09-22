@@ -305,7 +305,7 @@
                                                 </td>
                                                 <td class="px-4 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
                                                 <td class="px-4 py-3 text-right">
-                                                    <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
+                                                    <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
                                                         @csrf
                                                         <input name="return_to" type="hidden" value="dashboard">
                                                         <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">

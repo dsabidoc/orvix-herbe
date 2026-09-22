@@ -125,6 +125,17 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @forelse ($cut->items as $item)
+                                @php
+                                    $isInstallmentPayment = $item->movement->target_installment_id
+                                        && $item->movement->type !== 'capital_advance';
+                                    $targetRemainingCents = $item->movement->targetInstallment
+                                        ? Money::cents($item->movement->targetInstallment->remaining_amount)
+                                        : 0;
+                                    $projectedRemainingCents = $item->movement->confirmation_status === 'reported'
+                                        ? max(0, $targetRemainingCents - Money::cents($item->movement->contract_amount))
+                                        : $targetRemainingCents;
+                                    $isPartialInstallmentPayment = $isInstallmentPayment && $projectedRemainingCents > 0;
+                            @endphp
                             <tr>
                                 <td class="px-3 py-4 align-top">
                                     <a class="break-words font-semibold leading-5 text-[#0f766e]" href="{{ route('loans.show', $item->movement->loan) }}">{{ $item->movement->loan->client->first_name }} {{ $item->movement->loan->client->last_name }}</a>
@@ -134,6 +145,9 @@
                                     <p class="font-semibold text-slate-950">{{ $item->movement->loan->vehicle?->model ?? 'Vehiculo' }}</p>
                                     @if ($item->movement->targetInstallment)
                                         <p class="mt-1 text-xs text-slate-500">Letra {{ $item->movement->targetInstallment->number }} · vence {{ $item->movement->targetInstallment->due_date->format('d/m/Y') }}</p>
+                                        @if ($isPartialInstallmentPayment)
+                                            <p class="mt-1 text-xs font-semibold text-amber-700">Abono parcial · saldo pendiente {{ Money::mxn(Money::decimal($projectedRemainingCents)) }}</p>
+                                        @endif
                                     @else
                                         <p class="mt-1 text-xs text-slate-500">Movimiento general</p>
                                     @endif
@@ -145,7 +159,7 @@
                                     <p class="font-semibold text-slate-950">{{ ($item->movement->registered_at ?? $item->movement->created_at)->format('d/m/Y H:i') }}</p>
                                 </td>
                                 <td class="px-3 py-4 text-right align-top">
-                                    <p class="text-xs text-slate-500">Pagaré</p>
+                                    <p class="text-xs text-slate-500">Monto recibido de la letra</p>
                                     <p class="font-semibold">{{ Money::mxn($item->movement->contract_amount) }}</p>
                                     <p class="mt-2 text-xs text-slate-500">Recargos/otros</p>
                                     <p>{{ Money::mxn(Money::decimal(Money::cents($item->movement->operator_surcharge_amount) + Money::cents($item->movement->external_concepts_amount) + Money::cents($item->movement->additional_charge_amount ?? 0) + Money::cents($item->movement->delinquency_amount ?? 0))) }}</p>
@@ -154,6 +168,9 @@
                                 </td>
                                 <td class="px-3 py-4 align-top">
                                     <span class="inline-flex rounded bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{{ StatusLabels::movement($item->movement->confirmation_status) }}</span>
+                                    @if ($isInstallmentPayment)
+                                        <p class="mt-2 text-xs font-semibold {{ $isPartialInstallmentPayment ? 'text-amber-700' : 'text-emerald-700' }}">{{ $isPartialInstallmentPayment ? 'Letra con abono parcial' : 'Letra cubierta' }}</p>
+                                    @endif
                                     <p class="mt-2 text-xs text-slate-500">Registró</p>
                                     <p class="font-semibold text-slate-950">{{ $item->movement->registeredBy?->name ?? '-' }}</p>
                                 </td>
@@ -231,7 +248,7 @@
                                     <td class="whitespace-nowrap px-3 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
                                     @can('weekly-cuts.confirm')
                                         <td class="whitespace-nowrap px-3 py-3 text-right">
-                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}">
+                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}">
                                                 @csrf
                                                 <input name="return_to" type="hidden" value="cut">
                                                 <input name="cut_id" type="hidden" value="{{ $cut->id }}">
@@ -494,6 +511,7 @@
                                                     <td class="px-4 py-3 text-right">
                                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}"
                                                             data-confirm-paid
+                                                            data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}"
                                                             data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}"
                                                             @if ($isCapitalAdvance) data-force-capital-advance="true" @endif
                                                             @if ($canAdvanceCapital) data-capital-advance-allowed="true" @endif>

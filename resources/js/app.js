@@ -99,6 +99,9 @@ document.addEventListener('submit', (event) => {
     const delinquencyFields = dialog.querySelector('[data-confirm-paid-delinquency-fields]');
     const suggestedDelinquency = form.dataset.suggestedDelinquency || '0.00';
     const canIncludeDelinquency = !forceCapitalAdvance && !form.matches('[data-bulk-payment-form]');
+    const paymentAmountFields = dialog.querySelector('[data-confirm-paid-amount-fields]');
+    const paymentAmountInput = dialog.querySelector('#confirm-paid-amount');
+    const suggestedPaymentAmount = form.dataset.suggestedPaymentAmount || '0.00';
 
     if (delinquencyToggle instanceof HTMLInputElement) {
         delinquencyToggle.checked = false;
@@ -112,6 +115,14 @@ document.addEventListener('submit', (event) => {
 
     if (delinquencyFields instanceof HTMLElement) {
         delinquencyFields.hidden = true;
+    }
+
+    if (paymentAmountInput instanceof HTMLInputElement) {
+        paymentAmountInput.value = suggestedPaymentAmount;
+    }
+
+    if (paymentAmountFields instanceof HTMLElement) {
+        paymentAmountFields.hidden = forceCapitalAdvance || form.matches('[data-bulk-payment-form]');
     }
 
     if (paymentDateInput instanceof HTMLInputElement && formPaymentDateInput instanceof HTMLInputElement) {
@@ -488,6 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const confirmedAction = forceCapitalAdvance ? 'confirm-capital-advance' : dialog.returnValue;
 
             const paymentDateInput = dialog.querySelector('#confirm-paid-date');
+            const selectedPaymentAmount = dialog.querySelector('#confirm-paid-amount');
             let formPaymentDateInput = pendingPaidForm.querySelector('input[name="operated_on"]');
             let affectsInvestorsInput = pendingPaidForm.querySelector('input[name="affects_investors"]');
             let paymentEffectInput = pendingPaidForm.querySelector('input[name="payment_effect"]');
@@ -504,6 +516,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (paymentDateInput instanceof HTMLInputElement && paymentDateInput.value) {
                 formPaymentDateInput.value = paymentDateInput.value;
+            }
+
+            const formContractAmountInput = pendingPaidForm.querySelector('input[name="contract_amount"]');
+
+            if (formContractAmountInput instanceof HTMLInputElement
+                && selectedPaymentAmount instanceof HTMLInputElement
+                && confirmedAction !== 'confirm-capital-advance'
+                && !pendingPaidForm.matches('[data-bulk-payment-form]')) {
+                formContractAmountInput.value = selectedPaymentAmount.value.replace(/,/g, '');
             }
 
             if (!(affectsInvestorsInput instanceof HTMLInputElement)) {

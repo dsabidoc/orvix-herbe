@@ -311,6 +311,11 @@
                             <label class="text-sm font-semibold text-slate-700" for="confirm-paid-date">Fecha de pago y envio al corte</label>
                             <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-date" type="date" value="{{ now('America/Merida')->toDateString() }}">
                         </div>
+                        <div data-confirm-paid-amount-fields>
+                            <label class="text-sm font-semibold text-slate-700" for="confirm-paid-amount">Monto recibido de esta letra</label>
+                            <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-amount" type="text" inputmode="decimal" data-money-input value="0.00">
+                            <p class="mt-1 text-xs text-slate-500">Puedes registrar un abono menor; la letra conservará el saldo pendiente.</p>
+                        </div>
                         <div class="rounded-md border border-amber-200 bg-amber-50 p-3">
                             <label class="flex items-center gap-2 text-sm font-semibold text-amber-900" for="confirm-paid-include-delinquency">
                                 <input class="rounded border-amber-400 text-[#0f766e] focus:ring-[#0d9488]" id="confirm-paid-include-delinquency" type="checkbox">

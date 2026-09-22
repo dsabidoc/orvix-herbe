@@ -113,16 +113,16 @@ class CollectionController extends Controller
 
         $existing = CollectionMovement::query()
             ->where('target_installment_id', $installment->id)
-            ->whereIn('confirmation_status', ['reported', 'applied'])
+            ->where('confirmation_status', 'reported')
             ->first();
 
         if ($existing) {
-            return back()->with('warning', 'Esta letra ya esta marcada como pagada o por confirmar; no se duplico.');
+            return back()->with('warning', 'Esta letra ya tiene un pago por confirmar; espera a que se aplique antes de registrar otro abono.');
         }
 
         $data = $request->validate([
             'operated_on' => ['required', 'date'],
-            'contract_amount' => ['required', 'numeric', 'min:1'],
+            'contract_amount' => ['required', 'numeric', 'min:0.01'],
             'operator_surcharge_amount' => ['nullable', 'numeric', 'min:0'],
             'external_concepts_amount' => ['nullable', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
@@ -156,6 +156,11 @@ class CollectionController extends Controller
         $contractAmountCents = $paymentEffect === 'capital_advance'
             ? $this->capitalAdvanceAmountCents($installment)
             : Money::cents($data['contract_amount']);
+        abort_if(
+            $paymentEffect !== 'capital_advance' && $contractAmountCents > Money::cents($installment->remaining_amount),
+            422,
+            'El monto recibido no puede exceder el saldo pendiente de esta letra.',
+        );
         $delinquencyAmountCents = in_array($paymentEffect, ['capital_advance', 'no_investors'], true)
             ? 0
             : Money::cents($data['delinquency_amount'] ?? 0);

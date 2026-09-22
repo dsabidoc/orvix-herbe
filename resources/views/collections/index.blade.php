@@ -80,7 +80,7 @@
                             </td>
                             <td class="px-5 py-3 text-right">
                                 @if (! $isCovered && ! $movement)
-                                    <form class="inline-flex items-center gap-2" method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
+                                    <form class="inline-flex items-center gap-2" method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
                                         @csrf
                                         <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
                                         <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
