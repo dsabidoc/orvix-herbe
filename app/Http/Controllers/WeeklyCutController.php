@@ -435,12 +435,12 @@ class WeeklyCutController extends Controller
 
     private function pendingInstallmentsForCut(WeeklyCut $cut)
     {
-        $cutDate = $cut->period_starts_on->toDateString();
+        $cutMonthEnd = $cut->period_starts_on->endOfMonth()->toDateString();
 
         return Installment::query()
             ->with(['loan.client', 'loan.vehicle', 'reportedMovement'])
             ->where('remaining_amount', '>', 0)
-            ->whereDate('due_date', '<=', $cutDate)
+            ->whereDate('due_date', '<=', $cutMonthEnd)
             ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', ['reported', 'applied']))
             ->whereHas('loan', fn ($query) => $query
                 ->where('operator_id', $cut->operator_id)
