@@ -63,7 +63,7 @@
                         <td class="px-5 py-3">{{ $client->frozen_loans_count }}</td>
                         <td class="px-5 py-3">{{ $client->concluded_loans_count }}</td>
                         <td class="px-5 py-3">
-                            <span class="rounded px-2 py-1 text-xs font-bold {{ $client->active_loans_count + $client->frozen_loans_count > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $client->active_loans_count + $client->frozen_loans_count > 0 ? 'Activo' : 'No activo' }}</span>
+                            <span class="rounded px-2 py-1 text-xs font-bold {{ $client->active_loans_count > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $client->active_loans_count > 0 ? 'Activo' : 'No activo' }}</span>
                         </td>
                     </tr>
                 @empty

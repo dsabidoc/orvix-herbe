@@ -122,7 +122,9 @@ class DashboardController extends Controller
             'quickCollectionLoans' => $quickCollectionLoans,
             'operators' => Operator::query()
                 ->when($user->hasRole('operador-cartera'), fn ($query) => $query->whereKey($user->operatorProfile?->id))
-                ->withCount('loans')
+                ->withCount([
+                    'loans as loans_count' => fn ($query) => $query->where('status', 'active')->where('is_frozen', false),
+                ])
                 ->get(),
             'investors' => $user->hasRole('operador-cartera')
                 ? collect()

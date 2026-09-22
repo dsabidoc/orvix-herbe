@@ -57,9 +57,9 @@ class ClientController extends Controller
         }
 
         if ($statusFilter === 'active') {
-            $query->whereHas('loans', fn ($query) => $query->where('status', 'active'));
+            $query->whereHas('loans', fn ($query) => $query->where('status', 'active')->where('is_frozen', false));
         } elseif ($statusFilter === 'inactive') {
-            $query->whereDoesntHave('loans', fn ($query) => $query->where('status', 'active'));
+            $query->whereDoesntHave('loans', fn ($query) => $query->where('status', 'active')->where('is_frozen', false));
         }
 
         if ($sort === 'name') {
@@ -198,8 +198,8 @@ class ClientController extends Controller
     {
         $clientScope = $this->clientScope($request);
         $visibleClientIds = (clone $clientScope)->pluck('id');
-        $activeClients = (clone $clientScope)->whereHas('loans', fn ($query) => $query->where('status', 'active'));
-        $concludedClients = (clone $clientScope)->whereDoesntHave('loans', fn ($query) => $query->where('status', 'active'));
+        $activeClients = (clone $clientScope)->whereHas('loans', fn ($query) => $query->where('status', 'active')->where('is_frozen', false));
+        $concludedClients = (clone $clientScope)->whereDoesntHave('loans', fn ($query) => $query->where('status', 'active')->where('is_frozen', false));
         $loanScope = Loan::query()->whereIn('client_id', $visibleClientIds);
         $activeLoans = (clone $loanScope)->where('status', 'active')->where('is_frozen', false);
         $frozenLoans = (clone $loanScope)->where('status', 'active')->where('is_frozen', true);
