@@ -19,11 +19,11 @@
         </div>
     </div>
 
-    <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="GET">
-        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(200px,1.4fr)_minmax(160px,1fr)_minmax(150px,1fr)_minmax(150px,1fr)_auto_auto_auto] 2xl:items-end">
+    <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm" method="GET" data-portfolio-filter>
+        <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_minmax(150px,1fr)_minmax(145px,1fr)_minmax(155px,1fr)_auto_auto] xl:items-end">
             <div class="min-w-0">
-                <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="operator_id" name="operator_id">
+                <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="operator_id">Operador</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="operator_id" name="operator_id">
                     <option value="">Todos</option>
                     @unless(auth()->user()->hasRole('operador-cartera'))
                         <option value="none" @selected(($filters['operator_id'] ?? '') === 'none')>Sin operador asignado</option>
@@ -33,30 +33,54 @@
                     @endforeach
                 </select>
             </div>
-            <div class="min-w-0">
-                <label class="text-sm font-semibold text-slate-700" for="month">Mes especifico</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
+            <div class="min-w-0" data-portfolio-month-field>
+                <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="month">Mes</label>
+                <input class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
             </div>
             <div class="min-w-0">
-                <label class="text-sm font-semibold text-slate-700" for="date_mode">Referencia</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="date_mode" name="date_mode">
+                <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="date_mode">Ver por</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="date_mode" name="date_mode">
                     <option value="month" @selected(($filters['date_mode'] ?? 'month') === 'month')>Por mes</option>
                     <option value="date" @selected(($filters['date_mode'] ?? '') === 'date')>Fecha especifica</option>
                 </select>
             </div>
-            <div class="min-w-0">
-                <label class="text-sm font-semibold text-slate-700" for="specific_date">Fecha especifica</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="specific_date" name="specific_date" type="date" value="{{ $filters['specific_date'] ?? '' }}">
+            <div class="min-w-0" data-portfolio-date-field hidden>
+                <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="specific_date">Fecha</label>
+                <input class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="specific_date" name="specific_date" type="date" value="{{ $filters['specific_date'] ?? '' }}">
             </div>
-            <label title="Incluir vencidos y atrasados" class="flex min-h-[42px] min-w-0 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 2xl:w-fit 2xl:whitespace-nowrap">
+            <label title="Incluir vencidos y atrasados" class="flex min-h-[36px] min-w-0 items-center gap-2 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-600 xl:whitespace-nowrap">
                 <input type="hidden" name="include_overdue" value="0">
                 <input class="h-4 w-4 accent-[#0d9488]" name="include_overdue" type="checkbox" value="1" @checked($includeOverdue)>
                 <span>Incluir</span>
             </label>
-            <button class="w-full rounded-md bg-[#0d9488] px-3 py-2 text-sm font-bold text-white 2xl:w-auto" type="submit">Filtrar</button>
-            <a class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-center text-sm font-bold text-slate-700 2xl:w-auto" href="{{ route('portfolio-balances.index') }}">Todos</a>
+            <div class="flex min-h-[36px] gap-2">
+                <button class="flex-1 rounded-md bg-[#0d9488] px-3 py-1.5 text-sm font-bold text-white xl:flex-none" type="submit">Filtrar</button>
+                <a class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-center text-sm font-bold text-slate-700 xl:flex-none" href="{{ route('portfolio-balances.index') }}">Limpiar</a>
+            </div>
         </div>
     </form>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.querySelector('[data-portfolio-filter]');
+            const mode = form?.querySelector('#date_mode');
+            const monthField = form?.querySelector('[data-portfolio-month-field]');
+            const dateField = form?.querySelector('[data-portfolio-date-field]');
+
+            if (!mode || !monthField || !dateField) {
+                return;
+            }
+
+            const syncDateFields = () => {
+                const byDate = mode.value === 'date';
+                monthField.hidden = byDate;
+                dateField.hidden = !byDate;
+            };
+
+            mode.addEventListener('change', syncDateFields);
+            syncDateFields();
+        });
+    </script>
 
     <section class="no-print mb-4 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-5 py-4">
