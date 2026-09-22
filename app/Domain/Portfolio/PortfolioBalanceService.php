@@ -34,7 +34,8 @@ class PortfolioBalanceService
             ? CarbonImmutable::parse($filters['as_of_date'], 'America/Merida')->startOfDay()
             : $today;
         $periodStart = $cutoff->startOfMonth();
-        $periodEnd = ! empty($filters['as_of_date']) ? $cutoff : $cutoff->endOfMonth();
+        // La fecha especifica calcula el atraso; la vista sigue incluyendo todo el mes seleccionado.
+        $periodEnd = $cutoff->endOfMonth();
         $includeOverdue = (bool) ($filters['include_overdue'] ?? true);
         $loans = $this->loanQuery($filters, $user)->get();
         $installmentIds = $loans->flatMap(fn (Loan $loan) => $loan->installments->pluck('id'))->values();
