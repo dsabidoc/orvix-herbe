@@ -164,7 +164,9 @@ class PortfolioBalanceService
             ->values();
 
         $pendingRows = $installmentRows->filter(fn (array $row) => $row['pending_cents'] > 0 && ! $row['is_excluded'] && $row['is_balance_visible']);
-        $overdueRows = $pendingRows->filter(fn (array $row) => $row['is_overdue']);
+        // El saldo vencido del resumen debe corresponder al mes seleccionado,
+        // no acumular vencimientos de meses anteriores.
+        $overdueRows = $pendingRows->filter(fn (array $row) => $row['is_overdue'] && $row['is_in_selected_month']);
         $todayRows = $pendingRows->filter(fn (array $row) => $row['is_due_today']);
         $upcomingRows = $pendingRows->filter(fn (array $row) => $row['is_upcoming']);
         $nextInstallment = $pendingRows->sortBy([['due_date_sort', 'asc'], ['number', 'asc']])->first();
