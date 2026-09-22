@@ -20,7 +20,7 @@
     </div>
 
     <form class="no-print mb-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm" method="GET" data-portfolio-filter>
-        <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_minmax(150px,1fr)_minmax(145px,1fr)_minmax(155px,1fr)_auto_auto] xl:items-end">
+        <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_minmax(145px,1fr)_minmax(170px,1fr)_auto_auto] xl:items-end">
             <div class="min-w-0">
                 <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="operator_id">Operador</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="operator_id" name="operator_id">
@@ -33,10 +33,6 @@
                     @endforeach
                 </select>
             </div>
-            <div class="min-w-0" data-portfolio-month-field>
-                <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="month">Mes</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
-            </div>
             <div class="min-w-0">
                 <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="date_mode">Ver por</label>
                 <select class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="date_mode" name="date_mode">
@@ -44,9 +40,15 @@
                     <option value="date" @selected(($filters['date_mode'] ?? '') === 'date')>Fecha especifica</option>
                 </select>
             </div>
-            <div class="min-w-0" data-portfolio-date-field hidden>
-                <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="specific_date">Fecha</label>
-                <input class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="specific_date" name="specific_date" type="date" value="{{ $filters['specific_date'] ?? '' }}">
+            <div class="min-w-0" data-portfolio-period-field>
+                <div data-portfolio-month-field>
+                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="month">Mes</label>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="month" name="month" type="month" value="{{ $filters['month'] ?? now('America/Merida')->format('Y-m') }}">
+                </div>
+                <div data-portfolio-date-field hidden>
+                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500" for="specific_date">Fecha</label>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" id="specific_date" name="specific_date" type="date" value="{{ $filters['specific_date'] ?? '' }}">
+                </div>
             </div>
             <label title="Incluir vencidos y atrasados" class="flex min-h-[36px] min-w-0 items-center gap-2 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-600 xl:whitespace-nowrap">
                 <input type="hidden" name="include_overdue" value="0">
