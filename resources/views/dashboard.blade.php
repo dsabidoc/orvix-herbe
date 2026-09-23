@@ -55,7 +55,7 @@
     @endif
 
     <section class="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <form class="grid gap-3 md:grid-cols-2 xl:grid-cols-[220px_220px_180px_180px_auto] md:items-end" method="GET" action="{{ route('dashboard') }}">
+        <form class="grid gap-3 md:grid-cols-2 md:items-end @unless (auth()->user()->hasRole('operador-cartera')) xl:grid-cols-[minmax(320px,1.5fr)_minmax(200px,1fr)_160px_180px_max-content] @else xl:grid-cols-[minmax(250px,1fr)_180px_max-content] @endunless" method="GET" action="{{ route('dashboard') }}">
             @unless (auth()->user()->hasRole('operador-cartera'))
                 <div>
                     <label class="text-sm font-semibold text-slate-700" for="operator_id">Operador</label>
@@ -87,7 +87,7 @@
                 <label class="text-sm font-semibold text-slate-700" for="period">Periodo</label>
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="period" name="period" type="{{ $filters['period_type'] === 'year' ? 'number' : 'month' }}" value="{{ $filters['period'] }}">
             </div>
-            <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Filtrar</button>
+            <button class="rounded-md bg-[#0d9488] px-5 py-2 text-sm font-bold text-white xl:justify-self-start" type="submit">Filtrar</button>
         </form>
     </section>
 
