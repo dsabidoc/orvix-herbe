@@ -22,7 +22,7 @@
                 <label class="text-sm font-semibold text-slate-700" for="cut_date">Fecha de corte</label>
                 <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_date" name="cut_date" type="date" value="{{ now('America/Merida')->toDateString() }}" required>
             </div>
-            <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="submit">Generar corte</button>
+            <button class="cut-generate-button rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="submit">Generar corte</button>
         </form>
     </div>
 

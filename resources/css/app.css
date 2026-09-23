@@ -445,8 +445,19 @@ html[data-theme='dark'] textarea::placeholder {
     color: #7f8da6 !important;
 }
 
-html[data-theme='dark'] input[type='date']::-webkit-calendar-picker-indicator {
-    filter: invert(1);
+html[data-theme='dark'] input:is([type='date'], [type='month'], [type='datetime-local'], [type='time']) {
+    color-scheme: dark;
+}
+
+html[data-theme='dark'] input:is([type='date'], [type='month'], [type='datetime-local'], [type='time'])::-webkit-calendar-picker-indicator {
+    filter: brightness(0) invert(1);
+    opacity: 1;
+    cursor: pointer;
+}
+
+html[data-theme='dark'] .cut-generate-button {
+    background-color: #fff !important;
+    color: #111827 !important;
 }
 
 html[data-theme='dark'] input[type='checkbox'],
