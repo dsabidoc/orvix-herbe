@@ -666,6 +666,49 @@ class OrvixWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_marking_overdue_installment_from_cut_returns_json_and_updates_cut_without_redirecting(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-08-04 10:00:00');
+        CarbonImmutable::setTestNow('2026-08-04 10:00:00');
+
+        $samuel = User::query()->where('email', 'samuel@orvix.test')->firstOrFail();
+        $installment = Installment::query()
+            ->whereDate('due_date', '<', '2026-08-04')
+            ->where('remaining_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->whereHas('loan', fn ($query) => $query->where('operator_id', $samuel->operatorProfile->id))
+            ->firstOrFail();
+
+        $this->actingAs($samuel)->post(route('cuts.store'))->assertRedirect();
+        $cut = WeeklyCut::query()->where('operator_id', $samuel->operatorProfile->id)->latest('id')->firstOrFail();
+
+        $this->actingAs($samuel)
+            ->postJson(route('collections.mark-paid', $installment), [
+                'return_to' => 'cut',
+                'cut_id' => $cut->id,
+                'operated_on' => $cut->period_starts_on->toDateString(),
+                'contract_amount' => $installment->remaining_amount,
+                'operator_surcharge_amount' => 0,
+                'external_concepts_amount' => 0,
+                'additional_charge_amount' => 0,
+                'delinquency_amount' => 0,
+                'payment_effect' => 'normal',
+            ])
+            ->assertOk()
+            ->assertJsonPath('installment_id', $installment->id)
+            ->assertJsonPath('cut.items_count', 1);
+
+        $this->assertDatabaseHas('weekly_cut_items', [
+            'weekly_cut_id' => $cut->id,
+            'status' => 'included',
+        ]);
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
     public function test_operator_can_mark_payment_from_dashboard_quick_modal(): void
     {
         $this->seed(DatabaseSeeder::class);

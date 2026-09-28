@@ -13,6 +13,7 @@ use App\Models\WeeklyCut;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -103,11 +104,15 @@ class CollectionController extends Controller
         Installment $installment,
         WeeklyCutPeriodService $cutPeriodService,
         PaymentApplicationService $paymentApplicationService,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $installment->load('loan.operator');
         $this->authorizeInstallmentAccess($request, $installment);
 
         if (Money::cents($installment->remaining_amount) <= 0) {
+            if ($request->expectsJson() && $request->input('return_to') === 'cut') {
+                return response()->json(['message' => 'Esta letra ya esta cubierta.'], 409);
+            }
+
             return back()->with('warning', 'Esta letra ya esta cubierta.');
         }
 
@@ -117,6 +122,10 @@ class CollectionController extends Controller
             ->first();
 
         if ($existing) {
+            if ($request->expectsJson() && $request->input('return_to') === 'cut') {
+                return response()->json(['message' => 'Esta letra ya tiene un pago por confirmar; espera a que se aplique antes de registrar otro abono.'], 409);
+            }
+
             return back()->with('warning', 'Esta letra ya tiene un pago por confirmar; espera a que se aplique antes de registrar otro abono.');
         }
 
@@ -213,6 +222,31 @@ class CollectionController extends Controller
                 'operator_id' => $installment->loan->operator_id,
             ]),
         };
+
+        if ($request->expectsJson() && ($data['return_to'] ?? null) === 'cut' && $selectedCut) {
+            $selectedCut->refresh();
+            $pendingDeliveryCents = max(0, Money::cents($selectedCut->reported_total) - Money::cents($selectedCut->received_total));
+            $itemCount = $selectedCut->items()
+                ->with('movement')
+                ->get()
+                ->filter(fn ($item) => $item->movement && WeeklyCutPeriodService::isReportableMovement($item->movement))
+                ->count();
+
+            return response()->json([
+                'message' => $paymentEffect === 'no_investors'
+                    ? 'Letra marcada como pagada sin efectos y aplicada directamente.'
+                    : 'Letra marcada como pagada y agregada a este corte.',
+                'installment_id' => $installment->id,
+                'cut' => [
+                    'reported_total' => Money::mxn($selectedCut->reported_total),
+                    'confirmed_total' => Money::mxn($selectedCut->confirmed_total),
+                    'received_total' => Money::mxn($selectedCut->received_total),
+                    'difference_total' => Money::mxn($selectedCut->difference_total),
+                    'pending_delivery' => Money::mxn(Money::decimal($pendingDeliveryCents)),
+                    'items_count' => $itemCount,
+                ],
+            ]);
+        }
 
         return redirect($route)->with('status', ($paymentEffect === 'no_investors'
                 ? 'Letra marcada como pagada sin efectos y aplicada directamente.'

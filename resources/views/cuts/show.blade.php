@@ -65,23 +65,23 @@
                 <dl>
                     <div>
                         <dt>Cobros reportados</dt>
-                        <dd>{{ Money::mxn($cut->reported_total) }}</dd>
+                        <dd data-cut-summary="reported-total">{{ Money::mxn($cut->reported_total) }}</dd>
                     </div>
                     <div>
                         <dt>Cobros confirmados/recibidos</dt>
-                        <dd>{{ Money::mxn($cut->confirmed_total) }}</dd>
+                        <dd data-cut-summary="confirmed-total">{{ Money::mxn($cut->confirmed_total) }}</dd>
                     </div>
                     <div>
                         <dt>Pendiente de entregar</dt>
-                        <dd>{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
+                        <dd data-cut-summary="pending-delivery">{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
                     </div>
                     <div>
                         <dt>Cantidad de cobros</dt>
-                        <dd>{{ $cut->items->count() }}</dd>
+                        <dd data-cut-summary="items-count">{{ $cut->items->count() }}</dd>
                     </div>
                     <div>
                         <dt>Recibir por administrador</dt>
-                        <dd>{{ Money::mxn($cut->received_total) }}</dd>
+                        <dd data-cut-summary="received-total">{{ Money::mxn($cut->received_total) }}</dd>
                     </div>
                     <div>
                         <dt>Fecha de pago</dt>
@@ -89,7 +89,7 @@
                     </div>
                     <div>
                         <dt>Diferencia</dt>
-                        <dd>{{ Money::mxn($cut->difference_total) }}</dd>
+                        <dd data-cut-summary="difference-total">{{ Money::mxn($cut->difference_total) }}</dd>
                     </div>
                     <div>
                         <dt>Saldo</dt>
@@ -198,6 +198,7 @@
             </div>
 
             <div id="cut-pending-installments" class="hidden" data-cut-tab-panel="pending">
+            <div hidden class="px-5 pt-4 text-sm" role="status" aria-live="polite" data-cut-pending-feedback="cut-pending-{{ $cut->id }}"></div>
             @if ($pendingInstallments->isNotEmpty())
                 <div class="no-print border-y border-slate-200 px-5 py-4">
                     <h3 class="font-bold text-slate-950">Atrasados sin marcar</h3>
@@ -207,7 +208,7 @@
                         <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="pending_installments_search_{{ $cut->id }}" type="search" placeholder="Buscar por modelo, folio, cliente, fecha o pago" data-cut-pending-search="cut-pending-{{ $cut->id }}">
                     </div>
                 </div>
-                <div class="no-print overflow-x-auto">
+                <div class="no-print overflow-x-auto" data-cut-pending-table="cut-pending-{{ $cut->id }}">
                     <table class="cut-print-table w-auto text-left text-sm">
                         <thead class="bg-red-50 text-xs uppercase text-red-700">
                             <tr>
@@ -268,6 +269,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div hidden class="border-y border-slate-200 px-5 py-6 text-sm text-slate-500" data-cut-pending-empty="cut-pending-{{ $cut->id }}">No hay atrasados sin marcar para este corte.</div>
             @else
                 <div class="no-print border-y border-slate-200 px-5 py-6 text-sm text-slate-500">No hay atrasados sin marcar para este corte.</div>
             @endif
@@ -324,23 +326,23 @@
                 <dl class="mt-4 space-y-3 text-sm">
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Cobros reportados</dt>
-                        <dd class="font-bold">{{ Money::mxn($cut->reported_total) }}</dd>
+                        <dd class="font-bold" data-cut-summary="reported-total">{{ Money::mxn($cut->reported_total) }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Cobros confirmados/recibidos</dt>
-                        <dd class="font-bold">{{ Money::mxn($cut->confirmed_total) }}</dd>
+                        <dd class="font-bold" data-cut-summary="confirmed-total">{{ Money::mxn($cut->confirmed_total) }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Pendiente de entregar</dt>
-                        <dd class="font-bold text-red-700">{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
+                        <dd class="font-bold text-red-700" data-cut-summary="pending-delivery">{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Cantidad de cobros</dt>
-                        <dd class="font-bold">{{ $cut->items->count() }}</dd>
+                        <dd class="font-bold" data-cut-summary="items-count">{{ $cut->items->count() }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Recibir por administrador</dt>
-                        <dd class="font-bold">{{ Money::mxn($cut->received_total) }}</dd>
+                        <dd class="font-bold" data-cut-summary="received-total">{{ Money::mxn($cut->received_total) }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Fecha de pago</dt>
@@ -348,11 +350,11 @@
                     </div>
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Diferencia</dt>
-                        <dd class="font-bold">{{ Money::mxn($cut->difference_total) }}</dd>
+                        <dd class="font-bold" data-cut-summary="difference-total">{{ Money::mxn($cut->difference_total) }}</dd>
                     </div>
                     <div class="flex justify-between gap-4 border-t border-slate-200 pt-3">
                         <dt class="text-slate-700">Saldo</dt>
-                        <dd class="font-bold {{ $pendingDeliveryCents > 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
+                        <dd class="font-bold {{ $pendingDeliveryCents > 0 ? 'text-red-700' : 'text-emerald-700' }}" data-cut-summary="pending-delivery">{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
                     </div>
                 </dl>
             </section>

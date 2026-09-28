@@ -21,6 +21,96 @@ const saveCutPendingPosition = (form) => {
     }
 };
 
+const submitCutPendingPayment = async (form) => {
+    const target = form.dataset.cutPendingForm;
+    const feedback = target
+        ? document.querySelector(`[data-cut-pending-feedback="${target}"]`)
+        : null;
+    const submitButton = form.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton instanceof HTMLButtonElement ? submitButton.textContent : '';
+    const scrollY = window.scrollY;
+
+    if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Guardando...';
+    }
+
+    if (feedback instanceof HTMLElement) {
+        feedback.hidden = true;
+        feedback.textContent = '';
+    }
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+            const validationMessage = result.errors ? Object.values(result.errors).flat()[0] : null;
+            throw new Error(validationMessage || result.message || 'No se pudo registrar el pago.');
+        }
+
+        const row = form.closest('[data-cut-pending-row]');
+        row?.remove();
+
+        Object.entries(result.cut || {}).forEach(([key, value]) => {
+            const name = {
+                reported_total: 'reported-total',
+                confirmed_total: 'confirmed-total',
+                received_total: 'received-total',
+                difference_total: 'difference-total',
+                pending_delivery: 'pending-delivery',
+                items_count: 'items-count',
+            }[key];
+
+            if (name) {
+                document.querySelectorAll(`[data-cut-summary="${name}"]`).forEach((element) => {
+                    element.textContent = value;
+                });
+            }
+        });
+
+        const remainingRows = target
+            ? document.querySelectorAll(`[data-cut-pending-row="${target}"]`).length
+            : 1;
+        const table = target ? document.querySelector(`[data-cut-pending-table="${target}"]`) : null;
+        const emptyState = target ? document.querySelector(`[data-cut-pending-empty="${target}"]`) : null;
+
+        if (remainingRows === 0) {
+            if (table instanceof HTMLElement) table.classList.add('hidden');
+            if (emptyState instanceof HTMLElement) emptyState.hidden = false;
+        }
+
+        if (feedback instanceof HTMLElement) {
+            feedback.className = 'px-5 pt-4 text-sm font-semibold text-emerald-700';
+            feedback.textContent = result.message;
+            feedback.hidden = false;
+        }
+
+        requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'auto' }));
+    } catch (error) {
+        form.dataset.confirmed = 'false';
+
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
+        }
+
+        if (feedback instanceof HTMLElement) {
+            feedback.className = 'px-5 pt-4 text-sm font-semibold text-red-700';
+            feedback.textContent = error instanceof Error ? error.message : 'No se pudo registrar el pago.';
+            feedback.hidden = false;
+        }
+    }
+};
+
 const applyTheme = (theme) => {
     const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
 
@@ -565,8 +655,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 : '0';
 
             pendingPaidForm.dataset.confirmed = 'true';
-            saveCutPendingPosition(pendingPaidForm);
-            pendingPaidForm.requestSubmit();
+            if (pendingPaidForm.matches('[data-cut-pending-form]')) {
+                void submitCutPendingPayment(pendingPaidForm);
+            } else {
+                saveCutPendingPosition(pendingPaidForm);
+                pendingPaidForm.requestSubmit();
+            }
             pendingPaidForm = null;
         });
     }
