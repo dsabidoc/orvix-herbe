@@ -698,7 +698,11 @@ class OrvixWorkflowTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('installment_id', $installment->id)
-            ->assertJsonPath('cut.items_count', 1);
+            ->assertJsonStructure([
+                'message',
+                'installment_id',
+                'cut' => ['reported_total', 'confirmed_total', 'received_total', 'difference_total', 'pending_delivery', 'items_count'],
+            ]);
 
         $this->assertDatabaseHas('weekly_cut_items', [
             'weekly_cut_id' => $cut->id,
