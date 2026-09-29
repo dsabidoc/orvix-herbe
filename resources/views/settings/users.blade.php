@@ -43,7 +43,8 @@
             <div class="space-y-3 px-5 py-4">
                 <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="name" placeholder="Nombre" required>
                 <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="email" placeholder="Correo" type="email" required>
-                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" placeholder="Password" type="password" required>
+                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" placeholder="Contraseña de al menos 12 caracteres" type="password" required autocomplete="new-password">
+                <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password_confirmation" placeholder="Confirmar contraseña" type="password" required autocomplete="new-password">
                 <select class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="role" required>
                     @foreach ($roles as $role)
                         <option value="{{ $role->name }}">{{ $role->name }}</option>
@@ -80,9 +81,11 @@
                     <div>
                         <label class="text-sm font-semibold text-slate-700">Nueva contraseña</label>
                         <div class="mt-1 flex gap-2">
-                            <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" type="text" placeholder="Dejar vacio para conservar" data-generated-password>
+                            <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" type="text" placeholder="Dejar vacio para conservar" data-generated-password autocomplete="new-password">
                             <button class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-generate-password>Generar</button>
                         </div>
+                        <input class="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password_confirmation" type="password" placeholder="Confirmar nueva contraseña" data-password-confirmation autocomplete="new-password">
+                        <p class="mt-1 text-xs text-slate-500">Usa al menos 12 caracteres, mayúsculas, minúsculas, números y símbolos.</p>
                     </div>
                     <div>
                         <label class="text-sm font-semibold text-slate-700">Rol</label>

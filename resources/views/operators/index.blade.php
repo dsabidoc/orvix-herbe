@@ -78,12 +78,16 @@
                 <label class="block text-sm font-semibold text-slate-700">Celular
                     <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="phone" placeholder="Opcional">
                 </label>
-                <label class="block text-sm font-semibold text-slate-700">Contraseña generica
+                <label class="block text-sm font-semibold text-slate-700">Contraseña temporal
                     <div class="mt-1 flex gap-2">
-                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" type="text" value="orvix-demo" data-generated-password required>
+                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" type="text" data-generated-password required autocomplete="new-password">
                         <button class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-generate-password>Generar</button>
                     </div>
                 </label>
+                <label class="block text-sm font-semibold text-slate-700">Confirmar contraseña
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password_confirmation" type="password" data-password-confirmation required autocomplete="new-password">
+                </label>
+                <p class="text-xs text-slate-500">Usa al menos 12 caracteres, mayúsculas, minúsculas, números y símbolos.</p>
                 <label class="block text-sm font-semibold text-slate-700">Estado
                     <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="status" required>
                         <option value="active">Activo</option>

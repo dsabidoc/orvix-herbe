@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Role;
 
@@ -46,7 +47,7 @@ class OperatorController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:160', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:40'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'confirmed', PasswordRule::min(12)->mixedCase()->numbers()->symbols()],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
 

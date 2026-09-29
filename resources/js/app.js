@@ -938,10 +938,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
-            const bytes = new Uint32Array(14);
+            const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+            const lower = 'abcdefghijkmnopqrstuvwxyz';
+            const numbers = '23456789';
+            const symbols = '!@$%';
+            const alphabet = upper + lower + numbers + symbols;
+            const bytes = new Uint32Array(20);
             crypto.getRandomValues(bytes);
-            field.value = Array.from(bytes, (value) => alphabet[value % alphabet.length]).join('');
+            const password = [upper[bytes[0] % upper.length], lower[bytes[1] % lower.length], numbers[bytes[2] % numbers.length], symbols[bytes[3] % symbols.length]];
+
+            for (let index = 4; index < 16; index += 1) {
+                password.push(alphabet[bytes[index] % alphabet.length]);
+            }
+
+            for (let index = password.length - 1; index > 0; index -= 1) {
+                const swapIndex = bytes[index + 3] % (index + 1);
+                [password[index], password[swapIndex]] = [password[swapIndex], password[index]];
+            }
+
+            field.value = password.join('');
+            form?.querySelectorAll('[data-password-confirmation]').forEach((confirmation) => {
+                if (confirmation instanceof HTMLInputElement) {
+                    confirmation.value = field.value;
+                }
+            });
             field.focus();
             field.select();
         });

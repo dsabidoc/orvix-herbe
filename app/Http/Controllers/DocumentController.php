@@ -56,7 +56,7 @@ class DocumentController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:180'],
             'notes' => ['nullable', 'string', 'max:1000'],
-            'file' => ['required', 'file', 'max:102400'],
+            'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:102400'],
         ]);
 
         $file = $request->file('file');

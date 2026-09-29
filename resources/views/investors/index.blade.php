@@ -173,11 +173,13 @@
                     Crear usuario inversionista
                 </label>
                 <div class="sm:col-span-2" data-create-investor-password-row>
-                    <label class="text-sm font-semibold text-slate-700">Contraseña generica</label>
+                    <label class="text-sm font-semibold text-slate-700">Contraseña temporal</label>
                     <div class="mt-1 flex gap-2">
-                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" data-generated-password value="{{ old('password', 'orvix-demo') }}">
+                        <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password" data-generated-password value="{{ old('password') }}" autocomplete="new-password">
                         <button class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700" type="button" data-generate-password>Generar</button>
                     </div>
+                    <input class="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="password_confirmation" type="password" placeholder="Confirmar contraseña" data-password-confirmation autocomplete="new-password">
+                    <p class="mt-1 text-xs text-slate-500">Usa al menos 12 caracteres, mayúsculas, minúsculas, números y símbolos.</p>
                 </div>
             </div>
             <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">

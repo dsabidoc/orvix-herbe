@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Role;
@@ -77,7 +78,13 @@ class InvestorController extends Controller
                 Rule::unique('investors', 'email')->where(fn ($query) => $query->where('status', '!=', 'deleted')),
                 Rule::unique('users', 'email')->ignore($request->input('user_id')),
             ],
-            'password' => ['nullable', 'string', 'min:8', 'max:80'],
+            'password' => [
+                Rule::requiredIf(fn () => $request->boolean('create_user')),
+                'nullable',
+                'confirmed',
+                PasswordRule::min(12)->mixedCase()->numbers()->symbols(),
+                'max:80',
+            ],
         ]);
 
         $investor = DB::transaction(function () use ($request, $data, $ledger) {
@@ -116,12 +123,11 @@ class InvestorController extends Controller
                     return $existingProfile;
                 }
             } elseif ($request->boolean('create_user')) {
-                $password = $data['password'] ?: 'orvix-demo';
                 $user = User::query()->create([
                     'name' => trim($data['first_name'].' '.($data['last_name'] ?? '')),
                     'email' => $data['email'],
                     'phone' => $data['phone'] ?? null,
-                    'password' => $password,
+                    'password' => $data['password'],
                     'status' => 'active',
                     'force_password_change' => true,
                 ]);

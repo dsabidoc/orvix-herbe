@@ -785,8 +785,8 @@
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-slate-700" for="document_file">Archivo</label>
-                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#e6f7f4] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-[#0f766e]" id="document_file" name="file" type="file" required>
-                    <p class="mt-1 text-xs text-slate-500">Limite menor a 100 MB.</p>
+                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#e6f7f4] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-[#0f766e]" id="document_file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required>
+                    <p class="mt-1 text-xs text-slate-500">Solo PDF, JPG, PNG o WebP. Limite menor a 100 MB.</p>
                 </div>
                 <button class="w-full rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Guardar archivo</button>
             </form>
