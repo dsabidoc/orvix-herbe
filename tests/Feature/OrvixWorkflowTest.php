@@ -798,7 +798,10 @@ class OrvixWorkflowTest extends TestCase
             ->get($cutUrl)
             ->assertOk()
             ->assertSee('Atrasados sin marcar')
-            ->assertSee($overdue->loan->client->first_name);
+            ->assertSee($overdue->loan->client->first_name)
+            ->assertSee('bg-red-50/35', false)
+            ->assertSee('text-red-700', false)
+            ->assertSee('Vencida');
 
         Carbon::setTestNow();
         CarbonImmutable::setTestNow();

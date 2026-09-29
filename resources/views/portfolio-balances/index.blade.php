@@ -102,7 +102,7 @@
                     <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
                         <div>
                             <dt class="text-slate-500">Pagares</dt>
-                            <dd class="font-semibold">{{ $operatorRow['pending_installments_count'] }} pendientes · {{ $operatorRow['overdue_installments_count'] }} vencidos</dd>
+                            <dd class="font-semibold">{{ $operatorRow['pending_installments_count'] }} pendientes · <span class="{{ $operatorRow['overdue_installments_count'] > 0 ? 'text-red-700' : '' }}">{{ $operatorRow['overdue_installments_count'] }} vencidos</span></dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Vehiculos atraso</dt>
@@ -114,7 +114,7 @@
                         </div>
                         <div>
                             <dt class="text-slate-500">Max atraso</dt>
-                            <dd class="font-semibold">{{ $operatorRow['max_late_days'] }} dias</dd>
+                            <dd class="font-semibold {{ $operatorRow['max_late_days'] > 0 ? 'text-red-700' : '' }}">{{ $operatorRow['max_late_days'] }} dias</dd>
                         </div>
                     </dl>
                     <a class="mt-4 inline-flex rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700" href="{{ route('portfolio-balances.index', array_merge($filterQuery, ['operator_id' => $operatorRow['operator_id'] ?? 'none'])) }}">Ver detalle</a>
@@ -161,7 +161,7 @@
                                 <p class="font-semibold text-red-700">{{ $money($operatorRow['overdue_cents']) }}</p>
                             </td>
                             <td class="px-3 py-3 text-right">
-                                <p class="font-semibold">{{ $operatorRow['max_late_days'] }} dias</p>
+                                <p class="font-semibold {{ $operatorRow['max_late_days'] > 0 ? 'text-red-700' : '' }}">{{ $operatorRow['max_late_days'] }} dias</p>
                                 <p class="text-xs text-slate-500">{{ $operatorRow['vehicles_with_overdue_count'] }} vehiculos</p>
                             </td>
                             <td class="px-3 py-3">
@@ -191,7 +191,7 @@
         </div>
         <div class="divide-y divide-slate-100 md:hidden">
             @forelse ($loanRows as $row)
-                <article class="p-4">
+                <article class="p-4 {{ $row['late_days'] > 0 ? 'bg-red-50/30' : '' }}">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                             <a class="font-semibold text-slate-950 hover:text-[#0f766e]" href="{{ route('loans.show', $row['loan_public_id']) }}">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</a>
@@ -210,11 +210,11 @@
                         </div>
                         <div>
                             <dt class="text-slate-500">Fecha pagare</dt>
-                            <dd class="font-semibold">{{ $row['due_date'] ?? '-' }}</dd>
+                            <dd class="font-semibold {{ $row['late_days'] > 0 ? 'text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Dias de atraso</dt>
-                            <dd class="font-semibold">{{ $row['late_days'] }} dias</dd>
+                            <dd class="font-semibold {{ $row['late_days'] > 0 ? 'text-red-700' : '' }}">{{ $row['late_days'] }} dias</dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Suma vencidas</dt>
@@ -254,15 +254,15 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($loanRows as $row)
-                        <tr class="hover:bg-slate-50">
+                        <tr class="{{ $row['late_days'] > 0 ? 'bg-red-50/30' : 'hover:bg-slate-50' }}">
                             <td class="px-3 py-3">
                                 <a class="font-semibold hover:text-[#0f766e]" href="{{ route('loans.show', $row['loan_public_id']) }}">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</a>
                                 <p class="text-xs text-slate-500">{{ $row['folio'] }}</p>
                             </td>
                             <td class="px-3 py-3 font-semibold">{{ $row['payment_progress'] }}</td>
                             <td class="px-3 py-3 text-right font-semibold">{{ $money($row['payment_cents']) }}</td>
-                            <td class="px-3 py-3">{{ $row['due_date'] ?? '-' }}</td>
-                            <td class="px-3 py-3 text-right">{{ $row['late_days'] }} dias</td>
+                            <td class="px-3 py-3 {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</td>
+                            <td class="px-3 py-3 text-right {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['late_days'] }} dias</td>
                             <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($row['visible_sum_cents']) }}</td>
                             <td class="px-3 py-3 font-semibold text-[#0f766e]">{{ $row['client_name'] }}</td>
                         </tr>
@@ -348,13 +348,13 @@
                 </thead>
                 <tbody>
                     @forelse ($report['detail_rows'] as $row)
-                        <tr>
+                        <tr class="{{ $row['late_days'] > 0 ? 'bg-red-50/30' : '' }}">
                             <td>{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}<br><span class="text-[10px] text-slate-500">{{ $row['folio'] }}</span></td>
                             <td>{{ $row['payment_progress'] }}</td>
                             <td class="text-right">{{ $money($row['payment_cents']) }}</td>
-                            <td>{{ $row['due_date'] ?? '-' }}</td>
-                            <td class="text-right">{{ $row['late_days'] }} dias</td>
-                            <td class="text-right">{{ $money($row['visible_sum_cents']) }}</td>
+                            <td class="{{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</td>
+                            <td class="text-right {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['late_days'] }} dias</td>
+                            <td class="text-right {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $money($row['visible_sum_cents']) }}</td>
                             <td>{{ $row['client_name'] }}</td>
                         </tr>
                     @empty
@@ -379,7 +379,7 @@
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="font-semibold text-slate-950">Pagare {{ $installment['number'] }} · {{ $installment['progress'] }}</p>
-                                <p class="mt-1 text-xs text-slate-500">Vence {{ $installment['due_date'] }}</p>
+                                <p class="mt-1 text-xs {{ $installment['is_overdue'] ? 'font-semibold text-red-700' : 'text-slate-500' }}">Vence {{ $installment['due_date'] }}</p>
                             </div>
                             <span class="{{ $installment['status']['class'] }} shrink-0 rounded px-2 py-1 text-xs font-bold">{{ $installment['status']['label'] }}</span>
                         </div>
@@ -402,7 +402,7 @@
                             </div>
                             <div>
                                 <dt class="text-slate-500">Dias atraso</dt>
-                                <dd class="font-semibold">{{ $installment['late_days'] }}</dd>
+                                <dd class="font-semibold {{ $installment['is_overdue'] ? 'text-red-700' : '' }}">{{ $installment['late_days'] }}</dd>
                             </div>
                             <div>
                                 <dt class="text-slate-500">Ultimo pago</dt>
@@ -446,11 +446,11 @@
                             <tr class="{{ $installment['is_overdue'] ? 'bg-red-50/30' : '' }}">
                                 <td class="px-3 py-3 font-semibold">{{ $installment['number'] }}</td>
                                 <td class="px-3 py-3">{{ $installment['progress'] }}</td>
-                                <td class="px-3 py-3">{{ $installment['due_date'] }}</td>
+                                <td class="px-3 py-3 {{ $installment['is_overdue'] ? 'font-semibold text-red-700' : '' }}">{{ $installment['due_date'] }}</td>
                                 <td class="px-3 py-3 text-right font-semibold">{{ $money($installment['contract_cents']) }}</td>
                                 <td class="px-3 py-3 text-right">{{ $money($installment['paid_cents']) }}</td>
                                 <td class="px-3 py-3 text-right font-semibold">{{ $money($installment['pending_cents']) }}</td>
-                                <td class="px-3 py-3 text-right">{{ $installment['late_days'] }}</td>
+                                <td class="px-3 py-3 text-right {{ $installment['is_overdue'] ? 'font-semibold text-red-700' : '' }}">{{ $installment['late_days'] }}</td>
                                 <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($installment['overdue_cents']) }}</td>
                                 <td class="px-3 py-3"><span class="{{ $installment['status']['class'] }} rounded px-2 py-1 text-xs font-bold">{{ $installment['status']['label'] }}</span></td>
                                 <td class="px-3 py-3">{{ $installment['last_payment_date'] ?: '-' }}</td>

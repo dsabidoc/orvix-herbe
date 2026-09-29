@@ -226,6 +226,7 @@
                             @foreach ($pendingInstallments as $installment)
                                 @php
                                     $delinquencyCents = app(DelinquencyCalculator::class)->forInstallment($installment, $cut->period_starts_on);
+                                    $isOverdue = $installment->due_date->toDateString() < now('America/Merida')->toDateString();
                                     $vehicleLabel = trim((string) ($installment->loan->vehicle?->model ?? 'Vehiculo'));
                                     $searchText = implode(' ', [
                                         $vehicleLabel,
@@ -238,15 +239,20 @@
                                         Money::mxn($installment->remaining_amount),
                                     ]);
                                 @endphp
-                                <tr data-cut-pending-row="cut-pending-{{ $cut->id }}" data-search-text="{{ $searchText }}">
+                                <tr class="{{ $isOverdue ? 'bg-red-50/35' : '' }}" data-cut-pending-row="cut-pending-{{ $cut->id }}" data-search-text="{{ $searchText }}">
                                     <td class="px-3 py-3">
                                         <a class="font-semibold text-[#0f766e]" href="{{ route('loans.show', $installment->loan) }}">{{ $vehicleLabel }} · Dia {{ $installment->loan->payment_day }}</a>
                                         <p class="text-xs text-slate-500">{{ $installment->loan->folio }}</p>
                                     </td>
                                     <td class="px-3 py-3 font-semibold text-slate-950">{{ $installment->loan->client->first_name }}</td>
                                     <td class="whitespace-nowrap px-3 py-3">{{ $installment->number }}</td>
-                                    <td class="whitespace-nowrap px-3 py-3">{{ $installment->due_date->format('d/m/Y') }}</td>
-                                    <td class="whitespace-nowrap px-3 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
+                                    <td class="whitespace-nowrap px-3 py-3 {{ $isOverdue ? 'font-semibold text-red-700' : '' }}">
+                                        {{ $installment->due_date->format('d/m/Y') }}
+                                        @if ($isOverdue)
+                                            <span class="ml-2 rounded bg-red-50 px-2 py-1 text-xs font-bold text-red-700">Vencida</span>
+                                        @endif
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-3 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->remaining_amount) }}</td>
                                     @can('weekly-cuts.confirm')
                                         <td class="whitespace-nowrap px-3 py-3 text-right">
                                             <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}">

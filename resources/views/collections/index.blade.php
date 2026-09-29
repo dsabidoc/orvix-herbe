@@ -67,14 +67,14 @@
                                 : 0;
                         @endphp
                         <tr class="{{ $isOverdue ? 'bg-red-50/30' : '' }}">
-                            <td class="px-5 py-3 font-semibold">{{ $installment->due_date->format('d/m/Y') }}</td>
+                            <td class="px-5 py-3 font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ $installment->due_date->format('d/m/Y') }}</td>
                             <td class="px-5 py-3">
                                 <a class="font-semibold text-[#0f766e]" href="{{ route('loans.show', $installment->loan) }}">{{ $installment->loan->client->first_name }} {{ $installment->loan->client->last_name }}</a>
                                 <p class="text-xs text-slate-500">{{ $installment->loan->folio }} · letra {{ $installment->number }}</p>
                             </td>
                             <td class="px-5 py-3">{{ $installment->loan->vehicle?->model }} {{ $installment->loan->vehicle?->year }}</td>
                             <td class="px-5 py-3">{{ $installment->loan->operator?->name }}</td>
-                            <td class="px-5 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
+                            <td class="px-5 py-3 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->remaining_amount) }}</td>
                             <td class="px-5 py-3">
                                 <span class="rounded px-2 py-1 text-xs font-bold uppercase {{ $badgeClass }}">{{ $badge }}</span>
                             </td>

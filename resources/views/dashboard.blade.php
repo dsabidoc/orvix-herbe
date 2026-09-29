@@ -298,12 +298,12 @@
                                             <tr class="{{ $isOverdue ? 'bg-red-50/40' : '' }}">
                                                 <td class="px-4 py-3 font-semibold">{{ $installment->number }}</td>
                                                 <td class="px-4 py-3">
-                                                    {{ $installment->due_date->format('d/m/Y') }}
+                                                    <span class="{{ $isOverdue ? 'font-semibold text-red-700' : '' }}">{{ $installment->due_date->format('d/m/Y') }}</span>
                                                     @if ($isOverdue)
                                                         <span class="ml-2 rounded bg-red-50 px-2 py-1 text-xs font-bold text-red-700">Vencida</span>
                                                     @endif
                                                 </td>
-                                                <td class="px-4 py-3 text-right font-semibold">{{ Money::mxn($installment->remaining_amount) }}</td>
+                                                <td class="px-4 py-3 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->remaining_amount) }}</td>
                                                 <td class="px-4 py-3 text-right">
                                                     <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
                                                         @csrf

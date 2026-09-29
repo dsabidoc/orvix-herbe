@@ -377,7 +377,7 @@
                                     @endif
                                 </td>
                                 <td class="px-3 py-2 font-semibold">{{ $installment->number }}</td>
-                                <td class="px-3 py-2">{{ $installment->due_date->format('d/m/Y') }}</td>
+                                <td class="px-3 py-2 {{ $isOverdue ? 'font-semibold text-red-700' : '' }}">{{ $installment->due_date->format('d/m/Y') }}</td>
                                 <td class="px-3 py-2 text-right">
                                     @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($rowDelinquencyCents) }}" data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}">
@@ -407,7 +407,7 @@
                                 <td class="px-3 py-2">
                                     <span class="{{ $statusClass }} rounded px-2 py-1 text-xs font-bold">{{ $statusLabel }}</span>
                                 </td>
-                                <td class="px-3 py-2 text-right font-semibold">{{ Money::mxn($installment->contract_amount) }}</td>
+                                <td class="px-3 py-2 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->contract_amount) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
