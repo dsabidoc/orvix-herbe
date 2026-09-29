@@ -279,6 +279,7 @@ class InvestmentAllocationService
             ->orderBy('confirmed_at')
             ->orderBy('id')
             ->get();
+        $remainingComponents = [];
 
         foreach ($movements as $movement) {
             foreach ($movement->allocations as $allocation) {
@@ -295,18 +296,30 @@ class InvestmentAllocationService
                     continue;
                 }
 
-                if (in_array($movement->type, ['advance', 'capital_advance'], true)) {
-                    $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
-                    $currentMonthEnd = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->endOfMonth();
-                    $interestCents = $movement->type === 'capital_advance' || $dueDate->greaterThan($currentMonthEnd)
-                        ? 0
-                        : (int) round(Money::cents($installment->interest_amount) * min(1, $appliedCents / $contractCents));
+                $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
+                $currentMonthEnd = CarbonImmutable::parse($movement->operated_on, 'America/Merida')->endOfMonth();
+                $principalOnly = in_array($movement->type, ['advance', 'capital_advance'], true)
+                    || $dueDate->greaterThan($currentMonthEnd);
+
+                $components = $remainingComponents[$installment->id] ?? [
+                    'principal' => Money::cents($installment->principal_amount),
+                    'interest' => Money::cents($installment->interest_amount),
+                ];
+
+                if ($principalOnly) {
+                    $interestCents = 0;
                     $principalCents = $appliedCents;
                 } else {
-                    $paidRatio = min(1, $appliedCents / $contractCents);
-                    $principalCents = (int) round(Money::cents($installment->principal_amount) * $paidRatio);
-                    $interestCents = (int) round(Money::cents($installment->interest_amount) * $paidRatio);
+                    $componentTotalCents = $components['principal'] + $components['interest'];
+                    $paidRatio = $componentTotalCents > 0 ? min(1, $appliedCents / $componentTotalCents) : 0;
+                    $principalCents = min($components['principal'], (int) round($components['principal'] * $paidRatio));
+                    $interestCents = min($components['interest'], $appliedCents - $principalCents);
                 }
+
+                $remainingComponents[$installment->id] = [
+                    'principal' => max(0, $components['principal'] - $principalCents),
+                    'interest' => max(0, $components['interest'] - $interestCents),
+                ];
 
                 $this->investorReturnRecorder->record(
                     $movement->loan,

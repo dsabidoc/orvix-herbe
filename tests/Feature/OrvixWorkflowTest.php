@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\LoanSettlementService;
+use App\Domain\Loans\PaymentApplicationService;
 use App\Models\Client;
 use App\Models\CollectionMovement;
 use App\Models\Document;
@@ -476,6 +478,100 @@ class OrvixWorkflowTest extends TestCase
         $this->assertGreaterThan($operationalCents, Money::cents($installment->contract_amount));
     }
 
+    public function test_future_installment_marked_paid_applies_principal_only(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-09-22 12:00:00');
+        CarbonImmutable::setTestNow('2026-09-22 12:00:00');
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $installment = Installment::query()
+            ->where('remaining_amount', '>', 0)
+            ->where('interest_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->whereHas('loan', fn ($query) => $query->where('status', 'active')->where('calculation_method', '!=', 'interest_only'))
+            ->firstOrFail();
+        $installment->update(['due_date' => '2026-10-15']);
+        $installment->refresh();
+        $principalCents = app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
+        $remainingBefore = Money::cents($installment->remaining_amount);
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'operated_on' => '2026-09-22',
+                'contract_amount' => Money::decimal($principalCents),
+                'payment_effect' => 'normal',
+                'return_to' => 'loan',
+            ])
+            ->assertSessionHas('status');
+
+        $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+        $this->assertSame('capital_advance', $movement->type);
+        $this->assertSame($principalCents, Money::cents($movement->contract_amount));
+
+        $this->actingAs($admin)->post(route('payments.confirm', $movement))->assertSessionHas('status');
+        $this->assertSame($remainingBefore - $principalCents, Money::cents($installment->fresh()->remaining_amount));
+        $this->assertSame('partial', $installment->fresh()->status);
+
+        $installment->update(['due_date' => '2026-09-15']);
+        $remainingInterestCents = Money::cents($installment->fresh()->remaining_amount);
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'operated_on' => '2026-09-22',
+                'contract_amount' => Money::decimal($remainingInterestCents),
+                'payment_effect' => 'normal',
+                'return_to' => 'loan',
+            ])
+            ->assertSessionHas('status');
+
+        $currentMonthPayment = CollectionMovement::query()->where('target_installment_id', $installment->id)->latest('id')->firstOrFail();
+        $this->assertSame('ordinary', $currentMonthPayment->type);
+        $this->actingAs($admin)->post(route('payments.confirm', $currentMonthPayment))->assertSessionHas('status');
+        $this->assertSame(0, Money::cents($installment->fresh()->remaining_amount));
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_current_month_installment_marked_paid_keeps_principal_and_interest(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-09-22 12:00:00');
+        CarbonImmutable::setTestNow('2026-09-22 12:00:00');
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $installment = Installment::query()
+            ->where('remaining_amount', '>', 0)
+            ->where('interest_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->whereHas('loan', fn ($query) => $query->where('status', 'active')->where('calculation_method', '!=', 'interest_only'))
+            ->firstOrFail();
+        $installment->update(['due_date' => '2026-09-15']);
+        $installment->refresh();
+        $fullOperationalCents = Money::cents($installment->remaining_amount);
+        $interestCents = Money::cents($installment->interest_amount);
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'operated_on' => '2026-09-22',
+                'contract_amount' => Money::decimal($fullOperationalCents),
+                'payment_effect' => 'normal',
+                'return_to' => 'loan',
+            ])
+            ->assertSessionHas('status');
+
+        $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+        $this->assertSame('ordinary', $movement->type);
+        $this->assertSame($fullOperationalCents, Money::cents($movement->contract_amount));
+
+        $this->actingAs($admin)->post(route('payments.confirm', $movement))->assertSessionHas('status');
+        $this->assertSame(0, Money::cents($installment->fresh()->remaining_amount));
+        $this->assertGreaterThan(0, $interestCents);
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
     public function test_paid_without_investor_effects_reports_installment_without_recording_returns(): void
     {
         $this->seed(DatabaseSeeder::class);
@@ -585,6 +681,87 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame('advanced', $lastInstallment->status);
         $this->assertSame(0, Money::cents($lastInstallment->remaining_amount));
         $this->assertSame(Money::cents($principalOnly), Money::cents($lastInstallment->applied_amount));
+    }
+
+    public function test_interest_only_capital_advance_recalculates_future_interest_from_remaining_capital(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $templateLoan = Loan::query()->firstOrFail();
+        $loan = Loan::query()->create([
+            'public_id' => (string) str()->ulid(),
+            'folio' => 'INT-ADV-'.str()->ulid(),
+            'client_id' => $templateLoan->client_id,
+            'operator_id' => $templateLoan->operator_id,
+            'vehicle_id' => $templateLoan->vehicle_id,
+            'calculation_method' => 'interest_only',
+            'capital' => '1000.00',
+            'monthly_rate' => '0.100000',
+            'administration_fee' => '0.00',
+            'administration_fee_type' => 'monthly',
+            'vat_enabled' => false,
+            'interest_calculation_method' => 'fixed_principal',
+            'term_months' => 3,
+            'contract_total' => '1300.00',
+            'start_date' => '2026-09-01',
+            'first_payment_date' => '2026-09-01',
+            'payment_day' => 1,
+            'status' => 'active',
+        ]);
+
+        collect(['2026-09-01', '2026-10-01', '2026-11-01'])->each(function (string $dueDate, int $index) use ($loan): void {
+            $loan->installments()->create([
+                'number' => $index + 1,
+                'due_date' => $dueDate,
+                'contract_amount' => '100.00',
+                'principal_amount' => '0.00',
+                'administration_fee_amount' => '0.00',
+                'interest_amount' => '100.00',
+                'interest_vat_amount' => '0.00',
+                'capital_balance' => '1000.00',
+                'applied_amount' => '0.00',
+                'remaining_amount' => '100.00',
+                'status' => 'upcoming',
+            ]);
+        });
+
+        $movement = CollectionMovement::query()->create([
+            'public_id' => (string) str()->ulid(),
+            'folio' => 'MOV-INT-ADV-'.str()->ulid(),
+            'idempotency_key' => (string) str()->uuid(),
+            'loan_id' => $loan->id,
+            'target_installment_id' => $loan->installments()->where('number', 2)->value('id'),
+            'operator_id' => $loan->operator_id,
+            'registered_by' => $admin->id,
+            'operated_on' => '2026-09-15',
+            'contract_amount' => '200.00',
+            'operator_surcharge_amount' => '0.00',
+            'external_concepts_amount' => '0.00',
+            'additional_charge_amount' => '0.00',
+            'delinquency_amount' => '0.00',
+            'affects_investors' => false,
+            'type' => 'advance',
+            'payment_method' => 'cash',
+            'confirmation_status' => 'reported',
+        ]);
+
+        $payments = app(PaymentApplicationService::class);
+        $payments->confirm($movement, $admin->id);
+
+        $futureInstallment = $loan->installments()->where('number', 2)->firstOrFail();
+        $this->assertSame(80000, Money::cents($futureInstallment->capital_balance));
+        $this->assertSame(8000, Money::cents($futureInstallment->interest_amount));
+        $this->assertSame(8000, Money::cents($futureInstallment->remaining_amount));
+
+        app(InterestOnlyScheduleExtender::class)->ensureCoverage($loan->fresh(), CarbonImmutable::parse('2026-12-01', 'America/Merida'));
+        $extendedInstallment = $loan->installments()->where('number', 4)->firstOrFail();
+        $this->assertSame(8000, Money::cents($extendedInstallment->interest_amount));
+
+        $payments->reverse($movement->fresh(), $admin->id);
+
+        $this->assertSame(10000, Money::cents($futureInstallment->fresh()->interest_amount));
+        $this->assertSame(10000, Money::cents($extendedInstallment->fresh()->interest_amount));
     }
 
     public function test_settlement_charges_future_principal_without_future_interest(): void

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Installment extends Model
@@ -41,5 +42,10 @@ class Installment extends Model
         return $this->hasOne(CollectionMovement::class, 'target_installment_id')
             ->where('confirmation_status', 'reported')
             ->latestOfMany();
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class);
     }
 }

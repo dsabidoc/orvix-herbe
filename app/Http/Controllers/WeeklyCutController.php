@@ -540,7 +540,7 @@ class WeeklyCutController extends Controller
                 'client',
                 'vehicle',
                 'installments' => fn ($query) => $query
-                    ->with('reportedMovement')
+                    ->with(['reportedMovement', 'allocations.movement'])
                     ->where('remaining_amount', '>', 0)
                     ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES))
                     ->orderBy('number'),

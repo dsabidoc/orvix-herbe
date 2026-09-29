@@ -94,7 +94,7 @@ class DashboardController extends Controller
                 'vehicle',
                 'operator',
                 'installments' => fn ($query) => $query
-                    ->with('reportedMovement')
+                    ->with(['reportedMovement', 'allocations.movement'])
                     ->where('remaining_amount', '>', 0)
                     ->whereDoesntHave('reportedMovement')
                     ->orderBy('due_date')

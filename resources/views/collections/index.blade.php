@@ -65,6 +65,11 @@
                             $delinquencyCents = (! $isCovered && ! $movement)
                                 ? app(DelinquencyCalculator::class)->forInstallment($installment, $today)
                                 : 0;
+                            $futurePrincipalOnly = app(\App\Domain\Loans\InstallmentPaymentPolicy::class)
+                                ->isFutureMonth($installment, now('America/Merida'));
+                            $suggestedCapitalCents = ($installment->loan->calculation_method ?? 'regular') === 'interest_only'
+                                ? Money::cents($installment->remaining_amount)
+                                : app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
                         @endphp
                         <tr class="{{ $isOverdue ? 'bg-red-50/30' : '' }}">
                             <td class="px-5 py-3 font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ $installment->due_date->format('d/m/Y') }}</td>
@@ -80,7 +85,7 @@
                             </td>
                             <td class="px-5 py-3 text-right">
                                 @if (! $isCovered && ! $movement)
-                                    <form class="inline-flex items-center gap-2" method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
+                                    <form class="inline-flex items-center gap-2" method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" @if ($futurePrincipalOnly) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif>
                                         @csrf
                                         <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
                                         <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">

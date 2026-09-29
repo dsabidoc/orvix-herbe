@@ -294,6 +294,11 @@
                                                 $isOverdue = $installment->due_date->toDateString() < now('America/Merida')->toDateString();
                                                 $delinquencyCents = app(\App\Domain\Loans\DelinquencyCalculator::class)
                                                     ->forInstallment($installment, now('America/Merida')->toDateString());
+                                                $futurePrincipalOnly = app(\App\Domain\Loans\InstallmentPaymentPolicy::class)
+                                                    ->isFutureMonth($installment, now('America/Merida'));
+                                                $suggestedCapitalCents = ($loan->calculation_method ?? 'regular') === 'interest_only'
+                                                    ? Money::cents($installment->remaining_amount)
+                                                    : app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
                                             @endphp
                                             <tr class="{{ $isOverdue ? 'bg-red-50/40' : '' }}">
                                                 <td class="px-4 py-3 font-semibold">{{ $installment->number }}</td>
@@ -305,7 +310,7 @@
                                                 </td>
                                                 <td class="px-4 py-3 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->remaining_amount) }}</td>
                                                 <td class="px-4 py-3 text-right">
-                                                    <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}">
+                                                    <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" @if ($futurePrincipalOnly) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif>
                                                         @csrf
                                                         <input name="return_to" type="hidden" value="dashboard">
                                                         <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">

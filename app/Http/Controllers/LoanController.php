@@ -190,7 +190,7 @@ class LoanController extends Controller
             'fundDisbursements.weeklyCut',
             'fundDisbursements.operator',
             'fundDisbursements.registeredBy',
-            'installments' => fn ($query) => $query->with('reportedMovement')->orderBy('number'),
+            'installments' => fn ($query) => $query->with(['reportedMovement', 'allocations.movement'])->orderBy('number'),
             'movements' => fn ($query) => $query->with(['registeredBy', 'allocations.installment'])->latest(),
         ]);
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\DelinquencyCalculator;
+use App\Domain\Loans\InstallmentPaymentPolicy;
 use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
@@ -34,19 +35,23 @@ class PaymentController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $nextInstallment = in_array($data['type'], ['ordinary', 'partial'], true)
+            ? $loan->installments()->where('remaining_amount', '>', 0)->orderBy('number')->first()
+            : null;
+        $futureInterestOnlyAdvance = ($loan->calculation_method ?? 'regular') === 'interest_only'
+            && $nextInstallment
+            && app(InstallmentPaymentPolicy::class)->isFutureMonth($nextInstallment, $data['operated_on']);
+        $movementType = $futureInterestOnlyAdvance ? 'advance' : $data['type'];
+
         $idempotencyKey = sha1($loan->id.'|'.$request->user()->id.'|'.implode('|', [
-            $data['type'],
+            $movementType,
             $data['operated_on'],
             Money::decimal(Money::cents($data['contract_amount'])),
             $data['reference'] ?? '',
         ]));
 
-        $delinquencyAmountCents = $data['delinquency_amount'] ?? null;
-        if ($delinquencyAmountCents === null && in_array($data['type'], ['ordinary', 'partial'], true)) {
-            $nextInstallment = $loan->installments()
-                ->where('remaining_amount', '>', 0)
-                ->orderBy('number')
-                ->first();
+        $delinquencyAmountCents = $futureInterestOnlyAdvance ? 0 : ($data['delinquency_amount'] ?? null);
+        if ($delinquencyAmountCents === null && in_array($movementType, ['ordinary', 'partial'], true)) {
             $delinquencyAmountCents = $nextInstallment
                 ? $delinquencyCalculator->forInstallment($nextInstallment, $data['operated_on'])
                 : 0;
@@ -69,10 +74,10 @@ class PaymentController extends Controller
                 'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
                 'delinquency_amount' => Money::decimal(Money::cents($delinquencyAmountCents ?? 0)),
                 'affects_investors' => (bool) ($data['affects_investors'] ?? true),
-                'type' => $data['type'],
+                'type' => $movementType,
                 'payment_method' => $data['payment_method'] ?? 'cash',
                 'reference' => $data['reference'] ?? null,
-                'notes' => $data['notes'] ?? null,
+                'notes' => $data['notes'] ?? ($futureInterestOnlyAdvance ? 'Pago de letra futura aplicado solo a capital' : null),
                 'confirmation_status' => 'reported',
             ],
         );

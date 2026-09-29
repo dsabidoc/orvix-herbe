@@ -369,6 +369,11 @@
                                         ->filter(fn ($candidate) => $candidate->number > $installment->number)
                                         ->filter(fn ($candidate) => Money::cents($candidate->remaining_amount) > 0 && ! $candidate->reportedMovement)
                                         ->isEmpty();
+                                $futurePrincipalOnly = app(\App\Domain\Loans\InstallmentPaymentPolicy::class)
+                                    ->isFutureMonth($installment, now('America/Merida'));
+                                $suggestedCapitalCents = ($loan->calculation_method ?? 'regular') === 'interest_only'
+                                    ? Money::cents($installment->remaining_amount)
+                                    : app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
                             @endphp
                             <tr id="installment-{{ $installment->id }}" class="scroll-mt-24 {{ $isOverdue ? 'bg-red-50/35' : ($next?->id === $installment->id ? 'bg-[#e6f7f4]/40' : '') }}">
                                 <td class="px-3 py-2">
@@ -380,7 +385,7 @@
                                 <td class="px-3 py-2 {{ $isOverdue ? 'font-semibold text-red-700' : '' }}">{{ $installment->due_date->format('d/m/Y') }}</td>
                                 <td class="px-3 py-2 text-right">
                                     @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
-                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($rowDelinquencyCents) }}" data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}">
+                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}" data-suggested-delinquency="{{ Money::decimal($rowDelinquencyCents) }}" data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}" @if ($futurePrincipalOnly) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif>
                                             @csrf
                                             <input name="return_to" type="hidden" value="loan">
                                             <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">

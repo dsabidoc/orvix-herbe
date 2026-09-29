@@ -191,13 +191,13 @@
         </div>
         <div class="divide-y divide-slate-100 md:hidden">
             @forelse ($loanRows as $row)
-                <article class="p-4 {{ $row['late_days'] > 0 ? 'bg-red-50/30' : '' }}">
+                <article class="p-4 {{ $row['is_overdue'] ? 'bg-red-50/30' : '' }}">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                             <a class="font-semibold text-slate-950 hover:text-[#0f766e]" href="{{ route('loans.show', $row['loan_public_id']) }}">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</a>
                             <p class="mt-1 text-xs text-slate-500">{{ $row['folio'] }}</p>
                         </div>
-                        <p class="shrink-0 text-right font-bold text-red-700">{{ $money($row['visible_sum_cents']) }}</p>
+                        <p class="shrink-0 text-right font-bold {{ $row['is_overdue'] ? 'text-red-700' : '' }}">{{ $money($row['visible_sum_cents']) }}</p>
                     </div>
                     <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
                         <div>
@@ -210,15 +210,15 @@
                         </div>
                         <div>
                             <dt class="text-slate-500">Fecha pagare</dt>
-                            <dd class="font-semibold {{ $row['late_days'] > 0 ? 'text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</dd>
+                            <dd class="font-semibold {{ $row['is_overdue'] ? 'text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Dias de atraso</dt>
-                            <dd class="font-semibold {{ $row['late_days'] > 0 ? 'text-red-700' : '' }}">{{ $row['late_days'] }} dias</dd>
+                            <dd class="font-semibold {{ $row['is_overdue'] ? 'text-red-700' : '' }}">{{ $row['late_days'] }} dias</dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Suma vencidas</dt>
-                            <dd class="font-semibold text-red-700">{{ $money($row['visible_sum_cents']) }}</dd>
+                            <dd class="font-semibold {{ $row['is_overdue'] ? 'text-red-700' : '' }}">{{ $money($row['visible_sum_cents']) }}</dd>
                         </div>
                         <div>
                             <dt class="text-slate-500">Cliente</dt>
@@ -254,16 +254,16 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($loanRows as $row)
-                        <tr class="{{ $row['late_days'] > 0 ? 'bg-red-50/30' : 'hover:bg-slate-50' }}">
+                        <tr class="{{ $row['is_overdue'] ? 'bg-red-50/30' : 'hover:bg-slate-50' }}">
                             <td class="px-3 py-3">
                                 <a class="font-semibold hover:text-[#0f766e]" href="{{ route('loans.show', $row['loan_public_id']) }}">{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}</a>
                                 <p class="text-xs text-slate-500">{{ $row['folio'] }}</p>
                             </td>
                             <td class="px-3 py-3 font-semibold">{{ $row['payment_progress'] }}</td>
                             <td class="px-3 py-3 text-right font-semibold">{{ $money($row['payment_cents']) }}</td>
-                            <td class="px-3 py-3 {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</td>
-                            <td class="px-3 py-3 text-right {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['late_days'] }} dias</td>
-                            <td class="px-3 py-3 text-right font-semibold text-red-700">{{ $money($row['visible_sum_cents']) }}</td>
+                            <td class="px-3 py-3 {{ $row['is_overdue'] ? 'font-semibold text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</td>
+                            <td class="px-3 py-3 text-right {{ $row['is_overdue'] ? 'font-semibold text-red-700' : '' }}">{{ $row['late_days'] }} dias</td>
+                            <td class="px-3 py-3 text-right font-semibold {{ $row['is_overdue'] ? 'text-red-700' : '' }}">{{ $money($row['visible_sum_cents']) }}</td>
                             <td class="px-3 py-3 font-semibold text-[#0f766e]">{{ $row['client_name'] }}</td>
                         </tr>
                     @empty
@@ -348,13 +348,13 @@
                 </thead>
                 <tbody>
                     @forelse ($report['detail_rows'] as $row)
-                        <tr class="{{ $row['late_days'] > 0 ? 'bg-red-50/30' : '' }}">
+                        <tr class="{{ $row['is_overdue'] ? 'bg-red-50/30' : '' }}">
                             <td>{{ $row['vehicle_name'] }} · Dia {{ $row['payment_day'] }}<br><span class="text-[10px] text-slate-500">{{ $row['folio'] }}</span></td>
                             <td>{{ $row['payment_progress'] }}</td>
                             <td class="text-right">{{ $money($row['payment_cents']) }}</td>
-                            <td class="{{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</td>
-                            <td class="text-right {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $row['late_days'] }} dias</td>
-                            <td class="text-right {{ $row['late_days'] > 0 ? 'font-semibold text-red-700' : '' }}">{{ $money($row['visible_sum_cents']) }}</td>
+                            <td class="{{ $row['is_overdue'] ? 'font-semibold text-red-700' : '' }}">{{ $row['due_date'] ?? '-' }}</td>
+                            <td class="text-right {{ $row['is_overdue'] ? 'font-semibold text-red-700' : '' }}">{{ $row['late_days'] }} dias</td>
+                            <td class="text-right {{ $row['is_overdue'] ? 'font-semibold text-red-700' : '' }}">{{ $money($row['visible_sum_cents']) }}</td>
                             <td>{{ $row['client_name'] }}</td>
                         </tr>
                     @empty

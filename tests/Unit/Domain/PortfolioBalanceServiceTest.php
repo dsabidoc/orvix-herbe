@@ -112,6 +112,27 @@ class PortfolioBalanceServiceTest extends TestCase
         $this->assertSame(0, $afterPayment['overdue_cents']);
     }
 
+    public function test_payment_after_historical_cutoff_is_not_shown_as_current_red_overdue(): void
+    {
+        [$admin, $operator] = $this->admin();
+        $loan = $this->loanWithInstallments([
+            ['number' => 1, 'due_date' => '2026-08-01', 'amount' => '5000.00'],
+        ], $operator);
+        $this->applyPayment($loan, 1, '2026-08-15', '5000.00');
+
+        $report = $this->service->build([
+            'operator_id' => $operator->id,
+            'cutoff_date' => '2026-08-10',
+        ], $admin);
+        $row = $report['detail_rows']->first();
+
+        $this->assertNotNull($row);
+        $this->assertSame(0, $row['late_days']);
+        $this->assertFalse($row['is_overdue']);
+        $this->assertSame(500000, $row['payment_cents']);
+        $this->assertSame(500000, $report['loan_rows']->first()['overdue_cents']);
+    }
+
     public function test_operator_only_receives_own_portfolio_rows(): void
     {
         [, $operator, $operatorUser] = $this->admin();

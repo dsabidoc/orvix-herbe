@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
+use App\Domain\Loans\InstallmentPaymentPolicy;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
@@ -42,7 +43,7 @@ class CollectionController extends Controller
         };
 
         $installments = Installment::query()
-            ->with(['loan.client', 'loan.operator', 'loan.vehicle', 'reportedMovement'])
+            ->with(['loan.client', 'loan.operator', 'loan.vehicle', 'reportedMovement', 'allocations.movement'])
             ->whereHas('loan', $loanScope)
             ->where(function ($query) use ($monthStart, $monthEnd) {
                 $query
@@ -146,12 +147,7 @@ class CollectionController extends Controller
         ]);
 
         $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
-        $movementType = $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary';
-
-        if ($paymentEffect === 'capital_advance' && ! $this->isCapitalAdvanceEligible($installment)) {
-            return back()->with('warning', 'El abono a capital solo se puede aplicar desde la ultima letra pendiente, avanzando de atras hacia adelante.');
-        }
-
+        $paymentPolicy = app(InstallmentPaymentPolicy::class);
         $selectedCut = null;
         if (($data['return_to'] ?? null) === 'cut') {
             abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
@@ -162,15 +158,34 @@ class CollectionController extends Controller
             $data['operated_on'] = $selectedCut->period_starts_on->toDateString();
         }
 
-        $contractAmountCents = $paymentEffect === 'capital_advance'
-            ? $this->capitalAdvanceAmountCents($installment)
+        $automaticCapitalOnly = ($installment->loan->calculation_method ?? 'regular') !== 'interest_only'
+            && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
+        $automaticInterestOnlyAdvance = ($installment->loan->calculation_method ?? 'regular') === 'interest_only'
+            && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
+        $movementType = $automaticInterestOnlyAdvance
+            ? 'advance'
+            : ($automaticCapitalOnly || $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary');
+
+        $principalRemainingCents = $paymentPolicy->principalRemainingCents($installment);
+        $interestOnlyCapitalCents = $automaticInterestOnlyAdvance
+            ? Money::cents($installment->loan->installments()->where('remaining_amount', '>', 0)->orderBy('number')->value('capital_balance') ?? $installment->loan->capital)
+            : 0;
+        $maximumCapitalCents = $automaticInterestOnlyAdvance ? $interestOnlyCapitalCents : $principalRemainingCents;
+        $contractAmountCents = in_array($movementType, ['advance', 'capital_advance'], true)
+            ? min(Money::cents($data['contract_amount']), $maximumCapitalCents)
             : Money::cents($data['contract_amount']);
+        abort_if(
+            in_array($movementType, ['advance', 'capital_advance'], true)
+                && Money::cents($data['contract_amount']) > $maximumCapitalCents,
+            422,
+            'El abono a capital no puede exceder el capital pendiente de esta letra.',
+        );
         abort_if(
             $paymentEffect !== 'capital_advance' && $contractAmountCents > Money::cents($installment->remaining_amount),
             422,
             'El monto recibido no puede exceder el saldo pendiente de esta letra.',
         );
-        $delinquencyAmountCents = in_array($paymentEffect, ['capital_advance', 'no_investors'], true)
+        $delinquencyAmountCents = in_array($movementType, ['advance', 'capital_advance'], true) || $paymentEffect === 'no_investors'
             ? 0
             : Money::cents($data['delinquency_amount'] ?? 0);
 
@@ -197,7 +212,9 @@ class CollectionController extends Controller
             'origin_weekly_cut_id' => $paymentEffect === 'no_investors' ? null : $selectedCut?->id,
             'type' => $movementType,
             'payment_method' => 'cash',
-            'notes' => $data['notes'] ?? ($paymentEffect === 'capital_advance' ? 'Marcado como abono a capital desde cobranza' : 'Marcado pagado desde cobranza'),
+            'notes' => $data['notes'] ?? ($automaticCapitalOnly || $automaticInterestOnlyAdvance
+                ? 'Pago de letra futura aplicado solo a capital'
+                : ($paymentEffect === 'capital_advance' ? 'Marcado como abono a capital desde cobranza' : 'Marcado pagado desde cobranza')),
             'confirmation_status' => 'reported',
         ]);
 
@@ -270,8 +287,6 @@ class CollectionController extends Controller
             'return_to' => ['nullable', 'string', 'max:20'],
         ]);
 
-        abort_if(($data['payment_effect'] ?? null) === 'capital_advance', 422, 'El abono a capital no esta disponible en pagos masivos; debe hacerse letra por letra desde la ultima pendiente.');
-
         $installments = Installment::query()
             ->with('loan.operator')
             ->whereIn('id', $data['installment_ids'])
@@ -300,10 +315,19 @@ class CollectionController extends Controller
             }
 
             $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
-            $movementType = $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary';
-            $contractAmountCents = $paymentEffect === 'capital_advance'
-                ? $this->capitalAdvanceAmountCents($installment)
-                : Money::cents($installment->remaining_amount);
+            $paymentPolicy = app(InstallmentPaymentPolicy::class);
+            $automaticCapitalOnly = ($installment->loan->calculation_method ?? 'regular') !== 'interest_only'
+                && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
+            $automaticInterestOnlyAdvance = ($installment->loan->calculation_method ?? 'regular') === 'interest_only'
+                && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
+            $movementType = $automaticInterestOnlyAdvance
+                ? 'advance'
+                : ($automaticCapitalOnly || $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary');
+            $contractAmountCents = $automaticInterestOnlyAdvance
+                ? Money::cents($installment->remaining_amount)
+                : ($movementType === 'capital_advance'
+                    ? $paymentPolicy->principalRemainingCents($installment)
+                    : Money::cents($installment->remaining_amount));
             // Los pagos masivos no permiten seleccionar un moratorio por letra.
             $delinquencyAmountCents = 0;
 
@@ -331,9 +355,11 @@ class CollectionController extends Controller
                 'affects_investors' => $paymentEffect !== 'no_investors',
                 'type' => $movementType,
                 'payment_method' => 'cash',
-                'notes' => $paymentEffect === 'capital_advance'
+                'notes' => $automaticCapitalOnly || $automaticInterestOnlyAdvance
+                    ? 'Pago de letra futura aplicado solo a capital en bloque'
+                    : ($paymentEffect === 'capital_advance'
                     ? 'Marcado como abono a capital en bloque desde calendario contractual'
-                    : 'Marcado pagado en bloque desde calendario contractual',
+                    : 'Marcado pagado en bloque desde calendario contractual'),
                 'confirmation_status' => 'reported',
             ]);
 
@@ -384,20 +410,6 @@ class CollectionController extends Controller
         return $folio;
     }
 
-    private function capitalAdvanceAmountCents(Installment $installment): int
-    {
-        $remainingCents = Money::cents($installment->remaining_amount);
-        $operationalCents = Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount);
-
-        if ($remainingCents <= 0 || $operationalCents <= 0) {
-            return 0;
-        }
-
-        $ratio = min(1, $remainingCents / $operationalCents);
-
-        return min($remainingCents, (int) round(Money::cents($installment->principal_amount) * $ratio));
-    }
-
     private function cutReturnRoute(array $data): string
     {
         $route = route('cuts.show', WeeklyCut::query()->findOrFail($data['cut_id']));
@@ -407,20 +419,6 @@ class CollectionController extends Controller
         }
 
         return $route.'#cut-pending-installments';
-    }
-
-    private function isCapitalAdvanceEligible(Installment $installment): bool
-    {
-        if (Money::cents($installment->remaining_amount) <= 0 || Money::cents($installment->principal_amount) <= 0) {
-            return false;
-        }
-
-        return ! Installment::query()
-            ->where('loan_id', $installment->loan_id)
-            ->where('number', '>', $installment->number)
-            ->where('remaining_amount', '>', 0)
-            ->whereDoesntHave('reportedMovement')
-            ->exists();
     }
 
     private function authorizeInstallmentAccess(Request $request, Installment $installment): void

@@ -48,7 +48,7 @@ class InterestOnlyScheduleExtender
             (int) $loan->payment_day
         );
         $number = (int) $lastInstallment->number + 1;
-        $interestCents = (int) round(Money::cents($loan->capital) * (float) $loan->monthly_rate);
+        $interestCents = (int) round($currentCapitalCents * (float) $loan->monthly_rate);
         $administrationFeeCents = Money::cents($loan->administration_fee ?? 0);
         $vatRate = $loan->vat_enabled ? 0.16 : 0.0;
         $interestVatCents = (int) round(($interestCents + $administrationFeeCents) * $vatRate);

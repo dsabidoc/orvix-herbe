@@ -255,6 +255,9 @@ class PortfolioBalanceService
         $pendingCents = max(0, $rawPendingCents);
         $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
         $isExcluded = in_array((string) $installment->status, self::EXCLUDED_INSTALLMENT_STATUSES, true);
+        $isSettledNow = ! $isExcluded
+            && in_array((string) $installment->status, ['confirmed', 'advanced', 'paid'], true)
+            && Money::cents($installment->remaining_amount) === 0;
         $lateDays = $dueDate->lt($today) ? (int) $dueDate->diffInDays($today) : 0;
         $isOverdue = ! $isExcluded && $dueDate->lt($today) && $pendingCents > 0;
         $isDueToday = ! $isExcluded && $dueDate->equalTo($today) && $pendingCents > 0;
@@ -295,6 +298,7 @@ class PortfolioBalanceService
             'is_in_selected_month' => $isInSelectedMonth,
             'is_balance_visible' => $isBalanceVisible,
             'is_overdue' => $isOverdue,
+            'is_settled_now' => $isSettledNow,
             'is_due_today' => $isDueToday,
             'is_upcoming' => $isUpcoming,
             'inconsistencies' => $inconsistencies,
@@ -332,7 +336,11 @@ class PortfolioBalanceService
                         'due_date' => $installment['due_date'],
                         'due_date_sort' => $installment['due_date_sort'],
                         'due_day' => (int) CarbonImmutable::parse($installment['due_date_sort'])->format('d'),
-                        'late_days' => $installment['late_days'],
+                        // La tabla puede incluir una foto histórica anterior al pago actual.
+                        // Conservamos el saldo a esa fecha, pero no presentamos como atraso vigente
+                        // una letra que ya quedó liquidada.
+                        'late_days' => $installment['is_settled_now'] ? 0 : $installment['late_days'],
+                        'is_overdue' => $installment['is_overdue'] && ! $installment['is_settled_now'],
                         'overdue_installments_count' => $loanRow['overdue_installments_count'],
                         'overdue_cents' => $loanRow['overdue_cents'],
                         'visible_sum_cents' => 0,

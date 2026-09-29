@@ -504,8 +504,10 @@
                                                 @php
                                                     $isAfterCutDate = $installment->due_date->toDateString() > $cutDateString;
                                                     $isCapitalAdvance = $installment->due_date->toDateString() > $cutMonthEndString;
-                                                    $hasLaterPending = $loan->installments->contains(fn ($candidate) => $candidate->number > $installment->number && Money::cents($candidate->remaining_amount) > 0 && ! $candidate->reportedMovement);
-                                                    $canAdvanceCapital = $isCapitalAdvance && ! $hasLaterPending;
+                                                    $suggestedCapitalCents = ($loan->calculation_method ?? 'regular') === 'interest_only'
+                                                        ? Money::cents($installment->remaining_amount)
+                                                        : app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
+                                                    $canAdvanceCapital = $isCapitalAdvance && $suggestedCapitalCents > 0;
                                                     $delinquencyCents = $isAfterCutDate
                                                         ? 0
                                                         : app(DelinquencyCalculator::class)->forInstallment($installment, $cutDateString);
@@ -520,8 +522,9 @@
                                                         <form method="POST" action="{{ route('collections.mark-paid', $installment) }}"
                                                             data-confirm-paid
                                                             data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}"
+                                                            data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}"
                                                             data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}"
-                                                            @if ($isCapitalAdvance) data-force-capital-advance="true" @endif
+                                                            @if ($isCapitalAdvance) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif
                                                             @if ($canAdvanceCapital) data-capital-advance-allowed="true" @endif>
                                                             @csrf
                                                             <input name="return_to" type="hidden" value="cut">

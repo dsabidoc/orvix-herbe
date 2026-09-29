@@ -169,6 +169,7 @@ document.addEventListener('submit', (event) => {
     const noInvestorsButton = dialog.querySelector('[data-no-investors-action]');
     const forceCapitalAdvance = form.dataset.forceCapitalAdvance === 'true';
     const allowsCapitalAdvance = form.dataset.capitalAdvanceAllowed === 'true' || forceCapitalAdvance;
+    const showCapitalAdvanceAmount = form.dataset.showCapitalAdvanceAmount === 'true';
 
     if (capitalAdvanceButton instanceof HTMLButtonElement) {
         capitalAdvanceButton.hidden = !allowsCapitalAdvance;
@@ -208,11 +209,13 @@ document.addEventListener('submit', (event) => {
     }
 
     if (paymentAmountInput instanceof HTMLInputElement) {
-        paymentAmountInput.value = suggestedPaymentAmount;
+        paymentAmountInput.value = forceCapitalAdvance
+            ? (form.dataset.suggestedCapitalAmount || suggestedPaymentAmount)
+            : suggestedPaymentAmount;
     }
 
     if (paymentAmountFields instanceof HTMLElement) {
-        paymentAmountFields.hidden = forceCapitalAdvance || form.matches('[data-bulk-payment-form]');
+        paymentAmountFields.hidden = (forceCapitalAdvance && !showCapitalAdvanceAmount) || form.matches('[data-bulk-payment-form]');
     }
 
     if (paymentDateInput instanceof HTMLInputElement && formPaymentDateInput instanceof HTMLInputElement) {
@@ -566,6 +569,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const delinquencyToggle = dialog.querySelector('#confirm-paid-include-delinquency');
         const delinquencyFields = dialog.querySelector('[data-confirm-paid-delinquency-fields]');
 
+        dialog.querySelector('[data-capital-advance-action]')?.addEventListener('click', () => {
+            if (!pendingPaidForm) {
+                return;
+            }
+
+            const paymentAmount = dialog.querySelector('#confirm-paid-amount');
+            const suggestedCapitalAmount = pendingPaidForm.dataset.suggestedCapitalAmount;
+
+            if (paymentAmount instanceof HTMLInputElement && suggestedCapitalAmount) {
+                paymentAmount.value = suggestedCapitalAmount;
+            }
+        });
+
         delinquencyToggle?.addEventListener('change', () => {
             if (!(delinquencyToggle instanceof HTMLInputElement) || !(delinquencyFields instanceof HTMLElement)) {
                 return;
@@ -612,7 +628,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (formContractAmountInput instanceof HTMLInputElement
                 && selectedPaymentAmount instanceof HTMLInputElement
-                && confirmedAction !== 'confirm-capital-advance'
                 && !pendingPaidForm.matches('[data-bulk-payment-form]')) {
                 formContractAmountInput.value = selectedPaymentAmount.value.replace(/,/g, '');
             }
