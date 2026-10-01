@@ -133,14 +133,14 @@
                 <div>
                     <h3 class="font-bold text-slate-950">Composición para liquidar hoy</h3>
                     <p class="mt-1 text-sm text-slate-500">Componentes que suman exactamente el total de liquidación.</p>
-                    <div class="mx-auto mt-5 grid size-48 place-items-center rounded-full" style="background: conic-gradient({{ implode(', ', $settlementStops) }});">
-                    <div class="grid size-28 place-items-center rounded-full bg-white text-center shadow-sm">
-                        <div>
-                            <p class="text-xs font-semibold uppercase text-slate-500">Total</p>
-                            <p class="mt-1 text-sm font-bold text-slate-950">{{ $settleTodayKpi['value'] }}</p>
+                    <div class="mx-auto mt-5 grid place-items-center rounded-full" style="width: 12rem; height: 12rem; background: conic-gradient({{ implode(', ', $settlementStops) }});">
+                        <div class="grid place-items-center rounded-full bg-white text-center shadow-sm" style="width: 7rem; height: 7rem;">
+                            <div>
+                                <p class="text-xs font-semibold uppercase text-slate-500">Total</p>
+                                <p class="mt-1 text-sm font-bold text-slate-950">{{ $settleTodayKpi['value'] }}</p>
+                            </div>
                         </div>
                     </div>
-                </div>
                 </div>
                 <div class="space-y-4">
                     @forelse ($settlementSegments as $segment)
