@@ -9,14 +9,38 @@
         'green' => ['card' => 'border-emerald-200 bg-emerald-50/80', 'label' => 'text-emerald-700', 'dot' => '#10b981', 'track' => 'bg-emerald-100', 'bar' => 'bg-emerald-500'],
         'red' => ['card' => 'border-red-200 bg-red-50/80', 'label' => 'text-red-700', 'dot' => '#ef4444', 'track' => 'bg-red-100', 'bar' => 'bg-red-500'],
     ];
-    $chartKpis = collect($kpis)->filter(fn ($kpi) => $kpi['chartable'] ?? true)->values();
-    $settleTodayKpi = $chartKpis->firstWhere('title', 'Total a liquidar hoy');
-    $chartDisplayTotal = (int) ($settleTodayKpi['cents'] ?? 0);
-    $chartTotal = max(1, $chartDisplayTotal);
-    $chartStops = $chartDisplayTotal > 0
-        ? [$kpiStyles['blue']['dot'].' 0% 100%']
-        : ['#e2e8f0 0% 100%'];
-    $nonAdditiveKpiTitles = ['Esperado del periodo', 'Cobrado del periodo', 'Pendiente por cobrar'];
+    $kpisByTitle = collect($kpis)->keyBy('title');
+    $settleTodayKpi = $kpisByTitle->get('Total a liquidar hoy', ['cents' => 0, 'value' => Money::mxn(0)]);
+    $expectedPeriodKpi = $kpisByTitle->get('Esperado del periodo', ['cents' => 0, 'value' => Money::mxn(0)]);
+    $collectedPeriodKpi = $kpisByTitle->get('Cobrado del periodo', ['cents' => 0, 'value' => Money::mxn(0)]);
+    $pendingPeriodKpi = $kpisByTitle->get('Pendiente por cobrar', ['cents' => 0, 'value' => Money::mxn(0)]);
+    $settlementTotal = (int) $settleTodayKpi['cents'];
+    $settlementChartTotal = max(1, $settlementTotal);
+    $settlementSegments = collect([
+        ['title' => 'Capital por recuperar', 'value' => Money::mxn(Money::decimal((int) $settlementBreakdown['capital_cents'])), 'cents' => (int) $settlementBreakdown['capital_cents'], 'color' => 'blue'],
+        ['title' => 'Mes en curso e intereses', 'value' => Money::mxn(Money::decimal((int) $settlementBreakdown['current_month_cents'])), 'cents' => (int) $settlementBreakdown['current_month_cents'], 'color' => 'yellow'],
+        ['title' => 'Total vencidos', 'value' => Money::mxn(Money::decimal((int) $settlementBreakdown['overdue_cents'])), 'cents' => (int) $settlementBreakdown['overdue_cents'], 'color' => 'red'],
+    ])->filter(fn ($segment) => $segment['cents'] > 0)->values();
+    $settlementCursor = 0;
+    $settlementStops = [];
+
+    foreach ($settlementSegments as $segment) {
+        $percent = $segment['cents'] / $settlementChartTotal * 100;
+        $color = $kpiStyles[$segment['color']]['dot'];
+        $settlementStops[] = "{$color} {$settlementCursor}% ".($settlementCursor + $percent).'%';
+        $settlementCursor += $percent;
+    }
+
+    if ($settlementStops === []) {
+        $settlementStops[] = '#e2e8f0 0% 100%';
+    }
+
+    $expectedPeriodCents = max(0, (int) $expectedPeriodKpi['cents']);
+    $periodChartTotal = max(1, $expectedPeriodCents);
+    $periodSegments = collect([
+        ['title' => 'Cobrado', 'value' => $collectedPeriodKpi['value'], 'cents' => min($expectedPeriodCents, max(0, (int) $collectedPeriodKpi['cents'])), 'color' => 'green'],
+        ['title' => 'Pendiente', 'value' => $pendingPeriodKpi['value'], 'cents' => min($expectedPeriodCents, max(0, (int) $pendingPeriodKpi['cents'])), 'color' => 'orange'],
+    ]);
 
     $dashboardUser = auth()->user();
     $canCreateLoan = $dashboardUser->can('loans.formalize');
@@ -103,41 +127,74 @@
         @endforeach
     </div>
 
-    <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-center">
-            <div>
-                <h3 class="font-bold text-slate-950">Resumen visual</h3>
-                <p class="mt-1 text-sm text-slate-500">El total corresponde a liquidar hoy. Los indicadores del periodo son referencias y no se suman.</p>
-                <div class="mx-auto mt-5 grid size-56 place-items-center rounded-full" style="background: conic-gradient({{ implode(', ', $chartStops) }});">
+    <section class="mt-6 grid gap-6 xl:grid-cols-2">
+        <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="grid gap-6 md:grid-cols-[220px_1fr] md:items-center">
+                <div>
+                    <h3 class="font-bold text-slate-950">Composición para liquidar hoy</h3>
+                    <p class="mt-1 text-sm text-slate-500">Componentes que suman exactamente el total de liquidación.</p>
+                    <div class="mx-auto mt-5 grid size-48 place-items-center rounded-full" style="background: conic-gradient({{ implode(', ', $settlementStops) }});">
                     <div class="grid size-28 place-items-center rounded-full bg-white text-center shadow-sm">
                         <div>
                             <p class="text-xs font-semibold uppercase text-slate-500">Total</p>
-                            <p class="mt-1 text-sm font-bold text-slate-950">{{ Money::mxn(Money::decimal($chartDisplayTotal)) }}</p>
+                            <p class="mt-1 text-sm font-bold text-slate-950">{{ $settleTodayKpi['value'] }}</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="space-y-4">
-                @foreach ($chartKpis as $kpi)
+                </div>
+                <div class="space-y-4">
+                    @forelse ($settlementSegments as $segment)
                     @php
-                        $style = $kpiStyles[$kpi['color']];
-                        $percent = min(100, round($kpi['cents'] / $chartTotal * 100));
-                        $referenceLabel = $kpi['title'] === 'Total a liquidar hoy'
-                            ? 'Total base'
-                            : (in_array($kpi['title'], $nonAdditiveKpiTitles, true) ? 'Referencia del periodo' : 'Incluido en el total');
+                        $style = $kpiStyles[$segment['color']];
+                        $percent = round($segment['cents'] / $settlementChartTotal * 100);
                     @endphp
                     <div>
                         <div class="flex items-center justify-between gap-3">
                             <p class="flex items-center gap-2 text-sm font-semibold text-slate-800">
                                 <span class="size-2.5 rounded-full" style="background-color: {{ $style['dot'] }}"></span>
-                                {{ $kpi['title'] }}
+                                {{ $segment['title'] }}
                             </p>
                             <span class="text-sm font-bold text-slate-400">{{ $percent }}%</span>
                         </div>
                         <div class="{{ $style['track'] }} mt-2 h-2 rounded-full">
                             <div class="{{ $style['bar'] }} h-2 rounded-full" style="width: {{ max(2, $percent) }}%"></div>
                         </div>
-                        <p class="mt-1 text-sm font-semibold text-slate-600">{{ $kpi['value'] }} <span class="font-medium text-slate-400">· {{ $referenceLabel }}</span></p>
+                        <p class="mt-1 text-sm font-semibold text-slate-600">{{ $segment['value'] }}</p>
+                    </div>
+                    @empty
+                        <p class="text-sm text-slate-500">No hay importe pendiente por liquidar.</p>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 class="font-bold text-slate-950">Cobranza del periodo</h3>
+            <p class="mt-1 text-sm text-slate-500">Cobrado y pendiente dividen el esperado del periodo, sin mezclarse con la liquidación.</p>
+            <div class="mt-8">
+                <div class="flex items-end justify-between gap-3">
+                    <p class="text-sm font-semibold text-slate-700">Esperado del periodo</p>
+                    <p class="text-lg font-bold text-slate-950">{{ $expectedPeriodKpi['value'] }}</p>
+                </div>
+                <div class="mt-3 flex h-8 overflow-hidden rounded-full bg-slate-100">
+                    @foreach ($periodSegments as $segment)
+                        @php
+                            $percent = $segment['cents'] / $periodChartTotal * 100;
+                            $style = $kpiStyles[$segment['color']];
+                        @endphp
+                        <div class="{{ $style['bar'] }} h-full" style="width: {{ $percent }}%" title="{{ $segment['title'] }}: {{ $segment['value'] }}"></div>
+                    @endforeach
+                </div>
+            </div>
+            <div class="mt-8 grid gap-4 sm:grid-cols-2">
+                @foreach ($periodSegments as $segment)
+                    @php
+                        $style = $kpiStyles[$segment['color']];
+                        $percent = round($segment['cents'] / $periodChartTotal * 100);
+                    @endphp
+                    <div class="rounded-md {{ $style['track'] }} p-4">
+                        <p class="flex items-center gap-2 text-sm font-semibold text-slate-800"><span class="size-2.5 rounded-full" style="background-color: {{ $style['dot'] }}"></span>{{ $segment['title'] }}</p>
+                        <p class="mt-2 text-xl font-bold text-slate-950">{{ $segment['value'] }}</p>
+                        <p class="mt-1 text-sm font-medium text-slate-500">{{ $percent }}% del esperado</p>
                     </div>
                 @endforeach
             </div>

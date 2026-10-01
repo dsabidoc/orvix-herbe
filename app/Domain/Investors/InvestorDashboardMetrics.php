@@ -23,7 +23,7 @@ class InvestorDashboardMetrics
 
     /**
      * @param  Collection<int, Loan>  $loans
-     * @return array{settle_today_cents:int,expected_period_cents:int,collected_period_cents:int,overdue_cents:int}
+     * @return array{settle_today_cents:int,expected_period_cents:int,collected_period_cents:int,overdue_cents:int,settlement_breakdown:array{capital_cents:int,current_month_cents:int,overdue_cents:int}}
      */
     public function calculate(
         Investor $investor,
@@ -44,6 +44,11 @@ class InvestorDashboardMetrics
         $settleTodayCents = 0;
         $expectedPeriodCents = 0;
         $overdueCents = 0;
+        $settlementBreakdown = [
+            'capital_cents' => 0,
+            'current_month_cents' => 0,
+            'overdue_cents' => 0,
+        ];
 
         foreach ($loans as $loan) {
             $investment = $loan->investments->first();
@@ -54,12 +59,18 @@ class InvestorDashboardMetrics
 
             if ($this->investmentCoversDate($investment, $today)) {
                 foreach ($this->settlementService->quote($loan, $today)['rows'] as $row) {
-                    $settleTodayCents += $this->shareCents(
+                    $shareCents = $this->shareCents(
                         $loan,
                         $investment,
                         (int) $row['principal_cents'],
                         (int) $row['interest_cents'],
                     );
+                    $settleTodayCents += $shareCents;
+                    $settlementBreakdown[match ($row['bucket']) {
+                        'overdue' => 'overdue_cents',
+                        'current_month' => 'current_month_cents',
+                        default => 'capital_cents',
+                    }] += $shareCents;
                 }
             }
 
@@ -99,6 +110,7 @@ class InvestorDashboardMetrics
             'expected_period_cents' => $expectedPeriodCents,
             'collected_period_cents' => $this->collectedPeriodCents($investor, $loans, $periodStart, $periodEnd),
             'overdue_cents' => $overdueCents,
+            'settlement_breakdown' => $settlementBreakdown,
         ];
     }
 

@@ -55,9 +55,27 @@ class DashboardController extends Controller
             $expectedPeriodCents = $metrics['expected_period_cents'];
             $collectedPeriodCents = $metrics['collected_period_cents'];
             $overdueCents = $metrics['overdue_cents'];
+            $settlementBreakdown = $metrics['settlement_breakdown'];
         } else {
-            $settleTodayCents = $collectableLoans
-                ->sum(fn (Loan $loan) => (int) $settlementService->quote($loan, $today)['total_cents']);
+            $settleTodayCents = 0;
+            $settlementBreakdown = [
+                'capital_cents' => 0,
+                'current_month_cents' => 0,
+                'overdue_cents' => 0,
+            ];
+
+            foreach ($collectableLoans as $loan) {
+                $quote = $settlementService->quote($loan, $today);
+                $settleTodayCents += (int) $quote['total_cents'];
+
+                foreach ($quote['rows'] as $row) {
+                    $settlementBreakdown[match ($row['bucket']) {
+                        'overdue' => 'overdue_cents',
+                        'current_month' => 'current_month_cents',
+                        default => 'capital_cents',
+                    }] += (int) $row['amount_cents'];
+                }
+            }
             $expectedPeriodCents = $this->operationalScheduledCents(
                 Installment::query()
                     ->whereIn('loan_id', $collectableLoanIds)
@@ -118,6 +136,7 @@ class DashboardController extends Controller
                 ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingPeriodCents)), 'caption' => $selectedInvestor ? 'Esperado menos retornado' : 'Esperado menos cobrado', 'cents' => (int) $pendingPeriodCents, 'color' => 'orange'],
                 ['title' => 'Total vencidos', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => $selectedInvestor ? 'Capital e interes vencido correspondientes' : 'Abono e interes vencido', 'cents' => (int) $overdueCents, 'color' => 'red'],
             ],
+            'settlementBreakdown' => $settlementBreakdown,
             'loans' => $loans,
             'cuts' => $cuts,
             'quickCollectionLoans' => $quickCollectionLoans,
