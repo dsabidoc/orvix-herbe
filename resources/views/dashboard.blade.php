@@ -10,17 +10,13 @@
         'red' => ['card' => 'border-red-200 bg-red-50/80', 'label' => 'text-red-700', 'dot' => '#ef4444', 'track' => 'bg-red-100', 'bar' => 'bg-red-500'],
     ];
     $chartKpis = collect($kpis)->filter(fn ($kpi) => $kpi['chartable'] ?? true)->values();
-    $chartDisplayTotal = $chartKpis->sum('cents');
+    $settleTodayKpi = $chartKpis->firstWhere('title', 'Total a liquidar hoy');
+    $chartDisplayTotal = (int) ($settleTodayKpi['cents'] ?? 0);
     $chartTotal = max(1, $chartDisplayTotal);
-    $chartCursor = 0;
-    $chartStops = [];
-
-    foreach ($chartKpis as $kpi) {
-        $percent = $kpi['cents'] / $chartTotal * 100;
-        $color = $kpiStyles[$kpi['color']]['dot'];
-        $chartStops[] = "{$color} {$chartCursor}% ".($chartCursor + $percent).'%';
-        $chartCursor += $percent;
-    }
+    $chartStops = $chartDisplayTotal > 0
+        ? [$kpiStyles['blue']['dot'].' 0% 100%']
+        : ['#e2e8f0 0% 100%'];
+    $nonAdditiveKpiTitles = ['Esperado del periodo', 'Cobrado del periodo', 'Pendiente por cobrar'];
 
     $dashboardUser = auth()->user();
     $canCreateLoan = $dashboardUser->can('loans.formalize');
@@ -111,7 +107,7 @@
         <div class="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-center">
             <div>
                 <h3 class="font-bold text-slate-950">Resumen visual</h3>
-                <p class="mt-1 text-sm text-slate-500">Liquidacion de hoy, cobranza del periodo y vencidos.</p>
+                <p class="mt-1 text-sm text-slate-500">El total corresponde a liquidar hoy. Los indicadores del periodo son referencias y no se suman.</p>
                 <div class="mx-auto mt-5 grid size-56 place-items-center rounded-full" style="background: conic-gradient({{ implode(', ', $chartStops) }});">
                     <div class="grid size-28 place-items-center rounded-full bg-white text-center shadow-sm">
                         <div>
@@ -125,7 +121,10 @@
                 @foreach ($chartKpis as $kpi)
                     @php
                         $style = $kpiStyles[$kpi['color']];
-                        $percent = round($kpi['cents'] / $chartTotal * 100);
+                        $percent = min(100, round($kpi['cents'] / $chartTotal * 100));
+                        $referenceLabel = $kpi['title'] === 'Total a liquidar hoy'
+                            ? 'Total base'
+                            : (in_array($kpi['title'], $nonAdditiveKpiTitles, true) ? 'Referencia del periodo' : 'Incluido en el total');
                     @endphp
                     <div>
                         <div class="flex items-center justify-between gap-3">
@@ -138,7 +137,7 @@
                         <div class="{{ $style['track'] }} mt-2 h-2 rounded-full">
                             <div class="{{ $style['bar'] }} h-2 rounded-full" style="width: {{ max(2, $percent) }}%"></div>
                         </div>
-                        <p class="mt-1 text-sm font-semibold text-slate-600">{{ $kpi['value'] }}</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-600">{{ $kpi['value'] }} <span class="font-medium text-slate-400">· {{ $referenceLabel }}</span></p>
                     </div>
                 @endforeach
             </div>
