@@ -17,6 +17,8 @@ use RuntimeException;
 
 class PaymentApplicationService
 {
+    public const FUTURE_MONTH_INTEREST_REFERENCE = 'future_installment_with_interest';
+
     public function __construct(
         private readonly InvestorReturnRecorder $investorReturnRecorder,
         private readonly WeeklyCutPeriodService $cutPeriodService,
@@ -67,6 +69,7 @@ class PaymentApplicationService
                 && $movement->type === 'ordinary'
                 && ($movement->loan->calculation_method ?? 'regular') !== 'interest_only'
                 && $paymentPolicy->isFutureMonth($movement->targetInstallment, $movement->operated_on)
+                && ! $this->includesFutureMonthInterest($movement)
                 && $remainingCents > $paymentPolicy->principalRemainingCents($movement->targetInstallment)
             ) {
                 throw new RuntimeException('Una letra de un mes futuro solo puede recibir un abono de hasta su capital pendiente.');
@@ -84,7 +87,8 @@ class PaymentApplicationService
                 }
 
                 $futurePrincipalOnly = ($movement->loan->calculation_method ?? 'regular') !== 'interest_only'
-                    && $paymentPolicy->isFutureMonth($installment, $movement->operated_on);
+                    && $paymentPolicy->isFutureMonth($installment, $movement->operated_on)
+                    && ! $this->includesFutureMonthInterest($movement);
                 $installmentRemaining = $this->isCapitalAdvance($movement)
                     ? ($advanceAllowed[$installment->id] ?? 0)
                     : ($futurePrincipalOnly
@@ -321,6 +325,11 @@ class PaymentApplicationService
         return in_array($movementType, ['advance', 'capital_advance'], true) ? 'advanced' : 'confirmed';
     }
 
+    private function includesFutureMonthInterest(CollectionMovement $movement): bool
+    {
+        return $movement->reference === self::FUTURE_MONTH_INTEREST_REFERENCE;
+    }
+
     private function applyInterestOnlyCapitalAdvance(CollectionMovement $movement, int $confirmedByUserId): CollectionMovement
     {
         $loan = $movement->loan()->with('installments')->lockForUpdate()->firstOrFail();
@@ -532,8 +541,7 @@ class PaymentApplicationService
         int $userId,
         bool $principalOnly,
         array $remainingComponents,
-    ): void
-    {
+    ): void {
         $contractCents = $remainingComponents['principal'] + $remainingComponents['interest'];
 
         if ($appliedCents <= 0 || $contractCents <= 0) {

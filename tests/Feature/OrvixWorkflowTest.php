@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Loans\InstallmentPaymentPolicy;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
@@ -29,6 +30,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -122,7 +124,7 @@ class OrvixWorkflowTest extends TestCase
         $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
         $operator = Operator::query()->firstOrFail();
         $primary = Client::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'operator_id' => $operator->id,
             'first_name' => 'Darwin Ramon',
             'last_name' => 'Cervera Duran',
@@ -131,7 +133,7 @@ class OrvixWorkflowTest extends TestCase
             'status' => 'active',
         ]);
         $duplicate = Client::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'operator_id' => $operator->id,
             'first_name' => 'Darwin Ramon',
             'last_name' => 'Cervera Duran',
@@ -140,14 +142,14 @@ class OrvixWorkflowTest extends TestCase
             'status' => 'active',
         ]);
         $vehicle = Vehicle::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'client_id' => $duplicate->id,
             'brand' => 'NISSAN',
             'model' => 'MARCH',
             'status' => 'financed',
         ]);
         $loan = Loan::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'folio' => 'DAR-140826-98',
             'client_id' => $duplicate->id,
             'operator_id' => $operator->id,
@@ -161,7 +163,7 @@ class OrvixWorkflowTest extends TestCase
             'status' => 'active',
         ]);
         $application = LoanApplication::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'folio' => 'SOL-TEST',
             'client_id' => $duplicate->id,
             'operator_id' => $operator->id,
@@ -172,7 +174,7 @@ class OrvixWorkflowTest extends TestCase
             'status' => 'submitted',
         ]);
         $document = Document::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'loan_id' => $loan->id,
             'client_id' => $duplicate->id,
             'original_name' => 'factura.pdf',
@@ -250,7 +252,7 @@ class OrvixWorkflowTest extends TestCase
 
         $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
         $investor = Investor::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'first_name' => 'Sin',
             'last_name' => 'Prestamos',
             'name' => 'Sin Prestamos',
@@ -290,7 +292,7 @@ class OrvixWorkflowTest extends TestCase
             'status' => 'active',
         ]);
         $investor = Investor::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'user_id' => $user->id,
             'first_name' => 'Maria Gabriela',
             'last_name' => 'Ramirez Redondo',
@@ -338,7 +340,7 @@ class OrvixWorkflowTest extends TestCase
 
         $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
         $investor = Investor::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'first_name' => 'Capital',
             'last_name' => 'Editable',
             'name' => 'Capital Editable',
@@ -493,7 +495,7 @@ class OrvixWorkflowTest extends TestCase
             ->firstOrFail();
         $installment->update(['due_date' => '2026-10-15']);
         $installment->refresh();
-        $principalCents = app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
+        $principalCents = app(InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
         $remainingBefore = Money::cents($installment->remaining_amount);
 
         $this->actingAs($admin)
@@ -528,6 +530,46 @@ class OrvixWorkflowTest extends TestCase
         $this->assertSame('ordinary', $currentMonthPayment->type);
         $this->actingAs($admin)->post(route('payments.confirm', $currentMonthPayment))->assertSessionHas('status');
         $this->assertSame(0, Money::cents($installment->fresh()->remaining_amount));
+
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_future_installment_can_include_month_interest_when_explicitly_selected(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Carbon::setTestNow('2026-09-22 12:00:00');
+        CarbonImmutable::setTestNow('2026-09-22 12:00:00');
+        $admin = User::query()->where('email', 'admin@orvix.test')->firstOrFail();
+        $installment = Installment::query()
+            ->where('remaining_amount', '>', 0)
+            ->where('interest_amount', '>', 0)
+            ->whereDoesntHave('reportedMovement')
+            ->whereHas('loan', fn ($query) => $query->where('status', 'active')->where('calculation_method', '!=', 'interest_only'))
+            ->firstOrFail();
+        $installment->update(['due_date' => '2026-10-15']);
+        $installment->refresh();
+        $fullInstallmentCents = Money::cents($installment->remaining_amount);
+
+        $this->actingAs($admin)
+            ->post(route('collections.mark-paid', $installment), [
+                'operated_on' => '2026-09-22',
+                'contract_amount' => Money::decimal($fullInstallmentCents),
+                'include_month_interest' => true,
+                'payment_effect' => 'normal',
+                'return_to' => 'loan',
+            ])
+            ->assertSessionHas('status');
+
+        $movement = CollectionMovement::query()->where('target_installment_id', $installment->id)->firstOrFail();
+        $this->assertSame('ordinary', $movement->type);
+        $this->assertSame($fullInstallmentCents, Money::cents($movement->contract_amount));
+        $this->assertSame(PaymentApplicationService::FUTURE_MONTH_INTEREST_REFERENCE, $movement->reference);
+
+        $this->actingAs($admin)->post(route('payments.confirm', $movement))->assertSessionHas('status');
+        $this->assertSame(0, Money::cents($installment->fresh()->remaining_amount));
+        $this->assertSame('confirmed', $installment->fresh()->status);
 
         Carbon::setTestNow();
         CarbonImmutable::setTestNow();
@@ -1538,7 +1580,7 @@ class OrvixWorkflowTest extends TestCase
         $operator = Operator::query()->firstOrFail();
         $capitalInvestor = Investor::query()->where('available_capital', '>=', 75000)->firstOrFail();
         $interestOnlyInvestor = Investor::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'first_name' => 'Interes',
             'last_name' => 'Sin Capital',
             'name' => 'Interes Sin Capital',
@@ -1610,7 +1652,7 @@ class OrvixWorkflowTest extends TestCase
         $operator = Operator::query()->firstOrFail();
 
         $availableInvestor = Investor::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'first_name' => 'Disponible',
             'last_name' => 'Preview',
             'name' => 'Disponible Preview',
@@ -1622,7 +1664,7 @@ class OrvixWorkflowTest extends TestCase
         ]);
 
         Investor::query()->create([
-            'public_id' => (string) \Illuminate\Support\Str::ulid(),
+            'public_id' => (string) Str::ulid(),
             'first_name' => 'Eliminado',
             'last_name' => 'Preview',
             'name' => 'Eliminado Preview',

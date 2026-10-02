@@ -525,6 +525,7 @@
                                                             data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}"
                                                             data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}"
                                                             @if ($isCapitalAdvance) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif
+                                                            @if ($isCapitalAdvance && ($loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif
                                                             @if ($canAdvanceCapital) data-capital-advance-allowed="true" @endif>
                                                             @csrf
                                                             <input name="return_to" type="hidden" value="cut">

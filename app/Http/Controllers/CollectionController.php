@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Cuts\WeeklyCutPeriodService;
-use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\InstallmentPaymentPolicy;
+use App\Domain\Loans\InterestOnlyScheduleExtender;
 use App\Domain\Loans\PaymentApplicationService;
 use App\Models\CollectionMovement;
 use App\Models\Installment;
@@ -137,6 +137,7 @@ class CollectionController extends Controller
             'external_concepts_amount' => ['nullable', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'delinquency_amount' => ['nullable', 'numeric', 'min:0'],
+            'include_month_interest' => ['nullable', 'boolean'],
             'affects_investors' => ['nullable', 'boolean'],
             'payment_effect' => ['nullable', 'in:normal,no_investors,capital_advance'],
             'notes' => ['nullable', 'string', 'max:500'],
@@ -162,9 +163,20 @@ class CollectionController extends Controller
             && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
         $automaticInterestOnlyAdvance = ($installment->loan->calculation_method ?? 'regular') === 'interest_only'
             && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
+        $includeMonthInterest = $request->boolean('include_month_interest');
+        abort_if(
+            $includeMonthInterest && ! $automaticCapitalOnly,
+            422,
+            'Los intereses del mes solo se pueden contemplar al liquidar completa una letra futura regular.',
+        );
+        if ($includeMonthInterest) {
+            $paymentEffect = 'normal';
+        }
         $movementType = $automaticInterestOnlyAdvance
             ? 'advance'
-            : ($automaticCapitalOnly || $paymentEffect === 'capital_advance' ? 'capital_advance' : 'ordinary');
+            : (($automaticCapitalOnly && ! $includeMonthInterest) || ($paymentEffect === 'capital_advance' && ! $includeMonthInterest)
+                ? 'capital_advance'
+                : 'ordinary');
 
         $principalRemainingCents = $paymentPolicy->principalRemainingCents($installment);
         $interestOnlyCapitalCents = $automaticInterestOnlyAdvance
@@ -181,11 +193,16 @@ class CollectionController extends Controller
             'El abono a capital no puede exceder el capital pendiente de esta letra.',
         );
         abort_if(
-            $paymentEffect !== 'capital_advance' && $contractAmountCents > Money::cents($installment->remaining_amount),
+            ! in_array($movementType, ['advance', 'capital_advance'], true) && $contractAmountCents > Money::cents($installment->remaining_amount),
             422,
             'El monto recibido no puede exceder el saldo pendiente de esta letra.',
         );
-        $delinquencyAmountCents = in_array($movementType, ['advance', 'capital_advance'], true) || $paymentEffect === 'no_investors'
+        abort_if(
+            $includeMonthInterest && $contractAmountCents !== Money::cents($installment->remaining_amount),
+            422,
+            'Para contemplar intereses del mes debes cubrir el total pendiente de esta letra.',
+        );
+        $delinquencyAmountCents = $includeMonthInterest || in_array($movementType, ['advance', 'capital_advance'], true) || $paymentEffect === 'no_investors'
             ? 0
             : Money::cents($data['delinquency_amount'] ?? 0);
 
@@ -212,9 +229,12 @@ class CollectionController extends Controller
             'origin_weekly_cut_id' => $paymentEffect === 'no_investors' ? null : $selectedCut?->id,
             'type' => $movementType,
             'payment_method' => 'cash',
-            'notes' => $data['notes'] ?? ($automaticCapitalOnly || $automaticInterestOnlyAdvance
+            'reference' => $includeMonthInterest ? PaymentApplicationService::FUTURE_MONTH_INTEREST_REFERENCE : null,
+            'notes' => $data['notes'] ?? ($includeMonthInterest
+                ? 'Letra futura liquidada con capital e intereses del mes desde cobranza'
+                : ($automaticCapitalOnly || $automaticInterestOnlyAdvance
                 ? 'Pago de letra futura aplicado solo a capital'
-                : ($paymentEffect === 'capital_advance' ? 'Marcado como abono a capital desde cobranza' : 'Marcado pagado desde cobranza')),
+                : ($paymentEffect === 'capital_advance' ? 'Marcado como abono a capital desde cobranza' : 'Marcado pagado desde cobranza'))),
             'confirmation_status' => 'reported',
         ]);
 

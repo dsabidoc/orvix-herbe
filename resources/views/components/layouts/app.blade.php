@@ -327,6 +327,13 @@
                                 <p class="mt-1 text-xs text-amber-800">Importe sugerido según la morosidad del crédito. Puedes editarlo.</p>
                             </div>
                         </div>
+                        <div class="hidden rounded-md border border-teal-200 bg-teal-50 p-3" data-confirm-paid-month-interest-section>
+                            <label class="flex items-center gap-2 text-sm font-semibold text-teal-900" for="confirm-paid-include-month-interest">
+                                <input class="rounded border-teal-400 text-[#0f766e] focus:ring-[#0d9488]" id="confirm-paid-include-month-interest" type="checkbox">
+                                Contemplar intereses del mes
+                            </label>
+                            <p class="mt-1 text-xs text-teal-800">Liquida esta letra futura completa: capital pendiente más el interés del mes. El importe se ajustará al total de la letra.</p>
+                        </div>
                     </div>
                     <div class="flex flex-col justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:flex-wrap">
                         <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" value="cancel">No</button>
