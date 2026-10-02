@@ -195,7 +195,7 @@ document.addEventListener('submit', (event) => {
     const suggestedPaymentAmount = form.dataset.suggestedPaymentAmount || '0.00';
     const monthInterestSection = dialog.querySelector('[data-confirm-paid-month-interest-section]');
     const monthInterestToggle = dialog.querySelector('#confirm-paid-include-month-interest');
-    const canIncludeMonthInterest = forceCapitalAdvance && form.dataset.monthInterestAllowed === 'true';
+    const canIncludeMonthInterest = form.dataset.monthInterestAllowed === 'true';
 
     if (delinquencyToggle instanceof HTMLInputElement) {
         delinquencyToggle.checked = false;
@@ -237,6 +237,10 @@ document.addEventListener('submit', (event) => {
 
     if (capitalAdvanceButton instanceof HTMLButtonElement) {
         capitalAdvanceButton.textContent = 'Abono a capital';
+    }
+
+    if (normalPaymentButton instanceof HTMLButtonElement) {
+        normalPaymentButton.textContent = 'Pagado normal';
     }
 
     dialog.showModal();
@@ -587,6 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const delinquencyFields = dialog.querySelector('[data-confirm-paid-delinquency-fields]');
         const monthInterestToggle = dialog.querySelector('#confirm-paid-include-month-interest');
         const capitalAdvanceButton = dialog.querySelector('[data-capital-advance-action]');
+        const normalPaymentButton = dialog.querySelector('[data-normal-payment-action]');
 
         const syncMonthInterestAmount = () => {
             if (!pendingPaidForm || !(monthInterestToggle instanceof HTMLInputElement)) {
@@ -596,9 +601,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const paymentAmount = dialog.querySelector('#confirm-paid-amount');
             const suggestedCapitalAmount = pendingPaidForm.dataset.suggestedCapitalAmount;
             const suggestedPaymentAmount = pendingPaidForm.dataset.suggestedPaymentAmount;
+            const forceCapitalAdvance = pendingPaidForm.dataset.forceCapitalAdvance === 'true';
 
             if (paymentAmount instanceof HTMLInputElement) {
-                paymentAmount.value = monthInterestToggle.checked
+                paymentAmount.value = monthInterestToggle.checked || !forceCapitalAdvance
                     ? (suggestedPaymentAmount || '0.00')
                     : (suggestedCapitalAmount || suggestedPaymentAmount || '0.00');
                 paymentAmount.readOnly = monthInterestToggle.checked;
@@ -609,9 +615,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? 'Pagar letra completa'
                     : 'Abono a capital';
             }
+
+            if (normalPaymentButton instanceof HTMLButtonElement && !forceCapitalAdvance) {
+                normalPaymentButton.textContent = monthInterestToggle.checked
+                    ? 'Pagar letra completa'
+                    : 'Pagado normal';
+            }
         };
 
-        capitalAdvanceButton?.addEventListener('click', syncMonthInterestAmount);
+        capitalAdvanceButton?.addEventListener('click', () => {
+            if (!pendingPaidForm) {
+                return;
+            }
+
+            const paymentAmount = dialog.querySelector('#confirm-paid-amount');
+            const suggestedCapitalAmount = pendingPaidForm.dataset.suggestedCapitalAmount;
+            const suggestedPaymentAmount = pendingPaidForm.dataset.suggestedPaymentAmount;
+            const includeFullInstallment = monthInterestToggle instanceof HTMLInputElement && monthInterestToggle.checked;
+
+            if (paymentAmount instanceof HTMLInputElement) {
+                paymentAmount.value = includeFullInstallment
+                    ? (suggestedPaymentAmount || '0.00')
+                    : (suggestedCapitalAmount || suggestedPaymentAmount || '0.00');
+                paymentAmount.readOnly = includeFullInstallment;
+            }
+        });
 
         delinquencyToggle?.addEventListener('change', () => {
             if (!(delinquencyToggle instanceof HTMLInputElement) || !(delinquencyFields instanceof HTMLElement)) {
@@ -645,8 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const includeDelinquency = dialog.querySelector('#confirm-paid-include-delinquency');
             const selectedDelinquencyAmount = dialog.querySelector('#confirm-paid-delinquency-amount');
             const includeMonthInterest = dialog.querySelector('#confirm-paid-include-month-interest');
-            const shouldIncludeMonthInterest = forceCapitalAdvance
-                && includeMonthInterest instanceof HTMLInputElement
+            const shouldIncludeMonthInterest = includeMonthInterest instanceof HTMLInputElement
                 && includeMonthInterest.checked
                 && pendingPaidForm.dataset.monthInterestAllowed === 'true';
             const confirmedAction = forceCapitalAdvance ? 'confirm-capital-advance' : dialog.returnValue;

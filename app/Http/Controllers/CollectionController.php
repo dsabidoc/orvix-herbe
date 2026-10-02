@@ -164,10 +164,11 @@ class CollectionController extends Controller
         $automaticInterestOnlyAdvance = ($installment->loan->calculation_method ?? 'regular') === 'interest_only'
             && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
         $includeMonthInterest = $request->boolean('include_month_interest');
+        $isRegularInstallment = ($installment->loan->calculation_method ?? 'regular') !== 'interest_only';
         abort_if(
-            $includeMonthInterest && ! $automaticCapitalOnly,
+            $includeMonthInterest && ! $isRegularInstallment,
             422,
-            'Los intereses del mes solo se pueden contemplar al liquidar completa una letra futura regular.',
+            'Los intereses del mes solo se pueden contemplar en una letra regular.',
         );
         if ($includeMonthInterest) {
             $paymentEffect = 'normal';
@@ -202,7 +203,7 @@ class CollectionController extends Controller
             422,
             'Para contemplar intereses del mes debes cubrir el total pendiente de esta letra.',
         );
-        $delinquencyAmountCents = $includeMonthInterest || in_array($movementType, ['advance', 'capital_advance'], true) || $paymentEffect === 'no_investors'
+        $delinquencyAmountCents = ($includeMonthInterest && $automaticCapitalOnly) || in_array($movementType, ['advance', 'capital_advance'], true) || $paymentEffect === 'no_investors'
             ? 0
             : Money::cents($data['delinquency_amount'] ?? 0);
 
@@ -229,9 +230,11 @@ class CollectionController extends Controller
             'origin_weekly_cut_id' => $paymentEffect === 'no_investors' ? null : $selectedCut?->id,
             'type' => $movementType,
             'payment_method' => 'cash',
-            'reference' => $includeMonthInterest ? PaymentApplicationService::FUTURE_MONTH_INTEREST_REFERENCE : null,
+            'reference' => $includeMonthInterest && $automaticCapitalOnly ? PaymentApplicationService::FUTURE_MONTH_INTEREST_REFERENCE : null,
             'notes' => $data['notes'] ?? ($includeMonthInterest
-                ? 'Letra futura liquidada con capital e intereses del mes desde cobranza'
+                ? ($automaticCapitalOnly
+                    ? 'Letra futura liquidada con capital e intereses del mes desde cobranza'
+                    : 'Letra liquidada completa con intereses del mes desde cobranza')
                 : ($automaticCapitalOnly || $automaticInterestOnlyAdvance
                 ? 'Pago de letra futura aplicado solo a capital'
                 : ($paymentEffect === 'capital_advance' ? 'Marcado como abono a capital desde cobranza' : 'Marcado pagado desde cobranza'))),

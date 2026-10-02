@@ -327,7 +327,7 @@
                                 <p class="mt-1 text-xs text-amber-800">Importe sugerido según la morosidad del crédito. Puedes editarlo.</p>
                             </div>
                         </div>
-                        <div class="hidden rounded-md border border-teal-200 bg-teal-50 p-3" data-confirm-paid-month-interest-section>
+                        <div hidden class="rounded-md border border-teal-200 bg-teal-50 p-3" data-confirm-paid-month-interest-section>
                             <label class="flex items-center gap-2 text-sm font-semibold text-teal-900" for="confirm-paid-include-month-interest">
                                 <input class="rounded border-teal-400 text-[#0f766e] focus:ring-[#0d9488]" id="confirm-paid-include-month-interest" type="checkbox">
                                 Contemplar intereses del mes

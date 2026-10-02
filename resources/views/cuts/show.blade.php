@@ -255,7 +255,7 @@
                                     <td class="whitespace-nowrap px-3 py-3 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->remaining_amount) }}</td>
                                     @can('weekly-cuts.confirm')
                                         <td class="whitespace-nowrap px-3 py-3 text-right">
-                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}">
+                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}" @if (($installment->loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif>
                                                 @csrf
                                                 <input name="return_to" type="hidden" value="cut">
                                                 <input name="cut_id" type="hidden" value="{{ $cut->id }}">
@@ -525,7 +525,7 @@
                                                             data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}"
                                                             data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}"
                                                             @if ($isCapitalAdvance) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif
-                                                            @if ($isCapitalAdvance && ($loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif
+                                                            @if (($loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif
                                                             @if ($canAdvanceCapital) data-capital-advance-allowed="true" @endif>
                                                             @csrf
                                                             <input name="return_to" type="hidden" value="cut">
