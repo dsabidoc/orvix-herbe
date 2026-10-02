@@ -10,8 +10,9 @@ use Illuminate\Support\Collection;
 class PeriodCollectionService
 {
     /**
-     * Sums only ordinary payments assigned to installments due in the period.
-     * Advances and settlements are intentionally excluded from period collection.
+     * Sums ordinary payments assigned to installments due in the period once
+     * their weekly cut has been confirmed. Advances, settlements, and pending
+     * cuts are intentionally excluded from period collection.
      *
      * @param  Collection<int, int>|array<int, int>  $loanIds
      */
@@ -27,7 +28,10 @@ class PeriodCollectionService
             ->with('targetInstallment')
             ->whereIn('loan_id', $loanIds)
             ->where('type', 'ordinary')
-            ->whereIn('confirmation_status', ['reported', 'applied'])
+            ->where('confirmation_status', 'applied')
+            ->whereHas('weeklyCut', fn ($query) => $query
+                ->whereNotNull('confirmed_at')
+                ->whereIn('status', ['balanced', 'partially_received', 'with_difference', 'closed']))
             ->whereBetween('operated_on', [$periodStart->toDateString(), $periodEnd->toDateString()])
             ->get()
             ->filter(fn (CollectionMovement $movement) => $movement->targetInstallment

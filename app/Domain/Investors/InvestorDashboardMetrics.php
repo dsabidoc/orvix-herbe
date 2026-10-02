@@ -7,6 +7,7 @@ use App\Models\CollectionMovement;
 use App\Models\Investor;
 use App\Models\InvestorCapitalMovement;
 use App\Models\Loan;
+use App\Models\WeeklyCut;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -161,7 +162,7 @@ class InvestorDashboardMetrics
         $collectionMovements = $collectionMovementIds->isEmpty()
             ? collect()
             : CollectionMovement::query()
-                ->with('targetInstallment')
+                ->with(['targetInstallment', 'weeklyCut'])
                 ->whereIn('id', $collectionMovementIds)
                 ->get()
                 ->keyBy('id');
@@ -173,6 +174,8 @@ class InvestorDashboardMetrics
 
             if (! $collectionMovement
                 || $collectionMovement->type !== 'ordinary'
+                || $collectionMovement->confirmation_status !== 'applied'
+                || ! $this->isConfirmedCut($collectionMovement->weeklyCut)
                 || ! $collectionMovement->targetInstallment
             ) {
                 continue;
@@ -191,5 +194,12 @@ class InvestorDashboardMetrics
         }
 
         return $collectedCents;
+    }
+
+    private function isConfirmedCut(?WeeklyCut $cut): bool
+    {
+        return $cut
+            && $cut->confirmed_at
+            && in_array($cut->status, ['balanced', 'partially_received', 'with_difference', 'closed'], true);
     }
 }
