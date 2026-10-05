@@ -30,7 +30,18 @@
 
     <div class="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <section class="print-sheet min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-200 px-5 py-5">
+            <div class="print-only cut-print-header">
+                <div>
+                    <p class="cut-print-eyebrow">ORVIX PRESTAMOS</p>
+                    <h1>Relación de cobros del corte</h1>
+                </div>
+                <div class="cut-print-operator">
+                    <span>Operador</span>
+                    <strong>{{ $cut->operator->name }}</strong>
+                </div>
+            </div>
+
+            <div class="no-print border-b border-slate-200 px-5 py-5">
                 <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Corte Orvix Prestamos</p>
                 <div class="mt-2 grid gap-3 md:grid-cols-4">
                     <div>
@@ -61,39 +72,15 @@
             </div>
 
             <div class="print-only cut-print-summary border-b border-slate-200 px-5 py-4">
-                <h3 class="cut-print-summary-title">Resumen del corte</h3>
+                <h3 class="cut-print-summary-title">Resumen</h3>
                 <dl>
                     <div>
-                        <dt>Cobros reportados</dt>
+                        <dt>Total del corte</dt>
                         <dd data-cut-summary="reported-total">{{ Money::mxn($cut->reported_total) }}</dd>
-                    </div>
-                    <div>
-                        <dt>Cobros confirmados/recibidos</dt>
-                        <dd data-cut-summary="confirmed-total">{{ Money::mxn($cut->confirmed_total) }}</dd>
-                    </div>
-                    <div>
-                        <dt>Pendiente de entregar</dt>
-                        <dd data-cut-summary="pending-delivery">{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
                     </div>
                     <div>
                         <dt>Cantidad de cobros</dt>
                         <dd data-cut-summary="items-count">{{ $cut->items->count() }}</dd>
-                    </div>
-                    <div>
-                        <dt>Recibir por administrador</dt>
-                        <dd data-cut-summary="received-total">{{ Money::mxn($cut->received_total) }}</dd>
-                    </div>
-                    <div>
-                        <dt>Fecha de pago</dt>
-                        <dd>{{ $cut->confirmed_at?->format('d/m/Y') ?? '-' }}</dd>
-                    </div>
-                    <div>
-                        <dt>Diferencia</dt>
-                        <dd data-cut-summary="difference-total">{{ Money::mxn($cut->difference_total) }}</dd>
-                    </div>
-                    <div>
-                        <dt>Saldo</dt>
-                        <dd>{{ Money::mxn(Money::decimal($pendingDeliveryCents)) }}</dd>
                     </div>
                 </dl>
             </div>
@@ -113,11 +100,11 @@
                 <table class="cut-print-table min-w-[780px] w-full table-fixed text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
-                            <th class="w-[23%] px-3 py-3">Cliente</th>
-                            <th class="w-[20%] px-3 py-3">Credito</th>
-                            <th class="w-[16%] px-3 py-3">Fechas</th>
-                            <th class="w-[16%] px-3 py-3 text-right">Importes</th>
-                            <th class="w-[13%] px-3 py-3">Estado</th>
+                            <th class="cut-print-client w-[23%] px-3 py-3">Cliente</th>
+                            <th class="cut-print-credit w-[20%] px-3 py-3">Crédito</th>
+                            <th class="cut-print-hide w-[16%] px-3 py-3">Fechas</th>
+                            <th class="cut-print-amount w-[16%] px-3 py-3 text-right"><span class="no-print">Importes</span><span class="print-only">Importe</span></th>
+                            <th class="cut-print-hide w-[13%] px-3 py-3">Estado</th>
                             @can('weekly-cuts.confirm')
                                 <th class="no-print w-[12%] px-3 py-3 text-right">Accion</th>
                             @endcan
@@ -137,36 +124,38 @@
                                     $isPartialInstallmentPayment = $isInstallmentPayment && $projectedRemainingCents > 0;
                             @endphp
                             <tr>
-                                <td class="px-3 py-4 align-top">
+                                <td class="cut-print-client px-3 py-4 align-top">
                                     <a class="break-words font-semibold leading-5 text-[#0f766e]" href="{{ route('loans.show', $item->movement->loan) }}">{{ $item->movement->loan->client->first_name }} {{ $item->movement->loan->client->last_name }}</a>
                                     <p class="mt-1 break-all text-xs text-slate-500">{{ $item->movement->folio }}</p>
                                 </td>
-                                <td class="px-3 py-4 align-top">
+                                <td class="cut-print-credit px-3 py-4 align-top">
                                     <p class="font-semibold text-slate-950">{{ $item->movement->loan->vehicle?->model ?? 'Vehiculo' }}</p>
                                     @if ($item->movement->targetInstallment)
-                                        <p class="mt-1 text-xs text-slate-500">Letra {{ $item->movement->targetInstallment->number }} · vence {{ $item->movement->targetInstallment->due_date->format('d/m/Y') }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Letra {{ $item->movement->targetInstallment->number }}<span class="cut-print-hide"> · vence {{ $item->movement->targetInstallment->due_date->format('d/m/Y') }}</span></p>
                                         @if ($isPartialInstallmentPayment)
-                                            <p class="mt-1 text-xs font-semibold text-amber-700">Abono parcial · saldo pendiente {{ Money::mxn(Money::decimal($projectedRemainingCents)) }}</p>
+                                            <p class="cut-print-hide mt-1 text-xs font-semibold text-amber-700">Abono parcial · saldo pendiente {{ Money::mxn(Money::decimal($projectedRemainingCents)) }}</p>
                                         @endif
                                     @else
                                         <p class="mt-1 text-xs text-slate-500">Movimiento general</p>
                                     @endif
                                 </td>
-                                <td class="px-3 py-4 align-top">
+                                <td class="cut-print-hide px-3 py-4 align-top">
                                     <p class="text-xs text-slate-500">Declarada</p>
                                     <p class="font-semibold text-slate-950">{{ $item->movement->operated_on->format('d/m/Y') }}</p>
                                     <p class="mt-2 text-xs text-slate-500">Registro</p>
                                     <p class="font-semibold text-slate-950">{{ ($item->movement->registered_at ?? $item->movement->created_at)->format('d/m/Y H:i') }}</p>
                                 </td>
-                                <td class="px-3 py-4 text-right align-top">
-                                    <p class="text-xs text-slate-500">Monto recibido de la letra</p>
-                                    <p class="font-semibold">{{ Money::mxn($item->movement->contract_amount) }}</p>
-                                    <p class="mt-2 text-xs text-slate-500">Recargos/otros</p>
-                                    <p>{{ Money::mxn(Money::decimal(Money::cents($item->movement->operator_surcharge_amount) + Money::cents($item->movement->external_concepts_amount) + Money::cents($item->movement->additional_charge_amount ?? 0) + Money::cents($item->movement->delinquency_amount ?? 0))) }}</p>
-                                    <p class="mt-2 text-xs text-slate-500">Total</p>
+                                <td class="cut-print-amount px-3 py-4 text-right align-top">
+                                    <div class="no-print">
+                                        <p class="text-xs text-slate-500">Monto recibido de la letra</p>
+                                        <p class="font-semibold">{{ Money::mxn($item->movement->contract_amount) }}</p>
+                                        <p class="mt-2 text-xs text-slate-500">Recargos/otros</p>
+                                        <p>{{ Money::mxn(Money::decimal(Money::cents($item->movement->operator_surcharge_amount) + Money::cents($item->movement->external_concepts_amount) + Money::cents($item->movement->additional_charge_amount ?? 0) + Money::cents($item->movement->delinquency_amount ?? 0))) }}</p>
+                                        <p class="mt-2 text-xs text-slate-500">Total</p>
+                                    </div>
                                     <p class="font-bold text-slate-950">{{ Money::mxn($item->reported_amount) }}</p>
                                 </td>
-                                <td class="px-3 py-4 align-top">
+                                <td class="cut-print-hide px-3 py-4 align-top">
                                     <span class="inline-flex rounded bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{{ StatusLabels::movement($item->movement->confirmation_status) }}</span>
                                     @if ($isInstallmentPayment)
                                         <p class="mt-2 text-xs font-semibold {{ $isPartialInstallmentPayment ? 'text-amber-700' : 'text-emerald-700' }}">{{ $isPartialInstallmentPayment ? 'Letra con abono parcial' : 'Letra cubierta' }}</p>
