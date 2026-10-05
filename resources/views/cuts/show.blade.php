@@ -133,7 +133,7 @@
                                 <td class="cut-print-credit px-3 py-4 align-top">
                                     <p class="font-semibold text-slate-950">{{ $item->movement->loan->vehicle?->model ?? 'Vehiculo' }}</p>
                                     @if ($item->movement->targetInstallment)
-                                        <p class="mt-1 text-xs text-slate-500">Letra {{ $item->movement->targetInstallment->number }}<span class="cut-print-hide"> · vence {{ $item->movement->targetInstallment->due_date->format('d/m/Y') }}</span></p>
+                                        <p class="mt-1 text-xs text-slate-500">Letra {{ $item->movement->targetInstallment->number }} · vence {{ $item->movement->targetInstallment->due_date->format('d/m/Y') }}</p>
                                         @if ($isPartialInstallmentPayment)
                                             <p class="cut-print-hide mt-1 text-xs font-semibold text-amber-700">Abono parcial · saldo pendiente {{ Money::mxn(Money::decimal($projectedRemainingCents)) }}</p>
                                         @endif
