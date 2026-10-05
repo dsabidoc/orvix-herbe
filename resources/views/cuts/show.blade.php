@@ -38,6 +38,8 @@
                 <div class="cut-print-operator">
                     <span>Operador</span>
                     <strong>{{ $cut->operator->name }}</strong>
+                    <span class="cut-print-date-label">Fecha del corte</span>
+                    <strong>{{ $cut->period_starts_on->format('d/m/Y') }}</strong>
                 </div>
             </div>
 

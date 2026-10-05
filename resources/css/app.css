@@ -161,6 +161,10 @@
         font-size: 11px !important;
     }
 
+    .cut-print-operator .cut-print-date-label {
+        margin-top: 8px !important;
+    }
+
     .print-sheet p {
         font-size: 10px !important;
         line-height: 1.25 !important;
