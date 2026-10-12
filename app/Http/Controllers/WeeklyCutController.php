@@ -107,6 +107,22 @@ class WeeklyCutController extends Controller
             'items',
             $cut->items
                 ->filter(fn ($item) => WeeklyCutPeriodService::isReportableMovement($item->movement))
+                ->sort(function ($first, $second): int {
+                    $firstMovement = $first->movement;
+                    $secondMovement = $second->movement;
+
+                    return [
+                        $firstMovement?->targetInstallment?->due_date?->toDateString() ?? '9999-12-31',
+                        (int) ($firstMovement?->targetInstallment?->number ?? PHP_INT_MAX),
+                        (string) ($firstMovement?->loan?->folio ?? ''),
+                        (int) $first->id,
+                    ] <=> [
+                        $secondMovement?->targetInstallment?->due_date?->toDateString() ?? '9999-12-31',
+                        (int) ($secondMovement?->targetInstallment?->number ?? PHP_INT_MAX),
+                        (string) ($secondMovement?->loan?->folio ?? ''),
+                        (int) $second->id,
+                    ];
+                })
                 ->values(),
         );
 

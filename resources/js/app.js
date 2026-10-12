@@ -1096,6 +1096,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-quick-payment-search]').forEach((input) => {
         const selectId = input.getAttribute('data-quick-payment-search');
         const select = selectId ? document.getElementById(selectId) : null;
+        const container = input.closest('dialog') || document;
+        const status = selectId ? container.querySelector(`[data-quick-payment-search-status="${selectId}"]`) : null;
 
         if (!(input instanceof HTMLInputElement) || !(select instanceof HTMLSelectElement)) {
             return;
@@ -1109,25 +1111,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const filterOptions = () => {
             const needle = normalize(input.value).trim();
-            let visibleMatches = 0;
+            const matches = Array.from(select.options).filter((option) => option.value !== ''
+                && normalize(option.getAttribute('data-search-text') || option.textContent || '').includes(needle));
 
-            Array.from(select.options).forEach((option) => {
-                if (option.value === '') {
-                    option.hidden = false;
-                    return;
+            select.classList.toggle('border-amber-300', needle !== '' && matches.length === 0);
+
+            if (needle === '') {
+                if (status instanceof HTMLElement) {
+                    status.textContent = 'Escribe y usa Buscar para abrir la primera cartera coincidente.';
                 }
 
-                const haystack = normalize(option.getAttribute('data-search-text') || option.textContent || '');
-                const isVisible = needle === '' || haystack.includes(needle);
+                return;
+            }
 
-                option.hidden = !isVisible;
-                visibleMatches += isVisible ? 1 : 0;
-            });
+            if (matches.length === 0) {
+                if (status instanceof HTMLElement) {
+                    status.textContent = 'No se encontró una cartera con ese dato. Intenta con modelo, día, folio o cliente.';
+                }
 
-            select.classList.toggle('border-amber-300', needle !== '' && visibleMatches === 0);
+                return;
+            }
+
+            // iPad Safari does not reliably hide <option> elements in a native
+            // select. Selecting the first match directly makes the search useful
+            // on touch devices while leaving the full select as a fallback.
+            const firstMatch = matches[0];
+            select.value = firstMatch.value;
+            select.dispatchEvent(new Event('change'));
+
+            if (status instanceof HTMLElement) {
+                status.textContent = matches.length === 1
+                    ? 'Se abrió la cartera encontrada.'
+                    : `Se abrió la primera de ${matches.length} carteras coincidentes.`;
+            }
+
+            const panel = document.getElementById(firstMatch.value);
+            panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
 
-        const searchButton = document.querySelector(`[data-quick-payment-search-button="${selectId}"]`);
+        const searchButton = container.querySelector(`[data-quick-payment-search-button="${selectId}"]`);
 
         if (searchButton instanceof HTMLButtonElement) {
             searchButton.addEventListener('click', filterOptions);
@@ -1139,8 +1161,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 filterOptions();
             }
         });
-
-        filterOptions();
     });
 
     document.querySelectorAll('[data-cut-pending-search]').forEach((input) => {

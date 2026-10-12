@@ -404,26 +404,31 @@
 
     @can('weekly-cuts.confirm')
         @if ($cut->status !== 'closed')
-            <dialog id="cut-advance-modal" class="w-[min(96vw,1100px)] rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
-                <div class="border-b border-slate-200 px-5 py-4">
-                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Adelanto / liquidacion</p>
-                    <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $cut->operator->name }} · {{ $cut->period_starts_on->format('d/m/Y') }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">Busca cualquier cartera activa del operador de este corte para registrar pagos, adelantar letras o liquidarla sin salir de la pantalla.</p>
-                </div>
-                <div class="space-y-4 px-5 py-4">
+            <dialog id="cut-advance-modal" class="w-[calc(100vw-1rem)] max-w-[1100px] max-h-[calc(100dvh-1rem)] overflow-hidden rounded-lg border border-slate-200 bg-white p-0 text-left shadow-xl backdrop:bg-slate-950/40">
+                <div class="flex max-h-[calc(100dvh-1rem)] flex-col">
+                    <div class="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold uppercase tracking-[0.16em] text-[#0f766e]">Adelanto / liquidacion</p>
+                            <h3 class="mt-1 break-words text-lg font-bold text-slate-950">{{ $cut->operator->name }} · {{ $cut->period_starts_on->format('d/m/Y') }}</h3>
+                            <p class="mt-1 text-sm text-slate-500">Busca una cartera activa para registrar pagos, adelantar letras o liquidarla sin salir de la pantalla.</p>
+                        </div>
+                        <button class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700" type="button" data-close-modal aria-label="Cerrar adelanto">Cerrar</button>
+                    </div>
+                    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
                     @if ($advanceLoans->isEmpty())
                         <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                             No hay carteras activas con saldo pendiente para este operador.
                         </div>
                     @else
-                        <div>
+                        <div class="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white px-4 pb-4 sm:-mx-5 sm:px-5">
                             <label class="text-sm font-semibold text-slate-700" for="cut_advance_loan_search">Buscar cartera</label>
-                            <div class="mt-1 flex gap-2">
-                                <input class="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_advance_loan_search" type="search" placeholder="Buscar por modelo, dia, folio o cliente" data-quick-payment-search="cut_advance_loan">
-                                <button class="shrink-0 rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="button" data-quick-payment-search-button="cut_advance_loan">Buscar</button>
+                            <div class="mt-1 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                <input class="w-full min-w-0 rounded-md border border-slate-300 px-3 py-2.5 text-base sm:text-sm" id="cut_advance_loan_search" type="search" inputmode="search" placeholder="Modelo, día, folio o cliente" data-quick-payment-search="cut_advance_loan" aria-describedby="cut_advance_loan_search_status">
+                                <button class="min-h-11 rounded-md bg-[#0d9488] px-5 py-2.5 text-sm font-bold text-white" type="button" data-quick-payment-search-button="cut_advance_loan">Buscar</button>
                             </div>
-                            <label class="text-sm font-semibold text-slate-700" for="cut_advance_loan">Cartera</label>
-                            <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="cut_advance_loan" data-quick-payment-select>
+                            <p class="mt-2 min-h-5 text-xs text-slate-500" id="cut_advance_loan_search_status" aria-live="polite" data-quick-payment-search-status="cut_advance_loan">Escribe y usa Buscar para abrir la primera cartera coincidente.</p>
+                            <label class="mt-3 block text-sm font-semibold text-slate-700" for="cut_advance_loan">O selecciona una cartera</label>
+                            <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-base sm:text-sm" id="cut_advance_loan" data-quick-payment-select>
                                 <option value="">Seleccionar cartera</option>
                                 @foreach ($advanceLoans as $loan)
                                     @php
@@ -449,20 +454,20 @@
                                 $cutDateString = $cutDate->toDateString();
                                 $cutMonthEndString = $cutDate->copy()->endOfMonth()->toDateString();
                             @endphp
-                            <section class="hidden rounded-lg border border-slate-200" data-quick-payment-panel="cut-advance-loan-{{ $loan->id }}" id="cut-advance-loan-{{ $loan->id }}">
+                            <section class="mt-4 hidden rounded-lg border border-slate-200" data-quick-payment-panel="cut-advance-loan-{{ $loan->id }}" id="cut-advance-loan-{{ $loan->id }}">
                                 <div class="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
                                         <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{{ $loan->folio }}</p>
                                         <h4 class="mt-1 text-lg font-bold text-slate-950">{{ $loan->vehicle?->model ?? 'Vehiculo' }} · Dia {{ $loan->payment_day }}</h4>
                                         <p class="text-sm text-slate-500">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</p>
                                     </div>
-                                    <form class="rounded-lg border border-red-200 bg-red-50 p-3" method="POST" action="{{ route('loans.settle', $loan) }}">
+                                    <form class="w-full rounded-lg border border-red-200 bg-red-50 p-3 lg:w-auto lg:min-w-[330px]" method="POST" action="{{ route('loans.settle', $loan) }}">
                                         @csrf
                                         <input name="return_to" type="hidden" value="cut">
                                         <input name="cut_id" type="hidden" value="{{ $cut->id }}">
                                         <input name="advance_loan_id" type="hidden" value="{{ $loan->id }}">
                                         <input name="settled_on" type="hidden" value="{{ $cutDateString }}">
-                                        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+                                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                                             <div>
                                                 <label class="text-xs font-semibold text-red-700" for="settlement_reason_{{ $loan->id }}">Liquidar en este corte</label>
                                                 <select class="mt-1 w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm" id="settlement_reason_{{ $loan->id }}" name="settlement_reason" required>
@@ -474,11 +479,11 @@
                                                     <p class="mt-1 text-xs font-semibold text-amber-700">Incluye los pagos reportados en este corte; se aplicaran al confirmarlo.</p>
                                                 @endif
                                             </div>
-                                            <button class="rounded-md bg-red-700 px-4 py-2 text-sm font-bold text-white" type="submit">Liquidar</button>
+                                            <button class="min-h-11 rounded-md bg-red-700 px-5 py-2.5 text-sm font-bold text-white" type="submit">Liquidar</button>
                                         </div>
                                     </form>
                                 </div>
-                                <div class="max-h-[48vh] overflow-auto">
+                                <div class="max-h-[min(48vh,34rem)] overflow-auto overscroll-contain">
                                     <table class="w-full min-w-[760px] text-left text-sm">
                                         <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                                             <tr>
@@ -542,9 +547,10 @@
                             </section>
                         @endforeach
                     @endif
-                </div>
-                <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4">
-                    <button class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cerrar</button>
+                    </div>
+                    <div class="flex shrink-0 justify-end border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5 sm:py-4">
+                        <button class="min-h-11 rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700" type="button" data-close-modal>Cerrar</button>
+                    </div>
                 </div>
             </dialog>
         @endif

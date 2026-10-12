@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Investors\InvestorDashboardMetrics;
 use App\Domain\Loans\LoanSettlementService;
 use App\Models\Installment;
@@ -18,7 +17,7 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, LoanSettlementService $settlementService, InvestorDashboardMetrics $investorMetrics, PeriodCollectionService $periodCollectionService): View|RedirectResponse
+    public function __invoke(Request $request, LoanSettlementService $settlementService, InvestorDashboardMetrics $investorMetrics): View|RedirectResponse
     {
         $user = $request->user();
 
@@ -81,7 +80,11 @@ class DashboardController extends Controller
                     ->whereIn('loan_id', $collectableLoanIds)
                     ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
             );
-            $collectedPeriodCents = $periodCollectionService->amountForLoans($collectableLoanIds, $periodStart, $periodEnd);
+            // The dashboard represents cash that has actually been received in
+            // closed cuts. This intentionally differs from the schedule-level
+            // "letters collected" measure, which only counts ordinary payments
+            // assigned to installments due in the selected period.
+            $collectedPeriodCents = $this->closedCutCollectionCents($request, $periodStart, $periodEnd);
             $overdueCents = $this->operationalPendingCents(
                 Installment::query()
                     ->whereIn('loan_id', $collectableLoanIds)
@@ -132,7 +135,7 @@ class DashboardController extends Controller
                 ['title' => 'Prestamos concluidos', 'value' => number_format($concludedLoansCount), 'caption' => 'Prestamos liquidados o concluidos', 'cents' => 0, 'color' => 'blue', 'chartable' => false],
                 ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => $selectedInvestor ? 'Programado para su participacion' : 'Total programado originalmente', 'cents' => (int) $expectedPeriodCents, 'color' => 'yellow'],
                 ['title' => 'Total a liquidar hoy', 'value' => Money::mxn(Money::decimal((int) $settleTodayCents)), 'caption' => $selectedInvestor ? 'Capital aportado e intereses correspondientes' : 'Capital futuro e intereses vigentes', 'cents' => (int) $settleTodayCents, 'color' => 'blue'],
-                ['title' => 'Cobrado del periodo', 'value' => Money::mxn(Money::decimal((int) $collectedPeriodCents)), 'caption' => $selectedInvestor ? 'Retornos de cortes confirmados' : 'Letras de cortes confirmados', 'cents' => (int) $collectedPeriodCents, 'color' => 'green'],
+                ['title' => 'Cobrado del periodo', 'value' => Money::mxn(Money::decimal((int) $collectedPeriodCents)), 'caption' => $selectedInvestor ? 'Retornos de cortes confirmados' : 'Total recibido de cortes cerrados', 'cents' => (int) $collectedPeriodCents, 'color' => 'green'],
                 ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingPeriodCents)), 'caption' => $selectedInvestor ? 'Esperado menos retornado' : 'Esperado menos cobrado', 'cents' => (int) $pendingPeriodCents, 'color' => 'orange'],
                 ['title' => 'Total vencidos', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => $selectedInvestor ? 'Capital e interes vencido correspondientes' : 'Abono e interes vencido', 'cents' => (int) $overdueCents, 'color' => 'red'],
             ],
@@ -194,6 +197,18 @@ class DashboardController extends Controller
         return (int) $query
             ->get(['principal_amount', 'interest_amount'])
             ->sum(fn (Installment $installment) => Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount));
+    }
+
+    private function closedCutCollectionCents(Request $request, CarbonImmutable $periodStart, CarbonImmutable $periodEnd): int
+    {
+        return (int) WeeklyCut::query()
+            ->where('status', 'closed')
+            ->whereNotNull('confirmed_at')
+            ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
+            ->when(! $request->user()->hasRole('operador-cartera') && $request->filled('operator_id'), fn ($query) => $query->where('operator_id', $request->integer('operator_id')))
+            ->whereBetween('confirmed_at', [$periodStart, $periodEnd->endOfDay()])
+            ->get(['confirmed_total'])
+            ->sum(fn (WeeklyCut $cut) => Money::cents($cut->confirmed_total));
     }
 
     private function installmentOperationalPendingCents(Installment $installment): int

@@ -88,7 +88,7 @@ class CollectionController extends Controller
                 ['title' => 'Cartera del mes', 'value' => Money::mxn(Money::decimal((int) ((clone $monthInstallments)->sum('remaining_amount') * 100))), 'caption' => 'Saldo de letras del mes', 'color' => 'blue'],
                 ['title' => 'Letras cobradas del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthLettersCents)), 'caption' => 'Pagos de letras con vencimiento en este mes', 'color' => 'orange'],
                 ['title' => 'Esperado del mes', 'value' => Money::mxn(Money::decimal((int) $monthOperationalCents)), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
-                ['title' => 'Cobrado del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthCents)), 'caption' => 'Pagos reportados o aplicados', 'color' => 'green'],
+                ['title' => 'Cobrado del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthCents)), 'caption' => 'Total recibido de cortes cerrados', 'color' => 'green'],
                 ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingMonthCents)), 'caption' => 'Esperado menos letras cobradas', 'color' => 'orange'],
                 ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas del mes', 'color' => 'red'],
             ],
