@@ -115,8 +115,10 @@
                     <tbody class="divide-y divide-slate-100">
                         @forelse ($cut->items as $item)
                                 @php
-                                    $isInstallmentPayment = $item->movement->target_installment_id
-                                        && $item->movement->type !== 'capital_advance';
+                                    $movement = $item->movement;
+                                    $isCapitalAdvance = in_array($movement->type, ['advance', 'capital_advance'], true);
+                                    $isSettlement = $movement->type === 'settlement';
+                                    $isInstallmentPayment = $movement->target_installment_id && ! $isCapitalAdvance;
                                     $targetRemainingCents = $item->movement->targetInstallment
                                         ? Money::cents($item->movement->targetInstallment->remaining_amount)
                                         : 0;
@@ -134,9 +136,15 @@
                                     <p class="font-semibold text-slate-950">{{ $item->movement->loan->vehicle?->model ?? 'Vehiculo' }}</p>
                                     @if ($item->movement->targetInstallment)
                                         <p class="mt-1 text-xs text-slate-500">Letra {{ $item->movement->targetInstallment->number }} · vence {{ $item->movement->targetInstallment->due_date->format('d/m/Y') }}</p>
+                                        @if ($isCapitalAdvance)
+                                            <p class="mt-1 text-xs font-bold text-sky-700">Adelanto a capital · Solo capital</p>
+                                        @endif
                                         @if ($isPartialInstallmentPayment)
                                             <p class="cut-print-hide mt-1 text-xs font-semibold text-amber-700">Abono parcial · saldo pendiente {{ Money::mxn(Money::decimal($projectedRemainingCents)) }}</p>
                                         @endif
+                                    @elseif ($isSettlement)
+                                        <p class="mt-1 text-xs font-bold text-violet-700">Liquidación de crédito</p>
+                                        <p class="mt-1 text-xs text-slate-500">Inicio de crédito: {{ $movement->loan->start_date?->format('d/m/Y') ?? 'Sin fecha registrada' }}</p>
                                     @else
                                         <p class="mt-1 text-xs text-slate-500">Movimiento general</p>
                                     @endif
