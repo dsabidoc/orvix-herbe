@@ -203,11 +203,27 @@ class CollectionController extends Controller
             422,
             'Para contemplar intereses del mes debes cubrir el total pendiente de esta letra.',
         );
+        abort_if(
+            $automaticCapitalOnly && ! $includeMonthInterest && $contractAmountCents !== $principalRemainingCents,
+            422,
+            'Para adelantar una letra futura debes cubrir todo el capital pendiente de la letra.',
+        );
         $delinquencyAmountCents = ($includeMonthInterest && $automaticCapitalOnly) || in_array($movementType, ['advance', 'capital_advance'], true) || $paymentEffect === 'no_investors'
             ? 0
             : Money::cents($data['delinquency_amount'] ?? 0);
 
         abort_if($contractAmountCents <= 0, 422, 'Esta letra no tiene abono a capital disponible.');
+
+        $automaticCut = null;
+        if (($data['return_to'] ?? null) === 'loan' && $paymentEffect !== 'no_investors') {
+            // Desde el detalle del credito, la fecha declarada define el corte.
+            // Se abre una sola vez y los siguientes pagos de esa fecha se agregan ahi.
+            $automaticCut = $cutPeriodService->openDailyCutForOperatorDate(
+                $installment->loan->operator_id,
+                $data['operated_on'],
+                $request->user()->id,
+            );
+        }
 
         $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
         $movementPublicId = (string) Str::ulid();
@@ -249,6 +265,8 @@ class CollectionController extends Controller
                 $selectedCut,
                 $request->user()->id,
             );
+        } elseif ($automaticCut && WeeklyCutPeriodService::isReportableMovement($movement)) {
+            $cutPeriodService->attachMovementToCut($movement, $automaticCut, $request->user()->id);
         } else {
             $cutPeriodService->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
         }
@@ -288,11 +306,15 @@ class CollectionController extends Controller
             ]);
         }
 
-        return redirect($route)->with('status', ($paymentEffect === 'no_investors'
-                ? 'Letra marcada como pagada sin efectos y aplicada directamente.'
-                : ((($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement))
+        $status = $paymentEffect === 'no_investors'
+            ? 'Letra marcada como pagada sin efectos y aplicada directamente.'
+            : ((($data['return_to'] ?? null) === 'cut' && WeeklyCutPeriodService::isReportableMovement($movement))
                 ? 'Letra marcada como pagada y agregada a este corte.'
-                : 'Letra marcada como pagada y enviada al corte de la fecha seleccionada.')));
+                : ($automaticCut && WeeklyCutPeriodService::isReportableMovement($movement)
+                    ? 'Letra marcada como pagada y agregada al corte de la fecha seleccionada.'
+                    : 'Letra marcada como pagada y enviada al corte de la fecha seleccionada.'));
+
+        return redirect($route)->with('status', $status);
     }
 
     public function markPaidBulk(
@@ -321,6 +343,8 @@ class CollectionController extends Controller
 
         $created = 0;
         $appliedDirectly = 0;
+        $automaticCut = null;
+        $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
         foreach ($installments as $installment) {
             $this->authorizeInstallmentAccess($request, $installment);
 
@@ -337,7 +361,6 @@ class CollectionController extends Controller
                 continue;
             }
 
-            $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
             $paymentPolicy = app(InstallmentPaymentPolicy::class);
             $automaticCapitalOnly = ($installment->loan->calculation_method ?? 'regular') !== 'interest_only'
                 && $paymentPolicy->isFutureMonth($installment, $data['operated_on']);
@@ -356,6 +379,14 @@ class CollectionController extends Controller
 
             if ($contractAmountCents <= 0) {
                 continue;
+            }
+
+            if (($data['return_to'] ?? null) === 'loan' && $paymentEffect !== 'no_investors' && ! $automaticCut) {
+                $automaticCut = $cutPeriodService->openDailyCutForOperatorDate(
+                    $installment->loan->operator_id,
+                    $data['operated_on'],
+                    $request->user()->id,
+                );
             }
 
             $registeredAt = now(WeeklyCutPeriodService::TIMEZONE);
@@ -389,6 +420,8 @@ class CollectionController extends Controller
             if ($paymentEffect === 'no_investors') {
                 $paymentApplicationService->confirm($movement, $request->user()->id);
                 $appliedDirectly++;
+            } elseif ($automaticCut && WeeklyCutPeriodService::isReportableMovement($movement)) {
+                $cutPeriodService->attachMovementToCut($movement, $automaticCut, $request->user()->id);
             } else {
                 $cutPeriodService->attachMovementToOpenCutForOperatedDate($movement, $request->user()->id);
             }
@@ -402,7 +435,9 @@ class CollectionController extends Controller
             ->to(route('loans.show', $loan).'#calendar')
             ->with('status', $appliedDirectly > 0
                 ? $created.' letra(s) marcadas como pagadas sin efectos y aplicadas directamente.'
-                : $created.' letra(s) marcadas como pagadas; apareceran al generar corte.');
+                : ($automaticCut
+                    ? $created.' letra(s) marcadas como pagadas y agregadas al corte de la fecha seleccionada.'
+                    : $created.' letra(s) marcadas como pagadas; apareceran al generar corte.'));
     }
 
     private function selectedOperatorId(Request $request): ?int

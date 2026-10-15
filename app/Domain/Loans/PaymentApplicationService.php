@@ -78,7 +78,11 @@ class PaymentApplicationService
             if ($movement->type === 'advance') {
                 $this->assertAdvanceCoversAllowedAmounts($remainingCents, $advanceAllowed);
             } elseif ($this->isDirectCapitalAdvance($movement)) {
-                $this->assertDirectCapitalAdvanceAmount($remainingCents, $advanceAllowed);
+                $this->assertDirectCapitalAdvanceAmount(
+                    $remainingCents,
+                    $advanceAllowed,
+                    $this->isFullyAppliedFutureCapitalAdvance($movement, $movement->targetInstallment),
+                );
             }
 
             foreach ($installments as $installment) {
@@ -101,7 +105,9 @@ class PaymentApplicationService
 
                 $applied = min($remainingCents, $installmentRemaining);
                 $remainingComponents = $paymentPolicy->remainingComponentsCents($installment);
-                $totalRemainingAfter = $movement->type === 'advance' && $applied === $installmentRemaining
+                $fullyCoveredCapitalAdvance = $this->isFullyAppliedFutureCapitalAdvance($movement, $installment)
+                    && $applied === $installmentRemaining;
+                $totalRemainingAfter = ($movement->type === 'advance' || $fullyCoveredCapitalAdvance) && $applied === $installmentRemaining
                     ? 0
                     : Money::cents($installment->remaining_amount) - $applied;
                 $newApplied = Money::cents($installment->applied_amount) + $applied;
@@ -192,9 +198,13 @@ class PaymentApplicationService
                     $allocationCents = Money::cents($allocation->amount);
                     $appliedCents = max(0, Money::cents($installment->applied_amount) - $allocationCents);
                     $contractCents = $this->operationalCents($installment);
+                    $waivedFutureInterest = $this->isFullyAppliedFutureCapitalAdvance($movement, $installment)
+                        && Money::cents($installment->remaining_amount) === 0;
                     $remainingCents = $movement->type === 'advance'
                         ? $contractCents
-                        : min($contractCents, Money::cents($installment->remaining_amount) + $allocationCents);
+                        : ($waivedFutureInterest
+                            ? max(0, $contractCents - $appliedCents)
+                            : min($contractCents, Money::cents($installment->remaining_amount) + $allocationCents));
 
                     $installment->update([
                         'applied_amount' => Money::decimal($appliedCents),
@@ -525,13 +535,17 @@ class PaymentApplicationService
     /**
      * @param  array<int, int>  $allowedAmounts
      */
-    private function assertDirectCapitalAdvanceAmount(int $amountCents, array $allowedAmounts): void
+    private function assertDirectCapitalAdvanceAmount(int $amountCents, array $allowedAmounts, bool $mustCoverFullPrincipal): void
     {
-        if ($amountCents > 0 && $amountCents <= array_sum($allowedAmounts)) {
+        $allowedCents = array_sum($allowedAmounts);
+
+        if ($mustCoverFullPrincipal ? $amountCents === $allowedCents : ($amountCents > 0 && $amountCents <= $allowedCents)) {
             return;
         }
 
-        throw new RuntimeException('El abono a capital excede el capital pendiente de esta letra.');
+        throw new RuntimeException($mustCoverFullPrincipal
+            ? 'Para adelantar una letra futura debes cubrir todo el capital pendiente de la letra.'
+            : 'El abono a capital excede el capital pendiente de esta letra.');
     }
 
     private function recordInvestorReturns(
@@ -584,6 +598,16 @@ class PaymentApplicationService
     private function isDirectCapitalAdvance(CollectionMovement $movement): bool
     {
         return $movement->type === 'capital_advance' && filled($movement->target_installment_id);
+    }
+
+    private function isFullyAppliedFutureCapitalAdvance(CollectionMovement $movement, $installment): bool
+    {
+        return $movement->type === 'capital_advance'
+            && ($movement->loan->calculation_method ?? 'regular') !== 'interest_only'
+            && $this->isDirectCapitalAdvance($movement)
+            && $installment
+            && app(InstallmentPaymentPolicy::class)->isFutureMonth($installment, $movement->operated_on)
+            && ! $this->includesFutureMonthInterest($movement);
     }
 
     private function reverseInvestorReturns(CollectionMovement $movement, int $userId): void
