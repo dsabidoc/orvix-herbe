@@ -3,11 +3,16 @@
     use App\Support\StatusLabels;
     use App\Support\InvoiceHolders;
     use App\Domain\Loans\DelinquencyCalculator;
+    use App\Domain\Loans\InstallmentPaymentPolicy;
 
     $operationalTotal = $loan->installments->sum(fn ($installment) => Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount));
     $operationalBalance = $loan->installments->sum(fn ($installment) => Money::cents($installment->remaining_amount));
     $operationalPaid = $loan->installments->sum(fn ($installment) => Money::cents($installment->applied_amount));
     $next = $loan->installments->first(fn ($installment) => Money::cents($installment->remaining_amount) > 0);
+    $paymentPolicy = app(InstallmentPaymentPolicy::class);
+    $capitalPendingCents = ($loan->calculation_method ?? 'regular') === 'interest_only'
+        ? ($next ? Money::cents($next->capital_balance) : 0)
+        : $loan->installments->sum(fn ($installment) => $paymentPolicy->principalRemainingCents($installment));
     $today = now('America/Merida')->toDateString();
     $overdueInstallments = $loan->installments->filter(fn ($installment) => Money::cents($installment->remaining_amount) > 0 && $installment->due_date->toDateString() < $today);
     $overdueCount = $overdueInstallments->count();
@@ -108,8 +113,9 @@
                 'xl:grid-cols-5' => $overdueBalanceCents <= 0,
             ])>
                 <div class="rounded-md bg-slate-50 p-3">
-                    <dt class="text-sm text-slate-500">Capital</dt>
-                    <dd class="mt-1 font-bold">{{ Money::mxn($loan->capital) }}</dd>
+                    <dt class="text-sm text-slate-500">Capital pendiente real</dt>
+                    <dd class="mt-1 font-bold">{{ Money::mxn(Money::decimal($capitalPendingCents)) }}</dd>
+                    <p class="mt-1 text-xs text-slate-500">De {{ Money::mxn($loan->capital) }} original; baja solo con capital aplicado.</p>
                 </div>
                 <div class="rounded-md bg-slate-50 p-3">
                     <dt class="text-sm text-slate-500">{{ ($loan->calculation_method ?? 'regular') === 'interest_only' ? 'Interes proyectado' : 'Contrato programado' }}</dt>
@@ -299,7 +305,7 @@
             <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h3 class="font-bold text-slate-950">Calendario contractual</h3>
-                    <p class="mt-1 text-sm text-slate-500">El saldo solo baja cuando un cobro se confirma/aplica.</p>
+                    <p class="mt-1 text-sm text-slate-500">El capital pendiente real baja con cobros confirmados; la columna contractual conserva el calendario programado.</p>
                 </div>
                 @if ($canOperateLoan)
                     <div class="flex shrink-0 flex-wrap gap-2">
@@ -341,7 +347,7 @@
                             <th class="px-3 py-3 text-right">Abono a Capital</th>
                             <th class="px-3 py-3 text-right">Interes</th>
                             <th class="px-3 py-3 text-right">Subtotal</th>
-                            <th class="px-3 py-3 text-right">Capital</th>
+                            <th class="px-3 py-3 text-right">Capital contractual</th>
                             <th class="px-3 py-3">Estatus</th>
                             <th class="px-3 py-3 text-right">Pagaré</th>
                         </tr>
