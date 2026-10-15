@@ -191,7 +191,7 @@ class LoanController extends Controller
             'fundDisbursements.operator',
             'fundDisbursements.registeredBy',
             'installments' => fn ($query) => $query->with(['reportedMovement', 'allocations.movement'])->orderBy('number'),
-            'movements' => fn ($query) => $query->with(['registeredBy', 'allocations.installment'])->latest(),
+            'movements' => fn ($query) => $query->with(['registeredBy', 'targetInstallment', 'allocations.installment'])->latest(),
         ]);
 
         $fundingInvestors = Investor::availableForFunding()

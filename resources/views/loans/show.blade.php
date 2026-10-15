@@ -434,6 +434,14 @@
                                     <span class="font-semibold text-slate-600">Fecha de pago / envío al corte:</span>
                                     {{ $movement->operated_on->format('d/m/Y') }} · {{ StatusLabels::collectionMovementType($movement->type) }}
                                 </p>
+                                @if ($movement->targetInstallment)
+                                    <p class="mt-1 text-sm text-slate-500">
+                                        <span class="font-semibold text-slate-600">Letra {{ $movement->targetInstallment->number }} · vence:</span>
+                                        {{ $movement->targetInstallment->due_date->format('d/m/Y') }}
+                                    </p>
+                                @else
+                                    <p class="mt-1 text-sm text-slate-500">Sin letra específica vinculada</p>
+                                @endif
                             </div>
                             <span class="rounded px-2 py-1 text-xs font-bold {{ $movement->confirmation_status === 'applied' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">{{ StatusLabels::movement($movement->confirmation_status) }}</span>
                         </div>
