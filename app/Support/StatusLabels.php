@@ -15,6 +15,17 @@ final class StatusLabels
         ][$status] ?? self::fallback($status);
     }
 
+    public static function collectionMovementType(?string $type): string
+    {
+        return [
+            'ordinary' => 'Pago de letra',
+            'partial' => 'Abono parcial',
+            'advance' => 'Adelanto a capital',
+            'capital_advance' => 'Adelanto a capital',
+            'settlement' => 'Liquidación',
+        ][$type] ?? self::fallback($type);
+    }
+
     public static function cut(?string $status): string
     {
         return [

@@ -430,7 +430,10 @@
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="font-semibold text-slate-950">{{ $movement->folio }}</p>
-                                <p class="mt-1 text-sm text-slate-500">{{ $movement->operated_on->format('d/m/Y') }} · {{ $movement->type }}</p>
+                                <p class="mt-1 text-sm text-slate-500">
+                                    <span class="font-semibold text-slate-600">Fecha de pago / envío al corte:</span>
+                                    {{ $movement->operated_on->format('d/m/Y') }} · {{ StatusLabels::collectionMovementType($movement->type) }}
+                                </p>
                             </div>
                             <span class="rounded px-2 py-1 text-xs font-bold {{ $movement->confirmation_status === 'applied' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">{{ StatusLabels::movement($movement->confirmation_status) }}</span>
                         </div>
