@@ -350,7 +350,7 @@
                         <dd class="font-bold" data-cut-summary="received-total">{{ Money::mxn($cut->received_total) }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
-                        <dt class="text-slate-500">Fecha de pago</dt>
+                        <dt class="text-slate-500">{{ $usesDeliveryHistory ? 'Fecha de ultima entrega registrada' : 'Fecha de pago' }}</dt>
                         <dd class="font-bold">{{ $cut->confirmed_at?->format('d/m/Y') ?? '-' }}</dd>
                     </div>
                     <div class="flex justify-between gap-4">
@@ -364,26 +364,52 @@
                 </dl>
             </section>
 
+            @if ($usesDeliveryHistory)
+                <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                    <h3 class="font-bold text-slate-950">Historial de entregas</h3>
+                    <p class="mt-1 text-sm text-slate-500">Total recibido: {{ Money::mxn($cut->received_total) }}. Cada nuevo abono se suma a este importe.</p>
+                    <div class="mt-4 space-y-4">
+                        @forelse ($deliveryHistory as $delivery)
+                            <article class="border-t border-slate-200 pt-3 text-sm">
+                                <p class="font-bold text-slate-950">{{ $delivery['opening'] ? 'Recibido antes del ajuste (acumulado)' : 'Abono recibido' }}: {{ Money::mxn($delivery['amount']) }}</p>
+                                <p class="mt-1 text-slate-500">{{ $delivery['received_on'] ? \Carbon\CarbonImmutable::parse($delivery['received_on'])->format('d/m/Y') : 'Fecha no disponible' }} · {{ $delivery['user'] ?? 'Usuario no disponible' }}</p>
+                                @if ($delivery['note'])
+                                    <p class="mt-1 break-words text-slate-500">{{ $delivery['note'] }}</p>
+                                @endif
+                            </article>
+                        @empty
+                            <p class="text-sm text-slate-500">Todavia no hay entregas registradas.</p>
+                        @endforelse
+                    </div>
+                </section>
+            @endif
+
             @can('weekly-cuts.confirm')
                 @if ($cut->status !== 'closed')
                     <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                        <h3 class="font-bold text-slate-950">{{ $cut->confirmed_at ? 'Actualizar recepción' : 'Confirmar recepción' }}</h3>
-                        <p class="mt-1 text-sm text-slate-500">El corte puede seguir recibiendo cobros, prestamos nuevos y ajustes hasta que se cierre.</p>
+                        <h3 class="font-bold text-slate-950">{{ $usesDeliveryHistory ? 'Registrar nueva entrega' : ($cut->confirmed_at ? 'Actualizar recepción' : 'Confirmar recepción') }}</h3>
+                        <p class="mt-1 text-sm text-slate-500">{{ $usesDeliveryHistory ? 'Captura solo el nuevo abono. Se sumara al total recibido y conservara su fecha en el historial.' : 'El corte puede seguir recibiendo cobros, prestamos nuevos y ajustes hasta que se cierre.' }}</p>
                         <form class="mt-4 space-y-3" method="POST" action="{{ route('cuts.confirm', $cut) }}">
                             @csrf
                             <div>
-                                <label class="text-sm font-semibold text-slate-700" for="received_total">Efectivo recibido</label>
-                                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="received_total" name="received_total" type="number" step="0.01" value="{{ Money::cents($cut->received_total) > 0 ? $cut->received_total : $cut->reported_total }}">
+                                @if ($usesDeliveryHistory)
+                                    <input type="hidden" name="delivery_token" value="{{ old('delivery_token', (string) \Illuminate\Support\Str::uuid()) }}">
+                                    <label class="text-sm font-semibold text-slate-700" for="delivery_amount">Nuevo abono recibido</label>
+                                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="delivery_amount" name="delivery_amount" type="number" step="0.01" min="0.01" value="{{ old('delivery_amount') }}" required>
+                                @else
+                                    <label class="text-sm font-semibold text-slate-700" for="received_total">Efectivo recibido</label>
+                                    <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="received_total" name="received_total" type="number" step="0.01" value="{{ Money::cents($cut->received_total) > 0 ? $cut->received_total : $cut->reported_total }}">
+                                @endif
                             </div>
                             <div>
-                                <label class="text-sm font-semibold text-slate-700" for="received_on">Fecha de pago</label>
-                                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="received_on" name="received_on" type="date" value="{{ $cut->confirmed_at?->toDateString() ?? now('America/Merida')->toDateString() }}" required>
+                                <label class="text-sm font-semibold text-slate-700" for="received_on">{{ $usesDeliveryHistory ? 'Fecha de esta entrega' : 'Fecha de pago' }}</label>
+                                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="received_on" name="received_on" type="date" value="{{ $usesDeliveryHistory ? old('received_on', now('America/Merida')->toDateString()) : ($cut->confirmed_at?->toDateString() ?? now('America/Merida')->toDateString()) }}" required>
                             </div>
                             <div>
                                 <label class="text-sm font-semibold text-slate-700" for="reason">Nota</label>
-                                <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="reason" name="reason" rows="2"></textarea>
+                                <textarea class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="reason" name="reason" rows="2">{{ $usesDeliveryHistory ? old('reason') : '' }}</textarea>
                             </div>
-                            <button class="w-full rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="submit">{{ $cut->confirmed_at ? 'Actualizar corte' : 'Confirmar corte' }}</button>
+                            <button class="w-full rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="submit">{{ $usesDeliveryHistory ? 'Registrar abono y confirmar recepcion' : ($cut->confirmed_at ? 'Actualizar corte' : 'Confirmar corte') }}</button>
                         </form>
                     </section>
                 @endif

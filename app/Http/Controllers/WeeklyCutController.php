@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cuts\CutDeliveryHistory;
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
@@ -128,6 +129,10 @@ class WeeklyCutController extends Controller
 
         return view('cuts.show', [
             'cut' => $cut,
+            'usesDeliveryHistory' => app(CutDeliveryHistory::class)->enabled($cut),
+            'deliveryHistory' => app(CutDeliveryHistory::class)->enabled($cut)
+                ? app(CutDeliveryHistory::class)->history($cut)
+                : collect(),
             'pendingInstallments' => $this->pendingInstallmentsForCut($cut),
             'advanceLoans' => $this->advanceLoansForCut($cut, $settlementService),
         ]);
@@ -205,16 +210,25 @@ class WeeklyCutController extends Controller
 
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
+        $usesDeliveryHistory = app(CutDeliveryHistory::class)->enabled($cut);
         $data = $request->validate([
-            'received_total' => ['required', 'numeric', 'min:0'],
+            ...($usesDeliveryHistory ? [
+                'delivery_amount' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999999.99'],
+                'delivery_token' => ['required', 'uuid'],
+            ] : ['received_total' => ['required', 'numeric', 'min:0']]),
             'received_on' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        DB::transaction(function () use ($cut, $data, $request, $service, $settlementService) {
+        $recorded = DB::transaction(function () use ($cut, $data, $request, $service, $settlementService, $usesDeliveryHistory) {
             $cut = WeeklyCut::query()->whereKey($cut->id)->lockForUpdate()->firstOrFail();
             abort_if($cut->status === 'closed', 422, 'No se puede confirmar un corte cerrado sin reabrirlo.');
-            $receivedCents = Money::cents($data['received_total']);
+            if ($usesDeliveryHistory && ! app(CutDeliveryHistory::class)->record($cut, $data, $request->user()->id)) {
+                return false;
+            }
+            $receivedCents = $usesDeliveryHistory
+                ? Money::cents($cut->received_total) + Money::cents($data['delivery_amount'])
+                : Money::cents($data['received_total']);
             $reportedCents = Money::cents($cut->reported_total);
             $previousBalanceCents = Money::cents($cut->previous_balance);
             $differenceCents = $receivedCents - $reportedCents;
@@ -244,10 +258,17 @@ class WeeklyCutController extends Controller
                 ]);
             }
 
-            OperatorLedgerEntry::query()
+            $receiptLedgerQuery = OperatorLedgerEntry::query()
                 ->where('weekly_cut_id', $cut->id)
-                ->whereIn('type', ['confirmed_delivery', 'shortfall', 'overage'])
-                ->delete();
+                ->whereIn('type', ['confirmed_delivery', 'shortfall', 'overage']);
+            if ($usesDeliveryHistory) {
+                // Keep previous summaries as history, without counting them twice in current totals.
+                foreach ($receiptLedgerQuery->get() as $entry) {
+                    $entry->update(['type' => 'historical_'.$entry->type]);
+                }
+            } else {
+                $receiptLedgerQuery->delete();
+            }
 
             $cut->update([
                 'confirmed_by' => $request->user()->id,
@@ -286,11 +307,23 @@ class WeeklyCutController extends Controller
                     'difference_total' => Money::decimal($differenceCents),
                 ],
             ]);
+
+            if ($usesDeliveryHistory) {
+                app(WeeklyCutPeriodService::class)->refreshTotals($cut);
+            }
         });
 
-        app(WeeklyCutPeriodService::class)->refreshTotals($cut);
+        if ($recorded === false) {
+            return redirect()->route('cuts.show', $cut)->with('status', 'Esta entrega ya fue registrada; no se sumo nuevamente.');
+        }
 
-        return redirect()->route('cuts.show', $cut)->with('status', 'Corte confirmado y movimientos aplicados.');
+        if (! $usesDeliveryHistory) {
+            app(WeeklyCutPeriodService::class)->refreshTotals($cut);
+        }
+
+        return redirect()->route('cuts.show', $cut)->with('status', $usesDeliveryHistory
+            ? 'Entrega registrada y sumada al total recibido. Los cobros ya aplicados no se distribuyen nuevamente.'
+            : 'Corte confirmado y movimientos aplicados.');
     }
 
     public function settleBalance(Request $request, WeeklyCut $cut): RedirectResponse
