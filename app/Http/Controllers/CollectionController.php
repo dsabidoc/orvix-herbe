@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Collections\PeriodCollectionService;
+use App\Domain\Cuts\CutReceivedCash;
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\InstallmentPaymentPolicy;
 use App\Domain\Loans\InterestOnlyScheduleExtender;
@@ -66,14 +67,10 @@ class CollectionController extends Controller
         $monthLoanIds = (clone $monthInstallments)->select('loan_id')->distinct()->pluck('loan_id');
         $collectedMonthLettersCents = app(PeriodCollectionService::class)
             ->amountForLoans($monthLoanIds, $monthStart, $monthEnd);
-        $collectedMonthCents = WeeklyCut::query()
-            ->where('status', 'closed')
-            ->whereNotNull('confirmed_at')
+        $receivedCuts = WeeklyCut::query()
             ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
-            ->when(! $request->user()->hasRole('operador-cartera') && $operatorId, fn ($query) => $query->where('operator_id', $operatorId))
-            ->whereBetween('confirmed_at', [$monthStart, $monthEnd->endOfDay()])
-            ->get(['confirmed_total'])
-            ->sum(fn (WeeklyCut $cut) => Money::cents($cut->confirmed_total));
+            ->when(! $request->user()->hasRole('operador-cartera') && $operatorId, fn ($query) => $query->where('operator_id', $operatorId));
+        $collectedMonthCents = app(CutReceivedCash::class)->total($receivedCuts, $monthStart, $monthEnd);
         $pendingMonthCents = $monthOperationalCents - $collectedMonthLettersCents;
         $overdueCents = Installment::query()
             ->whereHas('loan', $loanScope)
@@ -88,7 +85,7 @@ class CollectionController extends Controller
                 ['title' => 'Cartera del mes', 'value' => Money::mxn(Money::decimal((int) ((clone $monthInstallments)->sum('remaining_amount') * 100))), 'caption' => 'Saldo de letras del mes', 'color' => 'blue'],
                 ['title' => 'Letras cobradas del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthLettersCents)), 'caption' => 'Pagos de letras con vencimiento en este mes', 'color' => 'orange'],
                 ['title' => 'Esperado del mes', 'value' => Money::mxn(Money::decimal((int) $monthOperationalCents)), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
-                ['title' => 'Cobrado del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthCents)), 'caption' => 'Total recibido de cortes cerrados', 'color' => 'green'],
+                ['title' => 'Cobrado del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthCents)), 'caption' => 'Entregas recibidas, incluidos abonos', 'color' => 'green'],
                 ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingMonthCents)), 'caption' => 'Esperado menos letras cobradas', 'color' => 'orange'],
                 ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas del mes', 'color' => 'red'],
             ],

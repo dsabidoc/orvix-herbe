@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Cuts\CutDeliveryHistory;
+use App\Domain\Cuts\CutReceivedCash;
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\LoanSettlementService;
 use App\Domain\Loans\PaymentApplicationService;
@@ -43,25 +44,28 @@ class WeeklyCutController extends Controller
                 $query->where(function ($query) use ($start, $end) {
                     $query
                         ->whereBetween('period_starts_on', [$start->toDateString(), $end->toDateString()])
-                        ->orWhereBetween('confirmed_at', [$start, $end->endOfDay()]);
+                        ->orWhereBetween('confirmed_at', [$start, $end->endOfDay()])
+                        ->orWhereIn('id', app(CutReceivedCash::class)->deliveryCutIdsForPeriod($start, $end));
                 });
             });
         $summaryCuts = (clone $baseQuery)->get();
+        $receivedByCut = app(CutReceivedCash::class)->amountsForCuts(
+            $summaryCuts,
+            $selectedMonth?->startOfMonth(),
+            $selectedMonth?->endOfMonth(),
+        );
         $operatorSummaries = $summaryCuts
             ->groupBy('operator_id')
-            ->map(function ($operatorCuts) {
-                $closedCuts = $operatorCuts->where('status', 'closed')->whereNotNull('confirmed_at');
-
+            ->map(function ($operatorCuts) use ($receivedByCut) {
                 return [
                     'operator' => $operatorCuts->first()->operator,
                     'cuts' => $operatorCuts->count(),
                     'reported_cents' => $operatorCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->reported_total)),
-                    'received_cents' => $closedCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->confirmed_total)),
+                    'received_cents' => $operatorCuts->sum(fn (WeeklyCut $cut) => $receivedByCut->get($cut->id, 0)),
                 ];
             })
             ->sortBy(fn (array $summary) => $summary['operator']?->name ?? '')
             ->values();
-        $closedSummaryCuts = $summaryCuts->where('status', 'closed')->whereNotNull('confirmed_at');
 
         return view('cuts.index', [
             'cuts' => $baseQuery
@@ -75,7 +79,7 @@ class WeeklyCutController extends Controller
             'summary' => [
                 'cuts' => $summaryCuts->count(),
                 'reported_cents' => $summaryCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->reported_total)),
-                'received_cents' => $closedSummaryCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->confirmed_total)),
+                'received_cents' => (int) $receivedByCut->sum(),
                 'operators' => $operatorSummaries->count(),
             ],
             'operatorSummaries' => $operatorSummaries,

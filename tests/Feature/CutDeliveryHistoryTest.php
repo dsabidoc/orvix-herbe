@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domain\Cuts\CutDeliveryHistory;
+use App\Domain\Cuts\CutReceivedCash;
 use App\Models\AuditEvent;
 use App\Models\Client;
 use App\Models\CollectionMovement;
@@ -18,9 +19,11 @@ use App\Models\User;
 use App\Models\WeeklyCut;
 use App\Models\WeeklyCutItem;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class CutDeliveryHistoryTest extends TestCase
@@ -224,5 +227,107 @@ class CutDeliveryHistoryTest extends TestCase
         $this->assertSame(0, AuditEvent::query()->where('action', 'weekly_cut.delivery_recorded')->count());
         $this->get(route('cuts.show', $this->cut))->assertOk()
             ->assertSee('Efectivo recibido')->assertDontSee('Nuevo abono recibido');
+    }
+
+    private function assertCashIndicators(string $month, string $expected, ?int $operatorId = null): void
+    {
+        $filters = array_filter(['operator_id' => $operatorId]);
+        $expectedCents = Money::cents($expected);
+        $this->get(route('dashboard', [...$filters, 'period' => $month]))->assertOk()
+            ->assertViewHas('kpis', fn ($kpis) => collect($kpis)->firstWhere('title', 'Cobrado del periodo')['cents'] === $expectedCents);
+        $this->get(route('cuts.index', [...$filters, 'month' => $month]))->assertOk()
+            ->assertViewHas('summary', fn ($summary) => $summary['received_cents'] === $expectedCents)
+            ->assertViewHas('operatorSummaries', fn ($summaries) => $summaries->sum('received_cents') === $expectedCents);
+        $this->get(route('collections.index', [...$filters, 'month' => $month]))->assertOk()
+            ->assertViewHas('kpis', fn ($kpis) => collect($kpis)->firstWhere('title', 'Cobrado del mes')['value'] === Money::mxn($expected));
+    }
+
+    public function test_cash_indicators_include_open_cut_deliveries_and_keep_each_receipt_in_its_month(): void
+    {
+        $this->reportedPayment();
+        // Neither the cut date nor the final receipt date is in October.
+        $this->cut->update(['period_starts_on' => '2026-09-19', 'period_ends_on' => '2026-09-19']);
+        $this->actingAs($this->admin);
+        $this->post(route('cuts.confirm', $this->cut), $this->delivery('200000', '2026-10-31'))
+            ->assertSessionHasNoErrors();
+        $this->assertCashIndicators('2026-10', '200000');
+        $this->assertCashIndicators('2026-11', '0');
+
+        $this->post(route('cuts.confirm', $this->cut), $this->delivery('50000', '2026-11-01'))
+            ->assertSessionHasNoErrors();
+        $this->assertCashIndicators('2026-10', '200000');
+        $this->assertCashIndicators('2026-11', '50000');
+        $this->get(route('cuts.index', ['month' => '2026-10']))->assertViewHas('cuts', fn ($cuts) => $cuts->contains('id', $this->cut->id));
+        $this->post(route('cuts.close', $this->cut))->assertSessionHasNoErrors();
+        $this->assertCashIndicators('2026-10', '200000');
+        $this->assertCashIndicators('2026-11', '50000');
+        $this->get(route('dashboard', ['period_type' => 'year', 'period' => '2026']))->assertOk()
+            ->assertViewHas('kpis', fn ($kpis) => collect($kpis)->firstWhere('title', 'Cobrado del periodo')['cents'] === 25000000);
+        $this->get(route('cuts.index'))->assertViewHas('summary', fn ($summary) => $summary['received_cents'] === 25000000);
+        $this->assertSame(1, InvestorCapitalMovement::query()->where('type', 'payment_returns_recorded')->count());
+    }
+
+    public function test_cash_indicators_preserve_previous_receipts_as_opening_balance_in_their_recorded_month(): void
+    {
+        $this->cut->update([
+            'received_total' => '70000', 'confirmed_total' => '70000',
+            'confirmed_at' => '2026-09-30 23:59:59', 'confirmed_by' => $this->admin->id,
+        ]);
+        $this->actingAs($this->admin)
+            ->post(route('cuts.confirm', $this->cut), $this->delivery('5000', '2026-10-01'))
+            ->assertSessionHasNoErrors();
+        $this->assertCashIndicators('2026-09', '70000');
+        $this->assertCashIndicators('2026-10', '5000');
+    }
+
+    public function test_legacy_confirmed_cash_counts_without_closing_and_reopening_does_not_remove_it(): void
+    {
+        $this->actingAs($this->admin);
+        $this->assertCashIndicators('2026-10', '0');
+        foreach (['partially_received', 'balanced', 'closed', 'reopened'] as $status) {
+            $this->cut->update([
+                'status' => $status, 'received_total' => '200000', 'confirmed_total' => '200000',
+                'confirmed_at' => '2026-10-21 23:59:59',
+            ]);
+            $this->assertCashIndicators('2026-10', '200000');
+        }
+        $this->assertCashIndicators('2026-09', '0');
+    }
+
+    public function test_cash_indicators_respect_operator_filters_and_operator_access_scope(): void
+    {
+        $this->cut->update(['received_total' => '200000', 'confirmed_at' => '2026-10-21 23:59:59']);
+        $otherOperator = Operator::query()->create(['public_id' => (string) Str::ulid(), 'name' => 'OTRO OPERADOR']);
+        WeeklyCut::query()->create([
+            'public_id' => (string) Str::ulid(), 'operator_id' => $otherOperator->id,
+            'period_starts_on' => '2026-10-19', 'period_ends_on' => '2026-10-19',
+            'received_total' => '5000', 'confirmed_at' => '2026-10-21 23:59:59',
+        ]);
+        $this->actingAs($this->admin);
+        $this->assertCashIndicators('2026-10', '205000');
+        $this->assertCashIndicators('2026-10', '200000', $this->cut->operator_id);
+        $this->assertCashIndicators('2026-10', '5000', $otherOperator->id);
+
+        $operatorUser = User::factory()->create();
+        $operatorUser->assignRole(Role::findOrCreate('operador-cartera', 'web'));
+        $this->cut->operator->update(['user_id' => $operatorUser->id]);
+        $this->actingAs($operatorUser);
+        $this->assertCashIndicators('2026-10', '200000', $otherOperator->id);
+    }
+
+    public function test_cash_calculation_is_read_only_and_does_not_add_cumulative_total_to_deliveries(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('cuts.confirm', $this->cut), $this->delivery('200000', '2026-10-21'))
+            ->assertSessionHasNoErrors();
+        $before = $this->cut->fresh()->getAttributes();
+        $auditCount = AuditEvent::query()->count();
+        $cash = app(CutReceivedCash::class);
+        for ($read = 0; $read < 2; $read++) {
+            $this->assertSame(20000000, $cash->total(WeeklyCut::query(), CarbonImmutable::parse('2026-10-01'), CarbonImmutable::parse('2026-10-31')));
+            $this->assertCashIndicators('2026-10', '200000');
+        }
+        $this->assertSame($before, $this->cut->fresh()->getAttributes());
+        $this->assertSame($auditCount, AuditEvent::query()->count());
     }
 }

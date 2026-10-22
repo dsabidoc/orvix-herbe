@@ -52,7 +52,7 @@
         @foreach ([
             ['title' => 'Cortes', 'value' => number_format($summary['cuts']), 'caption' => 'Incluidos en el filtro', 'color' => 'blue'],
             ['title' => 'Total reportado', 'value' => Money::mxn(Money::decimal($summary['reported_cents'])), 'caption' => 'Cobros registrados en cortes', 'color' => 'yellow'],
-            ['title' => 'Total cobrado', 'value' => Money::mxn(Money::decimal($summary['received_cents'])), 'caption' => 'Cortes concluidos por fecha de pago', 'color' => 'green'],
+            ['title' => 'Total cobrado', 'value' => Money::mxn(Money::decimal($summary['received_cents'])), 'caption' => 'Entregas recibidas por fecha, incluidos abonos', 'color' => 'green'],
             ['title' => 'Operadores', 'value' => number_format($summary['operators']), 'caption' => 'Con cortes en el filtro', 'color' => 'orange'],
         ] as $card)
             <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
