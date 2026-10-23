@@ -463,8 +463,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 rateType.value = 'monthly';
             }
 
-            if (rateValue instanceof HTMLInputElement && (rateValue.value === '' || rateValue.value === '2' || rateValue.value === '2.00')) {
-                rateValue.value = '3';
+            if (rateValue instanceof HTMLInputElement && rateValue.value === '') {
+                rateValue.value = '2';
             }
 
             if (interestMethod instanceof HTMLSelectElement) {
