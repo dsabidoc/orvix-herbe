@@ -4,6 +4,14 @@ namespace App\Support;
 
 final class StatusLabels
 {
+    private const CUT_GROUPS = [
+        'pending' => ['label' => 'Pendiente', 'statuses' => ['draft', 'forming', 'submitted', 'pending_reconciliation', 'reopened']],
+        'reviewing' => ['label' => 'En validacion', 'statuses' => ['partially_received', 'reviewing', 'confirmed', 'balanced', 'with_difference']],
+        'closed' => ['label' => 'Cerrado', 'statuses' => ['closed']],
+        'returned' => ['label' => 'Devuelto', 'statuses' => ['returned']],
+        'voided' => ['label' => 'Anulado', 'statuses' => ['voided']],
+    ];
+
     public static function movement(?string $status): string
     {
         return [
@@ -28,21 +36,23 @@ final class StatusLabels
 
     public static function cut(?string $status): string
     {
-        return [
-            'draft' => 'Pendiente',
-            'forming' => 'Pendiente',
-            'submitted' => 'Pendiente',
-            'pending_reconciliation' => 'Pendiente',
-            'partially_received' => 'En validacion',
-            'reviewing' => 'En validacion',
-            'confirmed' => 'En validacion',
-            'balanced' => 'En validacion',
-            'with_difference' => 'En validacion',
-            'closed' => 'Cerrado',
-            'reopened' => 'Pendiente',
-            'returned' => 'Devuelto',
-            'voided' => 'Anulado',
-        ][$status] ?? self::fallback($status);
+        foreach (self::CUT_GROUPS as $group) {
+            if (in_array($status, $group['statuses'], true)) {
+                return $group['label'];
+            }
+        }
+
+        return self::fallback($status);
+    }
+
+    public static function cutFilterOptions(): array
+    {
+        return array_map(fn (array $group) => $group['label'], self::CUT_GROUPS);
+    }
+
+    public static function cutStatusesForFilter(string $filter): array
+    {
+        return self::CUT_GROUPS[$filter]['statuses'] ?? [];
     }
 
     public static function installment(?string $status): string

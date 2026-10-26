@@ -43,6 +43,15 @@
                     </select>
                 </div>
             @endunless
+            <div class="min-w-0">
+                <label class="text-sm font-semibold text-slate-700" for="summary_status">Estado</label>
+                <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" id="summary_status" name="status">
+                    <option value="">Todos los estados</option>
+                    @foreach ($statusOptions as $status => $label)
+                        <option value="{{ $status }}" @selected($selectedStatus === $status)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
             <button class="rounded-md bg-[#0d9488] px-4 py-2 text-sm font-bold text-white" type="submit">Filtrar</button>
             <a class="rounded-md border border-slate-300 px-4 py-2 text-center text-sm font-bold text-slate-700" href="{{ route('cuts.index') }}">Total</a>
         </form>

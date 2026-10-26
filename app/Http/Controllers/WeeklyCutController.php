@@ -15,6 +15,7 @@ use App\Models\Operator;
 use App\Models\OperatorLedgerEntry;
 use App\Models\WeeklyCut;
 use App\Support\Money;
+use App\Support\StatusLabels;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,10 +34,14 @@ class WeeklyCutController extends Controller
             ? CarbonImmutable::createFromFormat('Y-m-d', $request->input('month').'-01', 'America/Merida')
             : null;
         $selectedOperatorId = $request->filled('operator_id') ? $request->integer('operator_id') : null;
+        $statusOptions = StatusLabels::cutFilterOptions();
+        $selectedStatus = $request->string('status')->toString();
+        $selectedStatus = array_key_exists($selectedStatus, $statusOptions) ? $selectedStatus : null;
         $baseQuery = WeeklyCut::query()
             ->with('operator')
             ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
             ->when(! $request->user()->hasRole('operador-cartera') && $selectedOperatorId, fn ($query) => $query->where('operator_id', $selectedOperatorId))
+            ->when($selectedStatus, fn ($query) => $query->whereIn('status', StatusLabels::cutStatusesForFilter($selectedStatus)))
             ->when($selectedMonth, function ($query) use ($selectedMonth) {
                 $start = $selectedMonth->startOfMonth();
                 $end = $selectedMonth->endOfMonth();
@@ -76,6 +81,8 @@ class WeeklyCutController extends Controller
             'operators' => Operator::query()->where('status', 'active')->orderBy('name')->get(),
             'selectedMonth' => $selectedMonth,
             'selectedOperatorId' => $selectedOperatorId,
+            'selectedStatus' => $selectedStatus,
+            'statusOptions' => $statusOptions,
             'summary' => [
                 'cuts' => $summaryCuts->count(),
                 'reported_cents' => $summaryCuts->sum(fn (WeeklyCut $cut) => Money::cents($cut->reported_total)),
