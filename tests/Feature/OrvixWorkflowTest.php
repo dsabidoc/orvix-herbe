@@ -1102,9 +1102,13 @@ class OrvixWorkflowTest extends TestCase
 
         $received = max(0, (int) floor((float) $cut->reported_total) - 1000);
 
+        CollectionMovement::query()->whereIn('id', $cut->items()->pluck('collection_movement_id'))
+            ->update(['weekly_cut_id' => $cut->id]);
+
         $this->actingAs($admin)
             ->post(route('cuts.confirm', $cut), [
-                'received_total' => $received,
+                'delivery_amount' => $received,
+                'delivery_token' => (string) Str::uuid(),
                 'received_on' => '2026-07-31',
                 'reason' => 'Faltante demo',
             ])
@@ -1163,7 +1167,8 @@ class OrvixWorkflowTest extends TestCase
         $received = max(0, (int) floor((float) $cut->reported_total) - 1000);
 
         $this->actingAs($admin)->post(route('cuts.confirm', $cut), [
-            'received_total' => $received,
+            'delivery_amount' => $received,
+            'delivery_token' => (string) Str::uuid(),
             'received_on' => '2026-07-31',
             'reason' => 'Faltante demo',
         ]);
@@ -2168,9 +2173,14 @@ class OrvixWorkflowTest extends TestCase
             ->where('status', 'submitted')
             ->firstOrFail();
 
+        // Match real cuts: seeded items must also link their movements to the cut.
+        CollectionMovement::query()->whereIn('id', $cut->items()->pluck('collection_movement_id'))
+            ->update(['weekly_cut_id' => $cut->id]);
+
         $this->actingAs($admin)
             ->post(route('cuts.confirm', $cut), [
-                'received_total' => $cut->reported_total,
+                'delivery_amount' => $cut->reported_total,
+                'delivery_token' => (string) Str::uuid(),
                 'received_on' => '2026-08-10',
                 'reason' => 'Primera recepcion',
             ])
@@ -2192,12 +2202,13 @@ class OrvixWorkflowTest extends TestCase
                 'operator_surcharge_amount' => 0,
                 'external_concepts_amount' => 0,
             ])
-            ->assertRedirect(route('cuts.show', $cut).'#cut-payments');
+            ->assertRedirect(route('cuts.show', $cut).'#cut-pending-installments');
 
         $cut->refresh();
         $this->actingAs($admin)
             ->post(route('cuts.confirm', $cut), [
-                'received_total' => $cut->reported_total,
+                'delivery_amount' => Money::decimal(Money::cents($cut->reported_total) - Money::cents($cut->received_total)),
+                'delivery_token' => (string) Str::uuid(),
                 'received_on' => '2026-08-10',
                 'reason' => 'Recepcion actualizada',
             ])

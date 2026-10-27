@@ -44,7 +44,7 @@ class CutDeliveryHistoryTest extends TestCase
             'public_id' => (string) Str::ulid(), 'name' => 'DARIO',
         ]);
         $this->cut = WeeklyCut::query()->create([
-            'public_id' => CutDeliveryHistory::CUT_PUBLIC_ID,
+            'public_id' => (string) Str::ulid(),
             'operator_id' => $operator->id,
             'period_starts_on' => '2026-10-19',
             'period_ends_on' => '2026-10-19',
@@ -214,19 +214,49 @@ class CutDeliveryHistoryTest extends TestCase
         ])->count());
     }
 
-    public function test_other_cuts_keep_the_existing_cumulative_capture(): void
+    public function test_all_operators_use_individual_deliveries_with_independent_duplicate_protection(): void
     {
-        $this->cut->update(['public_id' => (string) Str::ulid()]);
+        $otherOperator = Operator::query()->create(['public_id' => (string) Str::ulid(), 'name' => 'OTRO OPERADOR']);
+        $otherCut = WeeklyCut::query()->create([
+            'public_id' => (string) Str::ulid(), 'operator_id' => $otherOperator->id,
+            'period_starts_on' => '2026-10-19', 'period_ends_on' => '2026-10-19', 'status' => 'forming',
+        ]);
         $this->actingAs($this->admin);
-        foreach (['200000', '250000'] as $received) {
-            $this->post(route('cuts.confirm', $this->cut), [
-                'received_total' => $received, 'received_on' => '2026-10-20',
-            ])->assertSessionHasNoErrors();
+        $firstToken = (string) Str::uuid();
+        foreach ([$this->cut, $otherCut] as $cut) {
+            $first = $this->delivery('200000', '2026-10-20', $firstToken);
+            $this->post(route('cuts.confirm', $cut), $first)->assertSessionHasNoErrors();
+            $this->post(route('cuts.confirm', $cut), $first)->assertSessionHasNoErrors();
+            $this->post(route('cuts.confirm', $cut), $this->delivery('50000', '2026-10-22'))->assertSessionHasNoErrors();
+            $this->assertSame(25000000, Money::cents($cut->fresh()->received_total));
+            $this->assertSame(['2026-10-20', '2026-10-22'], app(CutDeliveryHistory::class)->history($cut->fresh())->pluck('received_on')->all());
+            $this->get(route('cuts.show', $cut))->assertOk()
+                ->assertSee('Nuevo abono recibido')->assertSee('Historial de entregas')
+                ->assertDontSee('name="received_total"', false);
         }
-        $this->assertSame(25000000, Money::cents($this->cut->fresh()->received_total));
+        $this->assertSame(4, AuditEvent::query()->where('action', 'weekly_cut.delivery_recorded')->count());
+        $this->assertCashIndicators('2026-10', '500000');
+    }
+
+    public function test_old_closed_cuts_keep_their_balance_and_allow_a_new_delivery_only_after_reopening(): void
+    {
+        $this->cut->update([
+            'status' => 'closed', 'received_total' => '200000.00', 'confirmed_total' => '200000.00',
+            'confirmed_at' => '2026-10-20 23:59:59', 'confirmed_by' => $this->admin->id,
+        ]);
+        $before = $this->cut->fresh()->getAttributes();
+        $this->actingAs($this->admin)->get(route('cuts.show', $this->cut))->assertOk()
+            ->assertSee('Recibido antes del ajuste (acumulado)')->assertDontSee('name="delivery_amount"', false);
+        $this->post(route('cuts.confirm', $this->cut), $this->delivery('50000', '2026-11-01'))->assertStatus(422);
+        $this->assertSame($before, $this->cut->fresh()->getAttributes());
         $this->assertSame(0, AuditEvent::query()->where('action', 'weekly_cut.delivery_recorded')->count());
-        $this->get(route('cuts.show', $this->cut))->assertOk()
-            ->assertSee('Efectivo recibido')->assertDontSee('Nuevo abono recibido');
+
+        $this->post(route('cuts.reopen', $this->cut), ['reason' => 'Entrega posterior'])->assertSessionHasNoErrors();
+        $this->post(route('cuts.confirm', $this->cut), $this->delivery('50000', '2026-11-01'))->assertSessionHasNoErrors();
+        $this->assertSame(25000000, Money::cents($this->cut->fresh()->received_total));
+        $this->assertCount(2, app(CutDeliveryHistory::class)->history($this->cut->fresh()));
+        $this->assertCashIndicators('2026-10', '200000');
+        $this->assertCashIndicators('2026-11', '50000');
     }
 
     private function assertCashIndicators(string $month, string $expected, ?int $operatorId = null): void

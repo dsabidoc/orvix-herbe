@@ -11,12 +11,10 @@ use Illuminate\Support\Collection;
 
 class CutDeliveryHistory
 {
-    // This change is enabled only for the cut requested by the customer.
-    public const CUT_PUBLIC_ID = '01M5AS3VH5S76XFVMJZ4NEZB27';
-
     public function enabled(WeeklyCut $cut): bool
     {
-        return $cut->public_id === self::CUT_PUBLIC_ID;
+        // All cuts keep individual deliveries; existing receipts remain an opening balance.
+        return true;
     }
 
     private function events(WeeklyCut $cut): Builder
