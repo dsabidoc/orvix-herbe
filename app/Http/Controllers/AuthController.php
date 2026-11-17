@@ -98,6 +98,12 @@ class AuthController extends Controller
         $request->session()->regenerate();
         $request->user()->forceFill(['last_login_at' => now('America/Merida')])->save();
 
+        if ($request->user()->can('cajas.access') && ! $request->user()->can('prestamos.access')) {
+            $request->session()->forget('url.intended');
+
+            return redirect()->route('cajas.home');
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

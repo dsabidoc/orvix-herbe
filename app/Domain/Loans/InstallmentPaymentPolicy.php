@@ -32,6 +32,9 @@ class InstallmentPaymentPolicy
 
         $appliedPrincipalCents = $allocations
             ->sum(function (PaymentAllocation $allocation) use ($principalCents, $operationalCents): int {
+                if ($allocation->principal_cents !== null) {
+                    return $allocation->principal_cents;
+                }
                 $amountCents = Money::cents($allocation->amount);
 
                 if (in_array($allocation->movement?->type, ['advance', 'capital_advance'], true)) {
@@ -58,5 +61,19 @@ class InstallmentPaymentPolicy
             'principal' => min($principalCents, $remainingCents),
             'interest' => $interestCents,
         ];
+    }
+
+    /** @return array{principal:int,interest:int} */
+    public function splitPaymentCents(array $remaining, int $amount, bool $principalOnly): array
+    {
+        if ($principalOnly) {
+            return ['principal' => $amount, 'interest' => 0];
+        }
+
+        $total = $remaining['principal'] + $remaining['interest'];
+        $ratio = $total > 0 ? min(1, $amount / $total) : 0;
+        $principal = (int) round($remaining['principal'] * $ratio);
+
+        return ['principal' => $principal, 'interest' => min($remaining['interest'], $amount - $principal)];
     }
 }

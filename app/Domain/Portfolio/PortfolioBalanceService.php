@@ -2,11 +2,13 @@
 
 namespace App\Domain\Portfolio;
 
+use App\Models\Installment;
 use App\Models\Loan;
 use App\Models\PaymentAllocation;
 use App\Models\User;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -37,14 +39,32 @@ class PortfolioBalanceService
         // La fecha especifica calcula el atraso; la vista sigue incluyendo todo el mes seleccionado.
         $periodEnd = $cutoff->endOfMonth();
         $includeOverdue = (bool) ($filters['include_overdue'] ?? true);
-        $loans = $this->loanQuery($filters, $user)->get();
-        $installmentIds = $loans->flatMap(fn (Loan $loan) => $loan->installments->pluck('id'))->values();
-        $allocationAmounts = $this->allocationAmountsByInstallment($installmentIds, $cutoff);
-        $allocationCounts = $this->allocationCountsByInstallment($installmentIds);
-        $allocationLastDates = $this->allocationLastDatesByInstallment($installmentIds, $cutoff);
+        $loans = $this->loanQuery($filters, $user, $cutoff)->get();
+        $allocations = $this->allocationsByInstallment($loans->modelKeys(), $cutoff);
+        $dueDates = [];
+        $dueDateInfo = function (Installment $installment) use (&$dueDates, $asOfDate, $periodStart, $periodEnd): array {
+            $key = $installment->getRawOriginal('due_date');
+            if (! isset($dueDates[$key])) {
+                $date = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
+                $isPast = $date->lt($asOfDate);
+
+                $dueDates[$key] = [
+                    'label' => $date->format('d/m/Y'),
+                    'sort' => $date->toDateString(),
+                    'late_days' => $isPast ? (int) $date->diffInDays($asOfDate) : 0,
+                    'is_past' => $isPast,
+                    'is_today' => $date->equalTo($asOfDate),
+                    'is_future' => $date->gt($asOfDate),
+                    'is_in_scope' => $date->lte($periodEnd),
+                    'is_in_month' => $date->betweenIncluded($periodStart, $periodEnd),
+                ];
+            }
+
+            return $dueDates[$key];
+        };
 
         $loanRows = $loans
-            ->map(fn (Loan $loan) => $this->loanRow($loan, $cutoff, $asOfDate, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn (Loan $loan) => $this->loanRow($loan, $includeOverdue, $allocations, $dueDateInfo))
             ->filter(fn (array $row) => $row['pending_cents'] > 0 || $row['inconsistencies'] !== [])
             ->filter(fn (array $row) => $this->passesDerivedFilters($row, $filters))
             ->values();
@@ -67,19 +87,22 @@ class PortfolioBalanceService
     /**
      * @param  array<string, mixed>  $filters
      */
-    private function loanQuery(array $filters, User $user): Builder
+    private function loanQuery(array $filters, User $user, CarbonImmutable $cutoff): Builder
     {
         $query = Loan::query()
+            ->select(['id', 'public_id', 'folio', 'client_id', 'operator_id', 'vehicle_id', 'start_date', 'term_months', 'payment_day', 'status', 'is_frozen'])
             ->with([
-                'client',
-                'operator',
-                'vehicle',
-                'investments',
-                'installments' => fn ($query) => $query->orderBy('number'),
-                'movements' => fn ($query) => $query
-                    ->where('confirmation_status', 'applied')
-                    ->orderByDesc('operated_on'),
+                'client:id,first_name,last_name',
+                'operator:id,name',
+                'vehicle:id,brand,model,year,plates,vin',
+                'installments' => fn ($query) => $query
+                    ->select(['id', 'loan_id', 'number', 'due_date', 'status', 'principal_amount', 'interest_amount', 'contract_amount', 'applied_amount', 'remaining_amount'])
+                    ->orderBy('number'),
             ])
+            ->withMax(['movements as last_applied_operated_on' => fn ($query) => $query
+                ->where('confirmation_status', 'applied')
+                ->whereDate('operated_on', '<=', $cutoff->toDateString())], 'operated_on')
+            ->withCasts(['last_applied_operated_on' => 'date'])
             ->where('status', 'active')
             ->where('is_frozen', false);
 
@@ -95,78 +118,49 @@ class PortfolioBalanceService
     }
 
     /**
-     * @param  Collection<int, int>  $installmentIds
-     * @return array<int, int>
+     * @param  list<int>  $loanIds
+     * @return array<int, object>
      */
-    private function allocationAmountsByInstallment(Collection $installmentIds, CarbonImmutable $cutoff): array
+    private function allocationsByInstallment(array $loanIds, CarbonImmutable $cutoff): array
     {
-        if ($installmentIds->isEmpty()) {
+        if ($loanIds === []) {
             return [];
         }
 
+        // Keep groups for any allocation, even if none were applied by the cutoff.
+        // Only installments without allocations use the legacy applied_amount fallback.
         return PaymentAllocation::query()
-            ->selectRaw('payment_allocations.installment_id, sum(payment_allocations.amount) as amount')
-            ->join('collection_movements', 'collection_movements.id', '=', 'payment_allocations.collection_movement_id')
-            ->whereIn('payment_allocations.installment_id', $installmentIds)
-            ->where('collection_movements.confirmation_status', 'applied')
-            ->whereDate('collection_movements.operated_on', '<=', $cutoff->toDateString())
+            ->toBase()
+            ->selectRaw('payment_allocations.installment_id,
+                sum(case when collection_movements.id is not null then payment_allocations.amount end) as amount,
+                sum(case when collection_movements.id is not null then payment_allocations.interest_waived_cents end) as interest_waived_cents,
+                max(collection_movements.operated_on) as operated_on')
+            ->join('installments', 'installments.id', '=', 'payment_allocations.installment_id')
+            ->leftJoin('collection_movements', fn ($join) => $join
+                ->on('collection_movements.id', '=', 'payment_allocations.collection_movement_id')
+                ->where('collection_movements.confirmation_status', 'applied')
+                ->whereDate('collection_movements.operated_on', '<=', $cutoff->toDateString()))
+            ->whereIntegerInRaw('installments.loan_id', $loanIds)
             ->groupBy('payment_allocations.installment_id')
-            ->pluck('amount', 'installment_id')
-            ->map(fn ($amount) => Money::cents($amount))
+            ->get()
+            ->keyBy('installment_id')
             ->all();
     }
 
     /**
-     * @param  Collection<int, int>  $installmentIds
-     * @return array<int, int>
-     */
-    private function allocationCountsByInstallment(Collection $installmentIds): array
-    {
-        if ($installmentIds->isEmpty()) {
-            return [];
-        }
-
-        return PaymentAllocation::query()
-            ->whereIn('installment_id', $installmentIds)
-            ->selectRaw('installment_id, count(*) as allocation_count')
-            ->groupBy('installment_id')
-            ->pluck('allocation_count', 'installment_id')
-            ->map(fn ($count) => (int) $count)
-            ->all();
-    }
-
-    /**
-     * @param  Collection<int, int>  $installmentIds
-     * @return array<int, string>
-     */
-    private function allocationLastDatesByInstallment(Collection $installmentIds, CarbonImmutable $cutoff): array
-    {
-        if ($installmentIds->isEmpty()) {
-            return [];
-        }
-
-        return PaymentAllocation::query()
-            ->selectRaw('payment_allocations.installment_id, max(collection_movements.operated_on) as operated_on')
-            ->join('collection_movements', 'collection_movements.id', '=', 'payment_allocations.collection_movement_id')
-            ->whereIn('payment_allocations.installment_id', $installmentIds)
-            ->where('collection_movements.confirmation_status', 'applied')
-            ->whereDate('collection_movements.operated_on', '<=', $cutoff->toDateString())
-            ->groupBy('payment_allocations.installment_id')
-            ->pluck('operated_on', 'installment_id')
-            ->map(fn ($date) => CarbonImmutable::parse($date)->format('d/m/Y'))
-            ->all();
-    }
-
-    /**
-     * @param  array<int, int>  $allocationAmounts
-     * @param  array<int, int>  $allocationCounts
-     * @param  array<int, string>  $allocationLastDates
+     * @param  array<int, object>  $allocations
      * @return array<string, mixed>
      */
-    private function loanRow(Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $today, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function loanRow(Loan $loan, bool $includeOverdue, array $allocations, Closure $dueDateInfo): array
     {
         $installmentRows = $loan->installments
-            ->map(fn ($installment) => $this->installmentRow($installment, $loan, $cutoff, $today, $periodStart, $periodEnd, $includeOverdue, $allocationAmounts, $allocationCounts, $allocationLastDates))
+            ->map(fn (Installment $installment) => $this->installmentRow(
+                $installment,
+                $loan,
+                $dueDateInfo($installment),
+                $includeOverdue,
+                $allocations[$installment->id] ?? null,
+            ))
             ->values();
 
         $pendingRows = $installmentRows->filter(fn (array $row) => $row['pending_cents'] > 0 && ! $row['is_excluded'] && $row['is_balance_visible']);
@@ -176,10 +170,6 @@ class PortfolioBalanceService
         $todayRows = $pendingRows->filter(fn (array $row) => $row['is_due_today']);
         $upcomingRows = $pendingRows->filter(fn (array $row) => $row['is_upcoming']);
         $nextInstallment = $pendingRows->sortBy([['due_date_sort', 'asc'], ['number', 'asc']])->first();
-        $lastPaymentDate = $loan->movements
-            ->first(fn ($movement) => CarbonImmutable::parse($movement->operated_on)->lte($cutoff))
-            ?->operated_on
-            ?->toDateString();
         $inconsistencies = $installmentRows
             ->flatMap(fn (array $row) => $row['inconsistencies'])
             ->values()
@@ -228,7 +218,7 @@ class PortfolioBalanceService
             'due_today_cents' => (int) $todayRows->sum('pending_cents'),
             'upcoming_cents' => (int) $upcomingRows->sum('pending_cents'),
             'max_late_days' => $maxLateDays,
-            'last_payment_date' => $lastPaymentDate,
+            'last_payment_date' => $loan->last_applied_operated_on?->toDateString(),
             'loan_status' => $loan->status,
             'loan_status_label' => $loan->is_frozen ? 'Congelado' : $this->loanStatusLabel((string) $loan->status),
             'is_frozen' => (bool) $loan->is_frozen,
@@ -239,31 +229,26 @@ class PortfolioBalanceService
     }
 
     /**
-     * @param  array<int, int>  $allocationAmounts
-     * @param  array<int, int>  $allocationCounts
-     * @param  array<int, string>  $allocationLastDates
+     * @param  array<string, mixed>  $dueDate
      * @return array<string, mixed>
      */
-    private function installmentRow($installment, Loan $loan, CarbonImmutable $cutoff, CarbonImmutable $today, CarbonImmutable $periodStart, CarbonImmutable $periodEnd, bool $includeOverdue, array $allocationAmounts, array $allocationCounts, array $allocationLastDates): array
+    private function installmentRow(Installment $installment, Loan $loan, array $dueDate, bool $includeOverdue, ?object $allocation): array
     {
         $contractCents = $this->operationalCents($installment);
-        $hasAllocations = ($allocationCounts[$installment->id] ?? 0) > 0;
-        $appliedCents = $hasAllocations
-            ? (int) ($allocationAmounts[$installment->id] ?? 0)
+        $appliedCents = $allocation !== null
+            ? Money::cents($allocation->amount ?? 0)
             : Money::cents($installment->applied_amount);
-        $rawPendingCents = $contractCents - $appliedCents;
+        $rawPendingCents = $contractCents - $appliedCents - (int) ($allocation->interest_waived_cents ?? 0);
         $pendingCents = max(0, $rawPendingCents);
-        $dueDate = CarbonImmutable::parse($installment->due_date, 'America/Merida')->startOfDay();
         $isExcluded = in_array((string) $installment->status, self::EXCLUDED_INSTALLMENT_STATUSES, true);
         $isSettledNow = ! $isExcluded
             && in_array((string) $installment->status, ['confirmed', 'advanced', 'paid'], true)
             && Money::cents($installment->remaining_amount) === 0;
-        $lateDays = $dueDate->lt($today) ? (int) $dueDate->diffInDays($today) : 0;
-        $isOverdue = ! $isExcluded && $dueDate->lt($today) && $pendingCents > 0;
-        $isDueToday = ! $isExcluded && $dueDate->equalTo($today) && $pendingCents > 0;
-        $isUpcoming = ! $isExcluded && $dueDate->gt($today) && $dueDate->lte($periodEnd) && $pendingCents > 0;
-        $isInScope = ! $isExcluded && $dueDate->lte($periodEnd);
-        $isInSelectedMonth = ! $isExcluded && $dueDate->gte($periodStart) && $dueDate->lte($periodEnd);
+        $isOverdue = ! $isExcluded && $dueDate['is_past'] && $pendingCents > 0;
+        $isDueToday = ! $isExcluded && $dueDate['is_today'] && $pendingCents > 0;
+        $isUpcoming = ! $isExcluded && $dueDate['is_future'] && $dueDate['is_in_scope'] && $pendingCents > 0;
+        $isInScope = ! $isExcluded && $dueDate['is_in_scope'];
+        $isInSelectedMonth = ! $isExcluded && $dueDate['is_in_month'];
         $isBalanceVisible = $isInScope && ($includeOverdue || $isInSelectedMonth);
         $inconsistencies = [];
 
@@ -284,15 +269,15 @@ class PortfolioBalanceService
             'loan_id' => $loan->id,
             'number' => (int) $installment->number,
             'progress' => $installment->number.'/'.$loan->term_months,
-            'due_date' => $dueDate->format('d/m/Y'),
-            'due_date_sort' => $dueDate->toDateString(),
+            'due_date' => $dueDate['label'],
+            'due_date_sort' => $dueDate['sort'],
             'contract_cents' => $contractCents,
             'paid_cents' => max(0, $appliedCents),
             'pending_cents' => $pendingCents,
-            'late_days' => $lateDays,
+            'late_days' => $dueDate['late_days'],
             'overdue_cents' => $isOverdue ? $pendingCents : 0,
-            'status' => $this->installmentState($isExcluded, $pendingCents, $appliedCents, $isOverdue, $isDueToday, $dueDate, $today, (string) $installment->status),
-            'last_payment_date' => $allocationLastDates[$installment->id] ?? null,
+            'status' => $this->installmentState($isExcluded, $pendingCents, $appliedCents, $isOverdue, $isDueToday, $dueDate['is_future'], (string) $installment->status),
+            'last_payment_date' => isset($allocation->operated_on) ? CarbonImmutable::parse($allocation->operated_on)->format('d/m/Y') : null,
             'is_excluded' => $isExcluded,
             'is_in_scope' => $isInScope,
             'is_in_selected_month' => $isInSelectedMonth,
@@ -335,7 +320,7 @@ class PortfolioBalanceService
                         'payment_cents' => $installment['pending_cents'],
                         'due_date' => $installment['due_date'],
                         'due_date_sort' => $installment['due_date_sort'],
-                        'due_day' => (int) CarbonImmutable::parse($installment['due_date_sort'])->format('d'),
+                        'due_day' => (int) substr($installment['due_date_sort'], -2),
                         // La tabla puede incluir una foto histórica anterior al pago actual.
                         // Conservamos el saldo a esa fecha, pero no presentamos como atraso vigente
                         // una letra que ya quedó liquidada.
@@ -544,7 +529,7 @@ class PortfolioBalanceService
     /**
      * @return array{label:string,class:string}
      */
-    private function installmentState(bool $isExcluded, int $pendingCents, int $appliedCents, bool $isOverdue, bool $isDueToday, CarbonImmutable $dueDate, CarbonImmutable $cutoff, string $status): array
+    private function installmentState(bool $isExcluded, int $pendingCents, int $appliedCents, bool $isOverdue, bool $isDueToday, bool $isFuture, string $status): array
     {
         if ($isExcluded) {
             return ['label' => 'Cancelado', 'class' => 'bg-slate-100 text-slate-600'];
@@ -566,7 +551,7 @@ class PortfolioBalanceService
             return ['label' => 'Vence hoy', 'class' => 'bg-yellow-50 text-yellow-700'];
         }
 
-        return ['label' => $dueDate->gt($cutoff) ? 'Proximo' : $this->loanStatusLabel($status), 'class' => 'bg-slate-100 text-slate-700'];
+        return ['label' => $isFuture ? 'Proximo' : $this->loanStatusLabel($status), 'class' => 'bg-slate-100 text-slate-700'];
     }
 
     private function loanStatusLabel(string $status): string

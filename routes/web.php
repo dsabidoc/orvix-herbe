@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CajasV1PendingLoanController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\DashboardController;
@@ -29,9 +30,12 @@ Route::middleware('guest')->group(function () {
     Route::post('/restablecer-contrasena', [AuthController::class, 'resetPassword'])->name('password.update');
 });
 
-Route::middleware('auth')->group(function () {
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+
+require __DIR__.'/cajas.php';
+
+Route::middleware(['auth', \App\Http\Middleware\EnsureApplicationAccess::class.':prestamos'])->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/prestamos', [LoanController::class, 'index'])->name('loans.index');
     Route::get('/prestamos/liquidados', [LoanController::class, 'settled'])->name('loans.settled');
@@ -46,6 +50,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/prestamos/nuevo/cotizar-redondeo', [LoanCreationController::class, 'quote'])->name('loans.quote-rounded');
     Route::post('/prestamos/nuevo/confirmar-redondeo', [LoanCreationController::class, 'confirmRounded'])->name('loans.confirm-rounded');
     Route::post('/prestamos/nuevo/crear', [LoanCreationController::class, 'store'])->name('loans.store');
+    Route::prefix('/prestamos/pendientes-cajas')->name('loans.cajas-pending.')->controller(CajasV1PendingLoanController::class)->group(function (): void {
+        Route::get('/', 'index')->name('index');
+        Route::get('/{pendingCredit}', 'show')->where('pendingCredit', '[A-Za-z0-9_-]{1,80}')->name('show');
+        Route::post('/{pendingCredit}/revisar-calendario', 'review')->where('pendingCredit', '[A-Za-z0-9_-]{1,80}')->name('review');
+        Route::post('/{pendingCredit}/formalizar', 'store')->where('pendingCredit', '[A-Za-z0-9_-]{1,80}')->name('store');
+    });
     Route::get('/prestamos/{loan}/editar', [LoanController::class, 'edit'])->name('loans.edit');
     Route::put('/prestamos/{loan}', [LoanController::class, 'update'])->name('loans.update');
     Route::delete('/prestamos/{loan}', [LoanController::class, 'destroy'])->name('loans.destroy');
@@ -76,6 +86,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/inversionistas/{investor}/retiro-directo', [InvestorController::class, 'directWithdrawal'])->name('investors.withdrawals.direct');
     Route::post('/inversionistas/{investor}/movimientos/{movement}/cancelar', [InvestorController::class, 'cancelCapitalMovement'])->name('investors.capital-movements.cancel');
     Route::get('/cobranza', [CollectionController::class, 'index'])->name('collections.index');
+    Route::get('/cobranza/rapida/{loan}', [DashboardController::class, 'quickPayment'])->name('dashboard.quick-payment');
     Route::post('/cobranza/letras/{installment}/pagado', [CollectionController::class, 'markPaid'])->name('collections.mark-paid');
     Route::post('/cobranza/letras/pagado-masivo', [CollectionController::class, 'markPaidBulk'])->name('collections.mark-paid.bulk');
     Route::post('/prestamos/{loan}/cobros', [PaymentController::class, 'store'])->name('payments.store');
@@ -86,11 +97,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/cortes', [WeeklyCutController::class, 'index'])->name('cuts.index');
     Route::post('/cortes', [WeeklyCutController::class, 'store'])->name('cuts.store');
     Route::get('/cortes/{cut}', [WeeklyCutController::class, 'show'])->name('cuts.show');
+    Route::get('/cortes/{cut}/adelanto/{loan}', [WeeklyCutController::class, 'advancePayment'])->name('cuts.advance-payment');
     Route::post('/cortes/{cut}/confirmar', [WeeklyCutController::class, 'confirm'])->name('cuts.confirm');
     Route::post('/cortes/{cut}/cerrar', [WeeklyCutController::class, 'close'])->name('cuts.close');
     Route::post('/cortes/{cut}/reabrir', [WeeklyCutController::class, 'reopen'])->name('cuts.reopen');
     Route::post('/cortes/{cut}/movimientos/{movement}/revertir', [WeeklyCutController::class, 'reverseMovement'])->name('cuts.movements.reverse');
-    Route::post('/cortes/{cut}/liquidar-saldo', [WeeklyCutController::class, 'settleBalance'])->name('cuts.settle-balance');
     Route::delete('/cortes/{cut}', [WeeklyCutController::class, 'destroy'])->name('cuts.destroy');
 
     Route::get('/clientes', [ClientController::class, 'index'])->name('clients.index');

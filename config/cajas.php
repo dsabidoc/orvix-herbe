@@ -1,0 +1,49 @@
+<?php
+
+return [
+    'capital_token' => env('CAJAS_LOANS_CAPITAL_TOKEN'),
+    'v1_pilot' => [
+        'enabled' => env('CAJAS_V1_PILOT_ENABLED', false),
+        'database' => env('CAJAS_V1_PILOT_DATABASE'),
+        'mysql_socket' => env('CAJAS_V1_PILOT_MYSQL_SOCKET'),
+        'token' => env('CAJAS_V1_PILOT_TOKEN'),
+        'operators' => array_filter(array_map('trim', explode(',', (string) env('CAJAS_V1_PILOT_OPERATORS', '')))),
+        'custody_accounts' => array_filter(array_map('trim', explode(',', (string) env('CAJAS_V1_PILOT_CUSTODY_ACCOUNTS', '')))),
+        'cutover_on' => env('CAJAS_V1_PILOT_CUTOVER_ON'),
+        'approval_url' => env('CAJAS_V1_PILOT_APPROVAL_URL'),
+        'approval_token' => env('CAJAS_V1_PILOT_APPROVAL_TOKEN'),
+        'approval_public_key' => env('CAJAS_V1_PILOT_APPROVAL_PUBLIC_KEY'),
+        'audit_user_email' => env('CAJAS_V1_PILOT_AUDIT_USER_EMAIL'),
+    ],
+    'v1_production' => [
+        'enabled' => env('CAJAS_PRODUCTION_ENABLED', false),
+        'admissions' => env('CAJAS_PRODUCTION_ADMISSIONS', false),
+        'database' => env('CAJAS_PRODUCTION_DATABASE'),
+        'public_url' => env('CAJAS_PRODUCTION_PUBLIC_URL'),
+        'trusted_proxies' => array_filter(array_map('trim', explode(',', (string) env('CAJAS_PRODUCTION_TRUSTED_PROXIES', '')))),
+        'tokens' => [
+            'read' => env('CAJAS_PRODUCTION_READ_TOKEN'),
+            'write' => env('CAJAS_PRODUCTION_WRITE_TOKEN'),
+            'capital' => env('CAJAS_PRODUCTION_CAPITAL_TOKEN'),
+        ],
+        'previous_tokens' => [
+            'read' => env('CAJAS_PRODUCTION_PREVIOUS_READ_TOKEN'),
+            'write' => env('CAJAS_PRODUCTION_PREVIOUS_WRITE_TOKEN'),
+            'capital' => env('CAJAS_PRODUCTION_PREVIOUS_CAPITAL_TOKEN'),
+        ],
+        'operator' => env('CAJAS_PRODUCTION_OPERATOR'),
+        'custody_accounts' => array_filter(array_map('trim', explode(',', (string) env('CAJAS_PRODUCTION_CUSTODY_ACCOUNTS', '')))),
+        'cutover_on' => env('CAJAS_PRODUCTION_CUTOVER_ON'),
+        'approval_url' => env('CAJAS_PRODUCTION_APPROVAL_URL'),
+        'approval_token' => env('CAJAS_PRODUCTION_APPROVAL_TOKEN'),
+        'custody_read_token' => env('CAJAS_PRODUCTION_CUSTODY_READ_TOKEN'),
+        'approval_public_key' => env('CAJAS_PRODUCTION_APPROVAL_PUBLIC_KEY'),
+        'previous_approval_public_key' => env('CAJAS_PRODUCTION_PREVIOUS_APPROVAL_PUBLIC_KEY'),
+        'rotation_until' => env('CAJAS_PRODUCTION_ROTATION_UNTIL'),
+        'audit_user_email' => env('CAJAS_PRODUCTION_AUDIT_USER_EMAIL'),
+    ],
+    // Opt-in, non-production and test accounts only. Never enables real money.
+    'sandbox_enabled' => env('CAJAS_SANDBOX_ENABLED', false),
+    'loan_rehearsal' => env('CAJAS_LOAN_REHEARSAL', false),
+    'loan_rehearsal_database' => env('CAJAS_LOAN_REHEARSAL_DATABASE'),
+];

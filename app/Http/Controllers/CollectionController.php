@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cajas\V1\OrdinaryPayment;
+use App\Domain\Cajas\V1\IntegrationAccess;
 use App\Domain\Collections\PeriodCollectionService;
 use App\Domain\Cuts\CutReceivedCash;
 use App\Domain\Cuts\WeeklyCutPeriodService;
@@ -18,6 +20,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -32,6 +35,7 @@ class CollectionController extends Controller
         $selectedMonth = CarbonImmutable::parse($request->input('month', now('America/Merida')->format('Y-m').'-01'));
         $monthStart = $selectedMonth->startOfMonth();
         $monthEnd = $selectedMonth->endOfMonth();
+        $nextMonthStart = $monthStart->addMonth()->toDateString();
         $operatorId = $this->selectedOperatorId($request);
         $loanScope = function ($query) use ($request, $operatorId) {
             $query->where('status', 'active')->where('is_frozen', false);
@@ -46,9 +50,10 @@ class CollectionController extends Controller
         $installments = Installment::query()
             ->with(['loan.client', 'loan.operator', 'loan.vehicle', 'reportedMovement', 'allocations.movement'])
             ->whereHas('loan', $loanScope)
-            ->where(function ($query) use ($monthStart, $monthEnd) {
+            ->where(function ($query) use ($monthStart, $nextMonthStart) {
                 $query
-                    ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+                    ->where(fn ($query) => $query->where('due_date', '>=', $monthStart->toDateString())
+                        ->where('due_date', '<', $nextMonthStart))
                     ->orWhere(function ($query) use ($monthStart) {
                         $query->whereDate('due_date', '<', $monthStart->toDateString())
                             ->where('remaining_amount', '>', 0);
@@ -60,7 +65,8 @@ class CollectionController extends Controller
 
         $monthInstallments = Installment::query()
             ->whereHas('loan', $loanScope)
-            ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()]);
+            ->where('due_date', '>=', $monthStart->toDateString())
+            ->where('due_date', '<', $nextMonthStart);
         $monthOperationalCents = (clone $monthInstallments)
             ->selectRaw('COALESCE(SUM(principal_amount + interest_amount), 0) as subtotal')
             ->value('subtotal') * 100;
@@ -71,10 +77,8 @@ class CollectionController extends Controller
             ->when($request->user()->hasRole('operador-cartera'), fn ($query) => $query->where('operator_id', $request->user()->operatorProfile?->id))
             ->when(! $request->user()->hasRole('operador-cartera') && $operatorId, fn ($query) => $query->where('operator_id', $operatorId));
         $collectedMonthCents = app(CutReceivedCash::class)->total($receivedCuts, $monthStart, $monthEnd);
-        $pendingMonthCents = $monthOperationalCents - $collectedMonthLettersCents;
-        $overdueCents = Installment::query()
-            ->whereHas('loan', $loanScope)
-            ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+        $pendingMonthCents = Money::cents((clone $monthInstallments)->where('remaining_amount', '>', 0)->sum('remaining_amount'));
+        $overdueCents = (clone $monthInstallments)
             ->whereDate('due_date', '<', now('America/Merida')->toDateString())
             ->where('remaining_amount', '>', 0)
             ->sum('remaining_amount') * 100;
@@ -82,11 +86,11 @@ class CollectionController extends Controller
         return view('collections.index', [
             'installments' => $installments,
             'kpis' => [
-                ['title' => 'Cartera del mes', 'value' => Money::mxn(Money::decimal((int) ((clone $monthInstallments)->sum('remaining_amount') * 100))), 'caption' => 'Saldo de letras del mes', 'color' => 'blue'],
+                ['title' => 'Cartera del mes', 'value' => Money::mxn(Money::decimal($pendingMonthCents)), 'caption' => 'Saldo de letras del mes', 'color' => 'blue'],
                 ['title' => 'Letras cobradas del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthLettersCents)), 'caption' => 'Pagos de letras con vencimiento en este mes', 'color' => 'orange'],
                 ['title' => 'Esperado del mes', 'value' => Money::mxn(Money::decimal((int) $monthOperationalCents)), 'caption' => 'Calendario mensual', 'color' => 'yellow'],
                 ['title' => 'Cobrado del mes', 'value' => Money::mxn(Money::decimal((int) $collectedMonthCents)), 'caption' => 'Entregas recibidas, incluidos abonos', 'color' => 'green'],
-                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingMonthCents)), 'caption' => 'Esperado menos letras cobradas', 'color' => 'orange'],
+                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal($pendingMonthCents)), 'caption' => 'Saldo vigente de letras del mes', 'color' => 'orange'],
                 ['title' => 'Vencido', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => 'Letras vencidas del mes', 'color' => 'red'],
             ],
             'month' => $selectedMonth,
@@ -98,6 +102,20 @@ class CollectionController extends Controller
     }
 
     public function markPaid(
+        Request $request,
+        Installment $installment,
+        WeeklyCutPeriodService $cutPeriodService,
+        PaymentApplicationService $paymentApplicationService,
+    ): RedirectResponse|JsonResponse {
+        return DB::transaction(fn () => $this->reportInstallmentPayment(
+            $request,
+            Installment::query()->lockForUpdate()->findOrFail($installment->id),
+            $cutPeriodService,
+            $paymentApplicationService,
+        ), 3);
+    }
+
+    private function reportInstallmentPayment(
         Request $request,
         Installment $installment,
         WeeklyCutPeriodService $cutPeriodService,
@@ -133,6 +151,7 @@ class CollectionController extends Controller
             'operator_surcharge_amount' => ['nullable', 'numeric', 'min:0'],
             'external_concepts_amount' => ['nullable', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'include_collection_fee' => ['nullable', 'boolean'],
             'delinquency_amount' => ['nullable', 'numeric', 'min:0'],
             'include_month_interest' => ['nullable', 'boolean'],
             'affects_investors' => ['nullable', 'boolean'],
@@ -211,7 +230,33 @@ class CollectionController extends Controller
 
         abort_if($contractAmountCents <= 0, 422, 'Esta letra no tiene abono a capital disponible.');
 
+        $collectionFeeCents = 0;
+        if ($request->boolean('include_collection_fee')) {
+            abort_unless(
+                $movementType === 'ordinary' && $paymentEffect === 'normal'
+                    && $contractAmountCents === Money::cents($installment->remaining_amount),
+                422,
+                'La cuota de cobranza se registra al cubrir todo el saldo de la letra con un pago normal.',
+            );
+            $collectionFeeCents = Money::cents($installment->administration_fee_amount);
+            abort_if($collectionFeeCents <= 0, 422, 'Esta letra no tiene cuota de cobranza.');
+        }
+
         $automaticCut = null;
+        $cajasType = match (true) {
+            $automaticCapitalOnly => $includeMonthInterest ? 'capital_interest' : 'capital',
+            $movementType === 'ordinary' => 'ordinary',
+            default => null,
+        };
+        if ($cajasType && $paymentEffect !== 'no_investors' && $collectionFeeCents === 0
+            && $delinquencyAmountCents === 0
+            && Money::cents($data['operator_surcharge_amount'] ?? 0) === 0
+            && Money::cents($data['external_concepts_amount'] ?? 0) === 0
+            && Money::cents($data['additional_charge_amount'] ?? 0) === 0
+            && app(IntegrationAccess::class)->usesCajas($installment->loan->operator?->public_id, $data['operated_on'])
+            && in_array($cajasType, app(OrdinaryPayment::class)->allowedTypes($installment, $data['operated_on']), true)) {
+            abort(409, 'Este cobro debe capturarse en Cajas.');
+        }
         if (($data['return_to'] ?? null) === 'loan' && $paymentEffect !== 'no_investors') {
             // Desde el detalle del credito, la fecha declarada define el corte.
             // Se abre una sola vez y los siguientes pagos de esa fecha se agregan ahi.
@@ -238,6 +283,7 @@ class CollectionController extends Controller
             'operator_surcharge_amount' => Money::decimal(Money::cents($data['operator_surcharge_amount'] ?? 0)),
             'external_concepts_amount' => Money::decimal(Money::cents($data['external_concepts_amount'] ?? 0)),
             'additional_charge_amount' => Money::decimal(Money::cents($data['additional_charge_amount'] ?? 0)),
+            'collection_fee_amount' => Money::decimal($collectionFeeCents),
             'delinquency_amount' => Money::decimal($delinquencyAmountCents),
             'affects_investors' => $paymentEffect !== 'no_investors',
             'origin_weekly_cut_id' => $paymentEffect === 'no_investors' ? null : $selectedCut?->id,
@@ -342,6 +388,17 @@ class CollectionController extends Controller
         $appliedDirectly = 0;
         $automaticCut = null;
         $paymentEffect = $data['payment_effect'] ?? ((bool) ($data['affects_investors'] ?? true) ? 'normal' : 'no_investors');
+        if ($paymentEffect !== 'no_investors') {
+            foreach ($installments as $installment) {
+                $this->authorizeInstallmentAccess($request, $installment);
+                $type = app(InstallmentPaymentPolicy::class)->isFutureMonth($installment, $data['operated_on'])
+                    ? 'capital' : ($paymentEffect === 'normal' ? 'ordinary' : null);
+                if (app(IntegrationAccess::class)->usesCajas($installment->loan->operator?->public_id, $data['operated_on'])
+                    && in_array($type, app(OrdinaryPayment::class)->allowedTypes($installment, $data['operated_on']), true)) {
+                    abort(409, 'Separa las letras cuyo cobro debe capturarse en Cajas.');
+                }
+            }
+        }
         foreach ($installments as $installment) {
             $this->authorizeInstallmentAccess($request, $installment);
 

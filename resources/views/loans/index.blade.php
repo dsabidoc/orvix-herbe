@@ -4,7 +4,10 @@
 
 <x-layouts.app title="Cartera">
     @can('loans.formalize')
-        <div class="mb-4 flex justify-end">
+        <div class="mb-4 flex flex-wrap justify-end gap-2">
+            @if (app(\App\Domain\Cajas\V1\PilotAccess::class)->enabled())
+                <a class="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold" href="{{ route('loans.cajas-pending.index') }}">Créditos pendientes de Cajas</a>
+            @endif
             <a class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" href="{{ route('loans.create') }}">Crear prestamo</a>
         </div>
     @endcan

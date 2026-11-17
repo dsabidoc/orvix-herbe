@@ -19,6 +19,7 @@ use App\Support\StatusLabels;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -93,7 +94,7 @@ class WeeklyCutController extends Controller
         ]);
     }
 
-    public function show(Request $request, WeeklyCut $cut, LoanSettlementService $settlementService): View
+    public function show(Request $request, WeeklyCut $cut): View
     {
         abort_if($this->isInvestorReadOnly($request), 403);
 
@@ -145,8 +146,44 @@ class WeeklyCutController extends Controller
                 ? app(CutDeliveryHistory::class)->history($cut)
                 : collect(),
             'pendingInstallments' => $this->pendingInstallmentsForCut($cut),
-            'advanceLoans' => $this->advanceLoansForCut($cut, $settlementService),
+            'advanceLoans' => $cut->status !== 'closed' && $request->user()->can('weekly-cuts.confirm')
+                ? $this->advanceLoansForCut($cut)
+                : collect(),
         ]);
+    }
+
+    public function advancePayment(Request $request, WeeklyCut $cut, Loan $loan, LoanSettlementService $settlementService): Response
+    {
+        abort_if($this->isInvestorReadOnly($request), 403);
+        abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
+        abort_if($request->user()->hasRole('operador-cartera') && $cut->operator_id !== $request->user()->operatorProfile?->id, 403);
+        abort_if($cut->status === 'closed', 404);
+
+        $cutDate = $cut->period_starts_on->toDateString();
+        $loan = $this->advanceLoanQuery($cut)
+            ->with([
+                'client',
+                'vehicle',
+                'installments' => fn ($query) => $query->chaperone()
+                    ->availableForQuickPayment()
+                    ->with('allocations.movement:id,type')
+                    ->orderByRaw('date(due_date) > ?', [$cutDate])
+                    ->orderBy('number'),
+            ])
+            ->findOrFail($loan->id);
+        $pendingMovements = CollectionMovement::query()
+            ->where('loan_id', $loan->id)
+            ->where('confirmation_status', 'reported')
+            ->whereNotNull('target_installment_id')
+            ->whereIn('id', $cut->items()->select('collection_movement_id'))
+            ->get();
+
+        return response()->view('partials.cut-advance-payment', [
+            'cut' => $cut,
+            'loan' => $loan,
+            'quote' => $settlementService->quote($loan, $cutDate, $pendingMovements),
+            'pendingPaymentCount' => $pendingMovements->count(),
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     public function store(Request $request, WeeklyCutPeriodService $cutPeriodService): RedirectResponse
@@ -337,57 +374,6 @@ class WeeklyCutController extends Controller
             : 'Corte confirmado y movimientos aplicados.');
     }
 
-    public function settleBalance(Request $request, WeeklyCut $cut): RedirectResponse
-    {
-        abort_if($this->isInvestorReadOnly($request), 403);
-
-        abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
-
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'settled_on' => ['required', 'date'],
-            'reason' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        DB::transaction(function () use ($cut, $data, $request) {
-            $cut = WeeklyCut::query()->whereKey($cut->id)->lockForUpdate()->firstOrFail();
-            $pendingOnCutCents = max(0, -Money::cents($cut->accumulated_balance));
-            $amountCents = Money::cents($data['amount']);
-
-            abort_if($cut->status === 'closed', 422, 'No se puede liquidar directamente un corte cerrado sin reabrirlo.');
-            abort_if($pendingOnCutCents === 0, 422, 'Este corte no tiene saldo pendiente por liquidar.');
-            abort_if($amountCents > $pendingOnCutCents, 422, 'El monto a liquidar no puede ser mayor al saldo pendiente.');
-
-            $balanceBeforeCents = $this->latestOperatorBalance($cut->operator_id);
-            $balanceAfterCents = $balanceBeforeCents + $amountCents;
-            $cutBalanceAfterCents = -($pendingOnCutCents - $amountCents);
-
-            OperatorLedgerEntry::query()->create([
-                'public_id' => (string) Str::ulid(),
-                'operator_id' => $cut->operator_id,
-                'weekly_cut_id' => $cut->id,
-                'created_by' => $request->user()->id,
-                'type' => 'regularization',
-                'amount' => Money::decimal($amountCents),
-                'balance_before' => Money::decimal($balanceBeforeCents),
-                'balance_after' => Money::decimal($balanceAfterCents),
-                'idempotency_key' => sha1('settle-cut|'.$cut->id.'|'.$request->user()->id.'|'.$amountCents.'|'.$data['settled_on'].'|'.now('America/Merida')->timestamp),
-                'reason' => $data['reason'] ?? 'Liquidacion de saldo pendiente de corte',
-                'settled_at' => CarbonImmutable::parse($data['settled_on'], 'America/Merida')->endOfDay(),
-                'settled_by' => $request->user()->id,
-            ]);
-
-            $cut->update([
-                'regularization_total' => Money::decimal(Money::cents($cut->regularization_total) + $amountCents),
-                'accumulated_balance' => Money::decimal($cutBalanceAfterCents),
-                'balance_settled_at' => $cutBalanceAfterCents === 0 ? CarbonImmutable::parse($data['settled_on'], 'America/Merida')->endOfDay() : null,
-                'balance_settled_by' => $cutBalanceAfterCents === 0 ? $request->user()->id : null,
-            ]);
-        });
-
-        return redirect()->route('cuts.show', $cut)->with('status', 'Saldo pendiente liquidado y descontado del siguiente corte.');
-    }
-
     public function close(Request $request, WeeklyCut $cut): RedirectResponse
     {
         abort_if($this->isInvestorReadOnly($request), 403);
@@ -481,18 +467,40 @@ class WeeklyCutController extends Controller
         return redirect(route('cuts.show', $cut).'#cut-pending-installments')->with('status', 'Movimiento revertido y regresado a atrasados sin marcar.');
     }
 
-    public function destroy(Request $request, WeeklyCut $cut): RedirectResponse
+    public function destroy(
+        Request $request,
+        WeeklyCut $cut,
+        PaymentApplicationService $paymentApplicationService,
+        LoanSettlementService $settlementService,
+    ): RedirectResponse
     {
         abort_if($this->isInvestorReadOnly($request), 403);
 
         abort_unless($request->user()->can('weekly-cuts.confirm'), 403);
 
-        DB::transaction(function () use ($cut, $request): void {
+        DB::transaction(function () use ($cut, $request, $paymentApplicationService, $settlementService): void {
             $cut = WeeklyCut::query()
                 ->with(['items', 'fundDisbursements', 'ledgerEntries'])
                 ->whereKey($cut->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            abort_if(
+                $cut->status === 'closed' || $cut->confirmed_at !== null,
+                422,
+                'Solo se pueden eliminar cortes que aun no han sido confirmados ni cerrados.',
+            );
+
+            $movements = CollectionMovement::query()
+                ->where('weekly_cut_id', $cut->id)
+                ->lockForUpdate()
+                ->get();
+
+            abort_if(
+                $movements->contains(fn (CollectionMovement $movement) => $movement->confirmation_status !== 'reported'),
+                422,
+                'El corte tiene movimientos que ya fueron aplicados. No se puede eliminar sin preservar su conciliacion.',
+            );
 
             $before = $cut->only([
                 'public_id',
@@ -507,13 +515,17 @@ class WeeklyCutController extends Controller
                 'status',
             ]);
 
-            CollectionMovement::query()
-                ->where('weekly_cut_id', $cut->id)
-                ->update(['weekly_cut_id' => null]);
-
-            CollectionMovement::query()
-                ->where('origin_weekly_cut_id', $cut->id)
-                ->update(['origin_weekly_cut_id' => null]);
+            foreach ($movements as $movement) {
+                if ($movement->type === 'settlement') {
+                    $settlementService->cancelReportedSettlement(
+                        $movement,
+                        $request->user()->id,
+                        'Liquidacion reportada cancelada al eliminar corte sin confirmar',
+                    );
+                } else {
+                    $paymentApplicationService->reverse($movement, $request->user()->id);
+                }
+            }
 
             $cut->fundDisbursements()->update(['weekly_cut_id' => null]);
             $cut->ledgerEntries()->update(['weekly_cut_id' => null]);
@@ -528,12 +540,12 @@ class WeeklyCutController extends Controller
                 'before' => $before,
                 'after' => [
                     'deleted_at' => now('America/Merida')->toDateTimeString(),
-                    'movements_detached' => true,
+                    'reported_movements_reversed' => $movements->count(),
                 ],
             ]);
         });
 
-        return redirect()->route('cuts.index')->with('status', 'Corte eliminado. Los cobros y movimientos relacionados se conservaron sin corte asignado.');
+        return redirect()->route('cuts.index')->with('status', 'Corte eliminado. Sus cobros reportados se conservaron como revertidos y las letras volvieron a estar disponibles para marcarse como pagadas.');
     }
 
     private function pendingInstallmentsForCut(WeeklyCut $cut)
@@ -585,34 +597,20 @@ class WeeklyCutController extends Controller
             ?? '99999999';
     }
 
-    private function advanceLoansForCut(WeeklyCut $cut, LoanSettlementService $settlementService)
+    private function advanceLoanQuery(WeeklyCut $cut)
     {
-        $cutDate = $cut->period_starts_on->toDateString();
-        $pendingCutMovements = $cut->items
-            ->map(fn ($item) => $item->movement)
-            ->filter(fn ($movement) => $movement
-                && $movement->confirmation_status === 'reported'
-                && filled($movement->target_installment_id))
-            ->values();
-
         return Loan::query()
-            ->with([
-                'client',
-                'vehicle',
-                'installments' => fn ($query) => $query
-                    ->with(['reportedMovement', 'allocations.movement'])
-                    ->where('remaining_amount', '>', 0)
-                    ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES))
-                    ->orderBy('number'),
-            ])
             ->where('operator_id', $cut->operator_id)
             ->where('status', 'active')
             ->where('is_frozen', false)
-            ->whereHas('installments', fn ($query) => $query
-                ->where('remaining_amount', '>', 0)
-                ->whereDoesntHave('reportedMovement', fn ($query) => $query->whereIn('confirmation_status', WeeklyCutPeriodService::REPORTABLE_MOVEMENT_STATUSES)))
-            ->get()
-            ->filter(fn (Loan $loan) => $loan->installments->isNotEmpty())
+            ->whereHas('installments', fn ($query) => $query->availableForQuickPayment());
+    }
+
+    private function advanceLoansForCut(WeeklyCut $cut)
+    {
+        return $this->advanceLoanQuery($cut)
+            ->with(['client:id,first_name,last_name', 'vehicle:id,brand,model,year,plates,vin'])
+            ->get(['id', 'public_id', 'folio', 'client_id', 'vehicle_id', 'payment_day', 'start_date', 'first_payment_date'])
             ->sort(function (Loan $first, Loan $second): int {
                 return [
                     (int) ($first->payment_day ?? 0),
@@ -626,47 +624,7 @@ class WeeklyCutController extends Controller
                     (string) $second->folio,
                 ];
             })
-            ->map(function (Loan $loan) use ($settlementService, $cutDate, $pendingCutMovements): Loan {
-                $loan->setRelation(
-                    'installments',
-                    $loan->installments
-                        ->sort(function (Installment $first, Installment $second) use ($cutDate): int {
-                            return [
-                                $first->due_date->toDateString() > $cutDate ? 1 : 0,
-                                (int) $first->number,
-                            ] <=> [
-                                $second->due_date->toDateString() > $cutDate ? 1 : 0,
-                                (int) $second->number,
-                            ];
-                        })
-                        ->values(),
-                );
-                $loan->setAttribute(
-                    'cut_settlement_quote',
-                    $settlementService->quote(
-                        $loan,
-                        $cutDate,
-                        $pendingCutMovements->where('loan_id', $loan->id)->values(),
-                    ),
-                );
-                $loan->setAttribute(
-                    'cut_pending_payment_count',
-                    $pendingCutMovements->where('loan_id', $loan->id)->count(),
-                );
-
-                return $loan;
-            })
             ->values();
-    }
-
-    private function latestOperatorBalance(int $operatorId): int
-    {
-        $latestBalance = OperatorLedgerEntry::query()
-            ->where('operator_id', $operatorId)
-            ->latest('id')
-            ->value('balance_after');
-
-        return Money::cents($latestBalance);
     }
 
     private function isInvestorReadOnly(Request $request): bool

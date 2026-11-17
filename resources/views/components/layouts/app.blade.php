@@ -54,6 +54,9 @@
                         if (! $isInvestorOnly && $canOpenInvestors) {
                             $mainNavItems[] = ['Inversionistas', 'investors.index', 'portfolio'];
                         }
+                        if (auth()->user()->can('cajas.access')) {
+                            $mainNavItems[] = ['Abrir Cajas', 'cajas.home', 'wallet'];
+                        }
                     @endphp
 
                     <nav class="mt-8 space-y-1 text-sm font-medium text-slate-600">
@@ -312,9 +315,20 @@
                             <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-date" type="date" value="{{ now('America/Merida')->toDateString() }}">
                         </div>
                         <div data-confirm-paid-amount-fields>
-                            <label class="text-sm font-semibold text-slate-700" for="confirm-paid-amount">Monto recibido de esta letra</label>
+                            <label class="text-sm font-semibold text-slate-700" for="confirm-paid-amount">Importe aplicado a la letra</label>
                             <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#0d9488] focus:outline-none focus:ring-2 focus:ring-[#99f6e4]" id="confirm-paid-amount" type="text" inputmode="decimal" data-money-input value="0.00">
-                            <p class="mt-1 text-xs text-slate-500">Puedes registrar un abono menor; la letra conservará el saldo pendiente.</p>
+                            <p class="mt-1 text-xs text-slate-500">Puedes registrar un abono menor y dejar la letra con saldo pendiente.</p>
+                        </div>
+                        <div hidden class="rounded-md border border-teal-200 bg-teal-50 p-3" data-confirm-paid-collection-fee-section>
+                            <label class="flex items-center gap-2 text-sm font-semibold text-teal-900" for="confirm-paid-include-collection-fee">
+                                <input class="rounded border-teal-400 text-[#0d9488]" id="confirm-paid-include-collection-fee" type="checkbox" aria-describedby="confirm-paid-collection-fee-hint">
+                                Incluir cuota de cobranza
+                                <span data-confirm-paid-collection-fee></span>
+                            </label>
+                            <p class="mt-1 text-xs text-teal-800" id="confirm-paid-collection-fee-hint">Disponible al cubrir el saldo completo de la letra con un pago normal.</p>
+                            <p hidden class="mt-2 text-sm text-teal-900" data-confirm-paid-collection-total>
+                                Total con cuota, antes de moratorios <output class="font-bold"></output>
+                            </p>
                         </div>
                         <div class="rounded-md border border-amber-200 bg-amber-50 p-3">
                             <label class="flex items-center gap-2 text-sm font-semibold text-amber-900" for="confirm-paid-include-delinquency">

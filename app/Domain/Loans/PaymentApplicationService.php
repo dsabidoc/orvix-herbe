@@ -45,6 +45,7 @@ class PaymentApplicationService
             }
 
             $remainingCents = Money::cents($movement->contract_amount);
+            $fromCajas = str_starts_with($movement->idempotency_key, 'cajas-cut-item-');
             $paymentPolicy = app(InstallmentPaymentPolicy::class);
             $installments = $movement->loan->installments()
                 ->where('remaining_amount', '>', 0)
@@ -58,6 +59,13 @@ class PaymentApplicationService
                 )
                 ->lockForUpdate()
                 ->get();
+
+            if (Money::cents($movement->collection_fee_amount) > 0) {
+                $target = $installments->firstWhere('id', $movement->target_installment_id);
+                if (! $target || Money::cents($target->remaining_amount) !== $remainingCents) {
+                    throw new RuntimeException('El saldo de la letra cambió. Revisa el cobro con cuota de cobranza antes de confirmarlo.');
+                }
+            }
 
             $advanceAllowed = [];
             if ($this->isCapitalAdvance($movement)) {
@@ -104,12 +112,14 @@ class PaymentApplicationService
                 }
 
                 $applied = min($remainingCents, $installmentRemaining);
+                $balanceBefore = Money::cents($installment->remaining_amount);
                 $remainingComponents = $paymentPolicy->remainingComponentsCents($installment);
+                $split = $paymentPolicy->splitPaymentCents($remainingComponents, $applied, $this->isCapitalAdvance($movement) || $futurePrincipalOnly);
                 $fullyCoveredCapitalAdvance = $this->isFullyAppliedFutureCapitalAdvance($movement, $installment)
                     && $applied === $installmentRemaining;
                 $totalRemainingAfter = ($movement->type === 'advance' || $fullyCoveredCapitalAdvance) && $applied === $installmentRemaining
                     ? 0
-                    : Money::cents($installment->remaining_amount) - $applied;
+                    : $balanceBefore - $applied;
                 $newApplied = Money::cents($installment->applied_amount) + $applied;
 
                 $installment->update([
@@ -122,10 +132,15 @@ class PaymentApplicationService
                     'collection_movement_id' => $movement->id,
                     'installment_id' => $installment->id,
                     'amount' => Money::decimal($applied),
+                    'principal_cents' => $fromCajas ? $split['principal'] : null,
+                    'interest_waived_cents' => $fromCajas ? $balanceBefore - $applied - $totalRemainingAfter : null,
                 ]);
 
-                if ($movement->affects_investors) {
-                    $this->recordInvestorReturns($movement, $installment, $applied, $confirmedByUserId, $futurePrincipalOnly, $remainingComponents);
+                if ($movement->affects_investors && array_sum($remainingComponents) > 0) {
+                    $this->investorReturnRecorder->record(
+                        $movement->loan, $installment, $split['principal'], $split['interest'], $movement, $confirmedByUserId,
+                        ! $this->isCapitalAdvance($movement) && ! $futurePrincipalOnly && $movement->target_installment_id === $installment->id,
+                    );
                 }
 
                 $remainingCents -= $applied;
@@ -166,6 +181,26 @@ class PaymentApplicationService
     }
 
     public function reverse(CollectionMovement $movement, int $reversedByUserId): CollectionMovement
+    {
+        if (str_starts_with($movement->idempotency_key, 'cajas-cut-item-')) {
+            throw new RuntimeException('El cobro está vinculado a Cajas y requiere una reversa coordinada.');
+        }
+
+        return $this->reversePayment($movement, $reversedByUserId);
+    }
+
+    public function reverseCajasOrdinary(CollectionMovement $movement, int $reversedByUserId): CollectionMovement
+    {
+        if (! str_starts_with($movement->idempotency_key, 'cajas-cut-item-')
+            || $movement->confirmation_status !== 'applied' || $movement->type !== 'ordinary'
+            || $movement->reversed_movement_id !== null) {
+            throw new RuntimeException('El cobro no es un pago ordinario original aplicado desde Cajas.');
+        }
+
+        return $this->reversePayment($movement, $reversedByUserId);
+    }
+
+    private function reversePayment(CollectionMovement $movement, int $reversedByUserId): CollectionMovement
     {
         return DB::transaction(function () use ($movement, $reversedByUserId) {
             $movement = CollectionMovement::query()
@@ -375,13 +410,13 @@ class PaymentApplicationService
             $this->investorReturnRecorder->record($loan, $anchor, $advanceCents, 0, $movement, $confirmedByUserId);
         }
 
-        $this->refreshInterestOnlyFutureInstallments($loan, max(0, $currentCapitalCents - $advanceCents), $movement->operated_on);
-
         $movement->update([
             'confirmation_status' => 'applied',
             'confirmed_by' => $confirmedByUserId,
             'confirmed_at' => now('America/Merida'),
         ]);
+
+        $this->refreshInterestOnlyFutureInstallments($loan, max(0, $currentCapitalCents - $advanceCents), $movement->operated_on);
 
         if ($movement->weekly_cut_id) {
             $this->cutPeriodService->refreshTotals($movement->weeklyCut()->first());
@@ -546,41 +581,6 @@ class PaymentApplicationService
         throw new RuntimeException($mustCoverFullPrincipal
             ? 'Para adelantar una letra futura debes cubrir todo el capital pendiente de la letra.'
             : 'El abono a capital excede el capital pendiente de esta letra.');
-    }
-
-    private function recordInvestorReturns(
-        CollectionMovement $movement,
-        $installment,
-        int $appliedCents,
-        int $userId,
-        bool $principalOnly,
-        array $remainingComponents,
-    ): void {
-        $contractCents = $remainingComponents['principal'] + $remainingComponents['interest'];
-
-        if ($appliedCents <= 0 || $contractCents <= 0) {
-            return;
-        }
-
-        if ($this->isCapitalAdvance($movement) || $principalOnly) {
-            $this->investorReturnRecorder->record($movement->loan, $installment, $appliedCents, 0, $movement, $userId);
-
-            return;
-        }
-
-        $paidRatio = min(1, $appliedCents / $contractCents);
-        $principalCents = min($remainingComponents['principal'], (int) round($remainingComponents['principal'] * $paidRatio));
-        $interestCents = min($remainingComponents['interest'], $appliedCents - $principalCents);
-
-        $this->investorReturnRecorder->record(
-            $movement->loan,
-            $installment,
-            $principalCents,
-            $interestCents,
-            $movement,
-            $userId,
-            $movement->target_installment_id === $installment->id,
-        );
     }
 
     private function operationalCents($installment): int

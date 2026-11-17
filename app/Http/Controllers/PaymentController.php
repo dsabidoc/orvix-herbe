@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Cajas\V1\OrdinaryPayment;
+use App\Domain\Cajas\V1\IntegrationAccess;
 use App\Domain\Cuts\WeeklyCutPeriodService;
 use App\Domain\Loans\DelinquencyCalculator;
 use App\Domain\Loans\InstallmentPaymentPolicy;
@@ -38,6 +40,30 @@ class PaymentController extends Controller
         $nextInstallment = in_array($data['type'], ['ordinary', 'partial'], true)
             ? $loan->installments()->where('remaining_amount', '>', 0)->orderBy('number')->first()
             : null;
+        if ($nextInstallment && (bool) ($data['affects_investors'] ?? true)
+            && Money::cents($data['operator_surcharge_amount'] ?? 0) === 0
+            && Money::cents($data['external_concepts_amount'] ?? 0) === 0
+            && Money::cents($data['additional_charge_amount'] ?? 0) === 0
+            && Money::cents($data['delinquency_amount'] ?? $delinquencyCalculator->forInstallment($nextInstallment, $data['operated_on'])) === 0
+            && app(IntegrationAccess::class)->usesCajas($loan->operator?->public_id, $data['operated_on'])
+            && app(OrdinaryPayment::class)->eligible($nextInstallment, $data['operated_on'])) {
+            abort(409, 'Este cobro ordinario debe capturarse en Cajas.');
+        }
+        if ($data['type'] === 'advance' && (bool) ($data['affects_investors'] ?? true)
+            && Money::cents($data['operator_surcharge_amount'] ?? 0) === 0
+            && Money::cents($data['external_concepts_amount'] ?? 0) === 0
+            && Money::cents($data['additional_charge_amount'] ?? 0) === 0
+            && Money::cents($data['delinquency_amount'] ?? 0) === 0
+            && app(IntegrationAccess::class)->usesCajas($loan->operator?->public_id, $data['operated_on'])) {
+            $amount = Money::cents($data['contract_amount']);
+            foreach (app(OrdinaryPayment::class)->advanceableTail($loan, $data['operated_on']) as $principal) {
+                $amount -= $principal;
+                abort_if($amount === 0, 409, 'Este adelanto debe capturarse en Cajas.');
+                if ($amount < 0) {
+                    break;
+                }
+            }
+        }
         $futureInterestOnlyAdvance = ($loan->calculation_method ?? 'regular') === 'interest_only'
             && $nextInstallment
             && app(InstallmentPaymentPolicy::class)->isFutureMonth($nextInstallment, $data['operated_on']);

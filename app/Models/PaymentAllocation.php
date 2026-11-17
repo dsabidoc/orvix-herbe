@@ -11,7 +11,13 @@ class PaymentAllocation extends Model
         'collection_movement_id',
         'installment_id',
         'amount',
+        'principal_cents',
+        'interest_waived_cents',
     ];
+
+    protected $casts = ['principal_cents' => 'integer', 'interest_waived_cents' => 'integer'];
+
+    protected $hidden = ['principal_cents', 'interest_waived_cents'];
 
     public function movement(): BelongsTo
     {

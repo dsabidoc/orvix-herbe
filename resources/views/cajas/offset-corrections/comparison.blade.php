@@ -1,0 +1,8 @@
+@php($fmt = fn ($cents) => \App\Support\Money::mxn(\App\Support\Money::decimal((int) $cents)))
+<div class="two-cols section">
+@foreach(['before' => 'Antes', 'after' => 'Después de autorizar'] as $key => $heading)
+<section class="panel pad"><h2>{{ $heading }}</h2><p class="money amount">{{ $fmt($proposal['capital_cents']) }}</p><p><strong>{{ $proposal[$key]['cancelled'] ? 'Compensación cancelada' : 'Compensación confirmada' }}</strong></p><p class="muted">{{ $proposal[$key]['executed_on'] }} · {{ $proposal[$key]['reference'] }}</p><p>Pendiente del corte: <strong>{{ $fmt($proposal[$key === 'before' ? 'remaining_before' : 'remaining_after']) }}</strong></p></section>
+@endforeach
+</div>
+<section class="panel pad section"><h2>Efecto en el corte y las cajas</h2><p><strong>Sin movimientos de dinero.</strong> Los recibos y saldos de caja permanecen iguales.</p>
+@if($kind === 'cancel')<p>Compensación efectiva: −{{ $fmt($proposal['capital_cents']) }}. Pendiente del operador: +{{ $fmt($proposal['capital_cents']) }}.</p><p class="muted">{{ $proposal['cancel_type'] === 'returned_operator' ? 'El capital regresó completo al operador' : 'El operador no entregó el capital' }} · {{ $proposal['effective_on'] }}.</p><p class="muted">El crédito no podrá volver a convertirse, compensarse ni desembolsarse. Si ya existe un préstamo de prueba sin cobros, quedará inactivo con su historial. La recepción posterior se registra una sola vez desde el corte.</p>@else<p class="muted">Solo se corrigen fecha o referencia. Se conservan capital, crédito, compensación efectiva y pendiente del operador.</p>@endif</section>

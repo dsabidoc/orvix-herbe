@@ -6,6 +6,7 @@ use App\Notifications\ResetPasswordNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -40,6 +41,16 @@ class User extends Authenticatable
     public function operatorProfile(): HasOne
     {
         return $this->hasOne(Operator::class);
+    }
+
+    public function cashAccounts(): BelongsToMany
+    {
+        return $this->belongsToMany(CashAccount::class);
+    }
+
+    public function cashOperators(): BelongsToMany
+    {
+        return $this->belongsToMany(Operator::class, 'cash_operator_user');
     }
 
     public function investorProfile(): HasOne

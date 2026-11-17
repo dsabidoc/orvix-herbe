@@ -432,17 +432,14 @@ class LoanController extends Controller
         $data['vat_enabled'] = $request->boolean('vat_enabled', true);
         $data['vin'] = $this->normalizeVin($data['vin'] ?? null);
         $this->ensureVinIsAvailable($data['vin'], $loan);
-        $financialConditionsChanged = $this->financialConditionsChanged($loan, $data, $newMonthlyRate);
-        $dateScheduleChanged = $this->dateScheduleChanged($loan, $data);
-
-        if ($financialConditionsChanged && ! $this->canEditConditions($loan)) {
-            return back()
-                ->withErrors(['capital' => 'Este prestamo ya tiene cobros registrados; solo puedes editar datos generales y fechas.'])
-                ->withInput();
-        }
-
-        DB::transaction(function () use ($loan, $data, $newMonthlyRate, $newAdministrationFee, $financialConditionsChanged, $dateScheduleChanged, $calculator) {
+        $updated = DB::transaction(function () use ($loan, $data, $newMonthlyRate, $newAdministrationFee, $calculator): bool {
             $loan = Loan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
+            $financialConditionsChanged = $this->financialConditionsChanged($loan, $data, $newMonthlyRate);
+            $dateScheduleChanged = $this->dateScheduleChanged($loan, $data);
+            if ($financialConditionsChanged && ! $this->canEditConditions($loan)) {
+                return false;
+            }
+
             $folioSourceChanged = (int) $loan->operator_id !== (int) $data['operator_id']
                 || $loan->start_date->toDateString() !== CarbonImmutable::parse($data['start_date'])->toDateString();
             $updatedFolio = $folioSourceChanged
@@ -472,7 +469,7 @@ class LoanController extends Controller
                     $this->updateInstallmentDueDates($loan, $data['first_payment_date'], (int) $data['payment_day']);
                 }
 
-                return;
+                return true;
             }
 
             $schedule = $calculator->calculate([
@@ -489,6 +486,7 @@ class LoanController extends Controller
                 'rounding_adjustment' => 'first',
             ]);
 
+            $previousLetterIds = $loan->installments()->pluck('public_id', 'number');
             $loan->installments()->delete();
             $loan->update([
                 'folio' => $updatedFolio,
@@ -512,12 +510,13 @@ class LoanController extends Controller
                 'delinquency_grace_days' => (int) ($data['delinquency_grace_days'] ?? 0),
             ]);
 
+            $replacementLetterIds = [];
             foreach ($schedule->installments as $installment) {
                 $operationalAmount = Money::decimal(
                     Money::cents($installment['principal'] ?? 0) + Money::cents($installment['interest'] ?? 0),
                 );
 
-                $loan->installments()->create([
+                $replacement = $loan->installments()->create([
                     'number' => $installment['number'],
                     'due_date' => $installment['due_date'],
                     'contract_amount' => $installment['amount'],
@@ -529,9 +528,24 @@ class LoanController extends Controller
                     'remaining_amount' => $operationalAmount,
                     'status' => 'upcoming',
                 ]);
+                $replacementLetterIds[$replacement->number] = $replacement->public_id;
             }
 
-        });
+            foreach ($previousLetterIds as $number => $publicId) {
+                DB::table('cajas_v1_installment_replacements')->insert([
+                    'public_id' => $publicId,
+                    'loan_public_id' => $loan->public_id,
+                    'replacement_public_id' => $replacementLetterIds[$number] ?? null,
+                ]);
+            }
+            return true;
+        }, 5);
+
+        if (! $updated) {
+            return back()
+                ->withErrors(['capital' => 'Este prestamo ya tiene cobros registrados; solo puedes editar datos generales y fechas.'])
+                ->withInput();
+        }
 
         return redirect()->route('loans.show', $loan)->with('status', 'Prestamo actualizado.');
     }

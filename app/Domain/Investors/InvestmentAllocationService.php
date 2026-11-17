@@ -166,7 +166,7 @@ class InvestmentAllocationService
         return (int) round($availableCents);
     }
 
-    public function creditAvailable(Investor $investor, int $amountCents, string $type, ?int $userId = null, ?int $loanId = null, ?int $investmentId = null, ?string $notes = null): void
+    public function creditAvailable(Investor $investor, int $amountCents, string $type, ?int $userId = null, ?int $loanId = null, ?int $investmentId = null, ?string $notes = null, ?array $metadata = null): void
     {
         if ($amountCents <= 0) {
             return;
@@ -176,7 +176,7 @@ class InvestmentAllocationService
         $afterCents = $beforeCents + $amountCents;
 
         $investor->forceFill(['available_capital' => Money::decimal($afterCents)])->save();
-        $this->recordMovement($investor, $amountCents, $beforeCents, $afterCents, $type, $userId, $loanId, $investmentId, $notes);
+        $this->recordMovement($investor, $amountCents, $beforeCents, $afterCents, $type, $userId, $loanId, $investmentId, $notes, $metadata);
     }
 
     public function debitAvailable(Investor $investor, int $amountCents, string $type, ?int $userId = null, ?int $loanId = null, ?int $investmentId = null, ?string $notes = null): void
@@ -192,7 +192,7 @@ class InvestmentAllocationService
         $this->recordMovement($investor, -$amountCents, $beforeCents, $afterCents, $type, $userId, $loanId, $investmentId, $notes);
     }
 
-    private function recordMovement(Investor $investor, int $amountCents, int $beforeCents, int $afterCents, string $type, ?int $userId, ?int $loanId, ?int $investmentId, ?string $notes): void
+    private function recordMovement(Investor $investor, int $amountCents, int $beforeCents, int $afterCents, string $type, ?int $userId, ?int $loanId, ?int $investmentId, ?string $notes, ?array $metadata = null): void
     {
         InvestorCapitalMovement::query()->create([
             'public_id' => (string) Str::ulid(),
@@ -205,6 +205,7 @@ class InvestmentAllocationService
             'balance_before' => Money::decimal($beforeCents),
             'balance_after' => Money::decimal($afterCents),
             'notes' => $notes,
+            'metadata' => $metadata,
         ]);
     }
 
@@ -306,7 +307,10 @@ class InvestmentAllocationService
                     'interest' => Money::cents($installment->interest_amount),
                 ];
 
-                if ($principalOnly) {
+                if ($allocation->principal_cents !== null) {
+                    $principalCents = $allocation->principal_cents;
+                    $interestCents = $appliedCents - $principalCents;
+                } elseif ($principalOnly) {
                     $interestCents = 0;
                     $principalCents = $appliedCents;
                 } else {

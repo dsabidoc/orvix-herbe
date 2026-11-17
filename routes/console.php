@@ -4,8 +4,13 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schedule;
+use App\Domain\Cajas\V1\IntegrationAccess;
 use App\Models\Loan;
 use App\Support\LoanFolios;
+
+Schedule::command('cajas:v1-process-cuts')->everyFiveSeconds()
+    ->when(fn () => app(IntegrationAccess::class)->enabled());
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

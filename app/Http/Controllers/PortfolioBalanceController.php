@@ -56,15 +56,16 @@ class PortfolioBalanceController extends Controller
 
         return response()->streamDownload(function () use ($report) {
             $handle = fopen('php://output', 'w');
+            $writeRow = static fn (array $fields) => fputcsv($handle, $fields, escape: '\\');
             fwrite($handle, "\xEF\xBB\xBF");
 
-            fputcsv($handle, ['Fecha de exportacion', CarbonImmutable::now('America/Merida')->format('d/m/Y H:i')]);
-            fputcsv($handle, ['Periodo', $report['filters']['period_label'] ?? 'Mes en curso']);
-            fputcsv($handle, ['Corte', $report['cutoff']->format('d/m/Y')]);
-            fputcsv($handle, []);
+            $writeRow(['Fecha de exportacion', CarbonImmutable::now('America/Merida')->format('d/m/Y H:i')]);
+            $writeRow(['Periodo', $report['filters']['period_label'] ?? 'Mes en curso']);
+            $writeRow(['Corte', $report['cutoff']->format('d/m/Y')]);
+            $writeRow([]);
 
-            fputcsv($handle, ['Resumen por operador']);
-            fputcsv($handle, [
+            $writeRow(['Resumen por operador']);
+            $writeRow([
                 'Operador',
                 'Clientes',
                 'Prestamos',
@@ -77,7 +78,7 @@ class PortfolioBalanceController extends Controller
             ]);
 
             foreach ($report['operator_rows'] as $operatorRow) {
-                fputcsv($handle, [
+                $writeRow([
                     $operatorRow['operator_name'],
                     $operatorRow['clients_count'],
                     $operatorRow['loans_count'],
@@ -90,9 +91,9 @@ class PortfolioBalanceController extends Controller
                 ]);
             }
 
-            fputcsv($handle, []);
-            fputcsv($handle, ['Detalle de cartera']);
-            fputcsv($handle, [
+            $writeRow([]);
+            $writeRow(['Detalle de cartera']);
+            $writeRow([
                 'Modelo con dia / folio',
                 'Num. pagare',
                 'Pago',
@@ -103,7 +104,7 @@ class PortfolioBalanceController extends Controller
             ]);
 
             foreach ($report['detail_rows'] as $row) {
-                fputcsv($handle, [
+                $writeRow([
                     $row['vehicle_name'].' · Dia '.$row['payment_day'].' · '.$row['folio'],
                     $row['payment_progress'],
                     Money::decimal($row['payment_cents']),

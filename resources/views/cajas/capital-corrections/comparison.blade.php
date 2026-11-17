@@ -1,0 +1,8 @@
+@php($fmt = fn ($cents) => \App\Support\Money::mxn(\App\Support\Money::decimal((int) $cents)))
+<div class="two-cols section">
+@foreach(['before' => 'Antes', 'after' => 'Después de autorizar'] as $key => $heading)
+<section class="panel pad"><h2>{{ $heading }}</h2><p class="money amount">{{ $fmt($proposal['capital_cents']) }}</p><p><strong>{{ $proposal[$key]['cancelled'] ? 'Entrega cancelada' : 'Capital entregado' }}</strong></p><p>{{ \App\Models\CashAccount::findOrFail($proposal[$key]['account_id'])->name }}</p><p class="muted">{{ $proposal[$key]['delivered_on'] }} · {{ $proposal[$key]['recipient_name'] }}</p><p class="muted">{{ $proposal[$key]['reference'] }}</p></section>
+@endforeach
+</div>
+<section class="panel pad section"><h2>Efecto en las cajas</h2>@forelse($proposal['entries'] as $entry)<div class="list-row"><div class="grow">{{ \App\Models\CashAccount::findOrFail($entry['account_id'])->name }}</div><strong>{{ $entry['amount_cents'] > 0 ? '+' : '−' }}{{ $fmt(abs($entry['amount_cents'])) }}</strong></div>@empty<p class="muted">Sin movimientos de dinero. Solo se corrigen datos del comprobante.</p>@endforelse
+@if($kind === 'cancel')<p class="muted">{{ $proposal['cancel_type'] === 'returned' ? 'Devolución completa declarada como recibida' : 'Anulación de una salida registrada por error' }} · {{ $proposal['effective_on'] }}.</p><p class="muted">Esta entrega no podrá convertirse ni desembolsarse nuevamente. Si ya existe un préstamo de prueba sin cobros, quedará inactivo y conservará su historial.</p>@elseif(count($proposal['entries']))<p class="muted">Se corrige la caja de origen con dos asientos vinculados. No se entrega capital de nuevo.</p>@endif</section>

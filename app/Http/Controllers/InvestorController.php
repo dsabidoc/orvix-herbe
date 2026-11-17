@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Investors\InvestmentAllocationService;
 use App\Domain\Investors\InvestorMonthlyReturnReport;
+use App\Domain\Investors\ReturnProvenance;
 use App\Models\Investor;
 use App\Models\InvestorCapitalMovement;
 use App\Models\InvestorWithdrawalRequest;
@@ -12,10 +13,10 @@ use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
-use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Role;
 
@@ -46,8 +47,42 @@ class InvestorController extends Controller
                 ->orWhere('phone', 'like', $search));
         }
 
+        $summaryInvestors = (clone $query)->get();
+        $availableCapitalCents = $summaryInvestors
+            ->sum(fn (Investor $investor) => Money::cents($investor->available_capital));
+        $returnsToReinvestCents = $summaryInvestors
+            ->sum(fn (Investor $investor) => Money::cents($investor->returned_capital_balance) + Money::cents($investor->generated_interest_balance));
+        $initialCapitalCents = $summaryInvestors
+            ->sum(fn (Investor $investor) => Money::cents($investor->initial_capital));
+
         return view('investors.index', [
             'investors' => $query->paginate(15)->withQueryString(),
+            'kpis' => [
+                [
+                    'title' => 'Capital disponible',
+                    'value' => Money::mxn(Money::decimal($availableCapitalCents)),
+                    'caption' => 'Saldo neto listo para asignar',
+                    'color' => 'green',
+                ],
+                [
+                    'title' => 'Retornos por reinvertir',
+                    'value' => Money::mxn(Money::decimal($returnsToReinvestCents)),
+                    'caption' => 'Capital e intereses pendientes de reinversión',
+                    'color' => 'orange',
+                ],
+                [
+                    'title' => 'Capital inicial registrado',
+                    'value' => Money::mxn(Money::decimal($initialCapitalCents)),
+                    'caption' => 'Monto capturado al alta',
+                    'color' => 'blue',
+                ],
+                [
+                    'title' => 'Inversionistas activos',
+                    'value' => number_format($summaryInvestors->where('status', 'active')->count()),
+                    'caption' => number_format($summaryInvestors->count()).' registrados en el resultado',
+                    'color' => 'yellow',
+                ],
+            ],
             'investorUsers' => User::query()
                 ->whereDoesntHave('investorProfile', fn ($query) => $query->where('status', '!=', 'deleted'))
                 ->where('status', 'active')
@@ -365,30 +400,37 @@ class InvestorController extends Controller
             return back()->withErrors(['returned_capital' => 'Captura capital retornado o interes generado.'])->withInput();
         }
 
-        $investor->forceFill([
-            'returned_capital_balance' => Money::decimal(Money::cents($investor->returned_capital_balance) + $returnedCapitalCents),
-            'generated_interest_balance' => Money::decimal(Money::cents($investor->generated_interest_balance) + $generatedInterestCents),
-        ])->save();
+        DB::transaction(function () use ($request, $investor, $data, $returnedCapitalCents, $generatedInterestCents) {
+            if (DB::connection()->getDriverName() === 'sqlite') {
+                DB::table('investors')->where('id', $investor->id)->update(['id' => DB::raw('id')]);
+            }
+            $investor = Investor::query()->whereKey($investor->id)->lockForUpdate()->firstOrFail();
 
-        InvestorCapitalMovement::query()->create([
-            'public_id' => (string) Str::ulid(),
-            'investor_id' => $investor->id,
-            'created_by' => $request->user()->id,
-            'type' => 'returns_recorded',
-            'amount' => Money::decimal($returnedCapitalCents + $generatedInterestCents),
-            'balance_before' => $investor->available_capital,
-            'balance_after' => $investor->available_capital,
-            'notes' => $data['notes'] ?? 'Retornos registrados',
-            'metadata' => [
-                'returned_capital' => Money::decimal($returnedCapitalCents),
-                'generated_interest' => Money::decimal($generatedInterestCents),
-            ],
-        ]);
+            $investor->forceFill([
+                'returned_capital_balance' => Money::decimal(Money::cents($investor->returned_capital_balance) + $returnedCapitalCents),
+                'generated_interest_balance' => Money::decimal(Money::cents($investor->generated_interest_balance) + $generatedInterestCents),
+            ])->save();
+
+            InvestorCapitalMovement::query()->create([
+                'public_id' => (string) Str::ulid(),
+                'investor_id' => $investor->id,
+                'created_by' => $request->user()->id,
+                'type' => 'returns_recorded',
+                'amount' => Money::decimal($returnedCapitalCents + $generatedInterestCents),
+                'balance_before' => $investor->available_capital,
+                'balance_after' => $investor->available_capital,
+                'notes' => $data['notes'] ?? 'Retornos registrados',
+                'metadata' => [
+                    'returned_capital' => Money::decimal($returnedCapitalCents),
+                    'generated_interest' => Money::decimal($generatedInterestCents),
+                ],
+            ]);
+        });
 
         return back()->with('status', 'Retornos registrados.');
     }
 
-    public function reinvest(Request $request, Investor $investor, InvestmentAllocationService $ledger): RedirectResponse
+    public function reinvest(Request $request, Investor $investor, InvestmentAllocationService $ledger, ReturnProvenance $provenance): RedirectResponse
     {
         abort_unless($request->user()->can('investors.manage'), 403);
 
@@ -427,7 +469,10 @@ class InvestorController extends Controller
             return back()->withErrors(['generated_interest_amount' => 'El monto no puede ser mayor al interes generado disponible.'])->withInput();
         }
 
-        DB::transaction(function () use ($request, $investor, $ledger, $returnedCapitalCents, $generatedInterestCents, $amountCents) {
+        DB::transaction(function () use ($request, $investor, $ledger, $provenance, $returnedCapitalCents, $generatedInterestCents) {
+            if (DB::connection()->getDriverName() === 'sqlite') {
+                DB::table('investors')->where('id', $investor->id)->update(['id' => DB::raw('id')]);
+            }
             $investor = Investor::query()->whereKey($investor->id)->lockForUpdate()->firstOrFail();
             $availableReturnedCapitalCents = Money::cents($investor->returned_capital_balance);
             $availableGeneratedInterestCents = Money::cents($investor->generated_interest_balance);
@@ -438,6 +483,9 @@ class InvestorController extends Controller
                 ]);
             }
 
+            $state = $provenance->state($investor);
+            $capitalOrigin = $provenance->plan($investor, 'returned_capital', $returnedCapitalCents, $state);
+            $interestOrigin = $provenance->plan($investor, 'generated_interest', $generatedInterestCents, $state);
             $investor->forceFill([
                 'returned_capital_balance' => Money::decimal($availableReturnedCapitalCents - $returnedCapitalCents),
                 'generated_interest_balance' => Money::decimal($availableGeneratedInterestCents - $generatedInterestCents),
@@ -450,6 +498,7 @@ class InvestorController extends Controller
                     'reinvest_capital',
                     $request->user()->id,
                     notes: 'Capital retornado convertido a capital disponible.',
+                    metadata: $capitalOrigin,
                 );
             }
 
@@ -460,6 +509,7 @@ class InvestorController extends Controller
                     'reinvest_interest',
                     $request->user()->id,
                     notes: 'Interes generado convertido a capital disponible.',
+                    metadata: $interestOrigin,
                 );
             }
         });

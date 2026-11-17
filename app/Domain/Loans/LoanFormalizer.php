@@ -33,6 +33,7 @@ class LoanFormalizer
                 'start_date' => $data['start_date'],
                 'first_payment_date' => $data['first_payment_date'] ?? $data['start_date'],
                 'payment_day' => (int) $data['payment_day'],
+                'rounding_increment' => $data['rounding_increment'] ?? 10,
             ]);
 
             $loan = Loan::query()->create([
