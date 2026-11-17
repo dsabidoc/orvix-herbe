@@ -37,7 +37,7 @@ class CajasV1PilotController extends Controller
             'day' => 'sometimes|integer|between:1,31', 'page' => 'sometimes|integer|between:1,10000',
             'installment_id' => ['sometimes', self::ID],
         ]);
-        $operator = $this->operator($input['operator']);
+        $operator = $this->operator($input['operator'], readOnly: true);
         $exact = $input['installment_id'] ?? null;
         $query = Installment::with(['loan.client', 'loan.vehicle', 'allocations.movement'])
             ->whereHas('loan', fn ($loan) => $loan->where('operator_id', $operator->id)
@@ -156,7 +156,7 @@ class CajasV1PilotController extends Controller
         if (! $record) {
             $this->access->fail(404, 'CUT_VERSION_NOT_FOUND', 'La versión indicada todavía no está registrada.');
         }
-        $this->access->authorizeOperator($record->operator);
+        $this->access->authorizeOperator($record->operator, readOnly: true);
         $this->authorizeCutAccounts($record->body);
 
         return response()->json([
@@ -169,7 +169,7 @@ class CajasV1PilotController extends Controller
     {
         $this->access->authenticate($request, 'read');
 
-        return response()->json($credits->result($this->credit($pendingCredit)))->header('Cache-Control', 'private, no-store');
+        return response()->json($credits->result($this->credit($pendingCredit, readOnly: true)))->header('Cache-Control', 'private, no-store');
     }
 
     public function correctPayment(Request $request, string $cut, PaymentCorrection $corrections): JsonResponse
@@ -273,13 +273,13 @@ class CajasV1PilotController extends Controller
             ->header('Cache-Control', 'private, no-store');
     }
 
-    private function credit(string $pendingCredit): CajasV1PendingCredit
+    private function credit(string $pendingCredit, bool $readOnly = false): CajasV1PendingCredit
     {
         $credit = CajasV1PendingCredit::with('operator', 'loan')->where('public_id', $pendingCredit)->first();
         if (! $credit) {
             $this->access->fail(404, 'PENDING_CREDIT_NOT_FOUND', 'El crédito pendiente todavía no está registrado.');
         }
-        $this->access->authorizeOperator($credit->operator->public_id);
+        $this->access->authorizeOperator($credit->operator->public_id, readOnly: $readOnly);
 
         return $credit;
     }
@@ -323,9 +323,9 @@ class CajasV1PilotController extends Controller
         return ['cut_id' => $cut['cut_id'], 'version' => (int) $cut['version']];
     }
 
-    private function operator(string $publicId): Operator
+    private function operator(string $publicId, bool $readOnly = false): Operator
     {
-        $this->access->authorizeOperator($publicId);
+        $this->access->authorizeOperator($publicId, readOnly: $readOnly);
         $operator = Operator::where('public_id', $publicId)->where('status', 'active')->first();
         if (! $operator) {
             $this->access->fail(404, 'OPERATOR_NOT_FOUND', 'El operador no está disponible.');

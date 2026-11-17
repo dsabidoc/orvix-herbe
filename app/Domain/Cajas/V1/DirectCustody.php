@@ -21,7 +21,7 @@ class DirectCustody
         if (! $payment || ! $payment->operator || $payment->totalCents() <= 0) {
             $this->access->fail(404, 'PAYMENT_NOT_FOUND', 'El pago nativo en efectivo aplicado no está disponible.');
         }
-        $this->access->authorizeOperator($payment->operator->public_id);
+        $this->access->authorizeOperator($payment->operator->public_id, readOnly: true);
 
         return [
             'payment_id' => $payment->public_id, 'payment_folio' => $payment->folio, 'operator' => $payment->operator->public_id,

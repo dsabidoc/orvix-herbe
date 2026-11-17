@@ -2,6 +2,7 @@
 
 namespace App\Domain\Cajas\V1;
 
+use App\Models\Operator;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\MySqlConnection;
 use Illuminate\Http\Request;
@@ -98,8 +99,16 @@ class IntegrationAccess
         return is_string($operator) && preg_match('/\A[A-Za-z0-9_-]{1,80}\z/', $operator) ? [$operator] : [];
     }
 
-    public function authorizeOperator(string $operator): void
+    public function authorizeOperator(string $operator, bool $readOnly = false): void
     {
+        if ($readOnly && $this->production() && $this->setting('read_all_active_operators') === true) {
+            if (! Operator::where('public_id', $operator)->where('status', 'active')->exists()) {
+                $this->fail(403, 'OPERATOR_OUT_OF_SCOPE', 'El operador no está habilitado para este servicio.');
+            }
+
+            return;
+        }
+
         if (! in_array($operator, $this->operators(), true)) {
             $this->fail(403, 'OPERATOR_OUT_OF_SCOPE', 'El operador no está habilitado para este servicio.');
         }
