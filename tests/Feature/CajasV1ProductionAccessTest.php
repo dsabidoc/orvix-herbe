@@ -56,6 +56,7 @@ class CajasV1ProductionAccessTest extends TestCase
             'cajas.v1_production.tokens.write' => $this->writeToken,
             'cajas.v1_production.tokens.capital' => $this->capitalToken,
             'cajas.v1_production.operator' => 'operator-fixture',
+            'cajas.v1_production.write_operators' => null,
             'cajas.v1_production.read_all_active_operators' => false,
             'cajas.v1_production.cutover_on' => '2026-11-15',
             'cajas.v1_pilot.enabled' => true,

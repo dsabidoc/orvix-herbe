@@ -32,6 +32,9 @@ return [
             'capital' => env('CAJAS_PRODUCTION_PREVIOUS_CAPITAL_TOKEN'),
         ],
         'operator' => env('CAJAS_PRODUCTION_OPERATOR'),
+        'write_operators' => env('CAJAS_PRODUCTION_WRITE_OPERATORS') === null
+            ? null
+            : array_values(array_unique(array_filter(array_map('trim', explode(',', (string) env('CAJAS_PRODUCTION_WRITE_OPERATORS')))))),
         'read_all_active_operators' => env('CAJAS_PRODUCTION_READ_ALL_ACTIVE_OPERATORS', false),
         'custody_accounts' => array_filter(array_map('trim', explode(',', (string) env('CAJAS_PRODUCTION_CUSTODY_ACCOUNTS', '')))),
         'cutover_on' => env('CAJAS_PRODUCTION_CUTOVER_ON'),

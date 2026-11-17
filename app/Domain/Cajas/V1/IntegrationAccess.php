@@ -94,6 +94,16 @@ class IntegrationAccess
         if (! $this->production()) {
             return $this->setting('operators');
         }
+        $operators = $this->setting('write_operators');
+        if ($operators !== null) {
+            if (! is_array($operators) || array_filter($operators, fn ($id) => ! is_string($id) || ! preg_match('/\A[A-Za-z0-9_-]{1,80}\z/', $id)) !== []) {
+                return [];
+            }
+
+            return Operator::whereIn('public_id', $operators)->where('status', 'active')
+                ->orderBy('id')->pluck('public_id')->all();
+        }
+
         $operator = $this->setting('operator');
 
         return is_string($operator) && preg_match('/\A[A-Za-z0-9_-]{1,80}\z/', $operator) ? [$operator] : [];
