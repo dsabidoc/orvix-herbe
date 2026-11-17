@@ -4,6 +4,7 @@ namespace App\Domain\Loans;
 
 use App\Domain\Investors\InvestorReturnRecorder;
 use App\Models\CollectionMovement;
+use App\Models\Installment;
 use App\Models\Loan;
 use App\Models\PaymentAllocation;
 use App\Models\WeeklyCutItem;
@@ -22,11 +23,38 @@ class LoanSettlementService
      */
     public function quote(Loan $loan, CarbonImmutable|string|null $settledOn = null, ?Collection $pendingMovements = null): array
     {
-        $settledOn = $this->settledOn($settledOn);
+        return $this->quoteFromInstallments(
+            $loan,
+            $this->settledOn($settledOn),
+            $this->installmentsAfterPendingMovements($loan, $pendingMovements),
+        );
+    }
+
+    /** @param Collection<int, Loan> $loans */
+    public function quoteMany(Collection $loans, CarbonImmutable|string|null $settledOn = null): Collection
+    {
+        if ($loans->isEmpty()) {
+            return collect();
+        }
+
+        $date = $this->settledOn($settledOn);
+        $unpaidByLoan = Installment::query()
+            ->whereIntegerInRaw('loan_id', $loans->pluck('id')->all())
+            ->where('remaining_amount', '>', 0)
+            ->orderBy('number')
+            ->get()
+            ->groupBy('loan_id');
+
+        return $loans->mapWithKeys(fn (Loan $loan) => [
+            $loan->id => $this->quoteFromInstallments($loan, $date, $unpaidByLoan->get($loan->id, collect())),
+        ]);
+    }
+
+    private function quoteFromInstallments(Loan $loan, CarbonImmutable $settledOn, Collection $unpaidInstallments): array
+    {
         $monthStart = $settledOn->startOfMonth();
         $monthEnd = $settledOn->endOfMonth();
         $rows = [];
-        $unpaidInstallments = $this->installmentsAfterPendingMovements($loan, $pendingMovements);
 
         if (($loan->calculation_method ?? 'regular') === 'interest_only') {
             $anchor = $unpaidInstallments->first();

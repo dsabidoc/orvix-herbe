@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -27,6 +28,7 @@ class CollectionMovement extends Model
         'operator_surcharge_amount',
         'external_concepts_amount',
         'additional_charge_amount',
+        'collection_fee_amount',
         'delinquency_amount',
         'affects_investors',
         'type',
@@ -49,6 +51,16 @@ class CollectionMovement extends Model
     public function getRouteKeyName(): string
     {
         return 'public_id';
+    }
+
+    public function totalCents(): int
+    {
+        return Money::cents($this->contract_amount)
+            + Money::cents($this->operator_surcharge_amount)
+            + Money::cents($this->external_concepts_amount)
+            + Money::cents($this->additional_charge_amount)
+            + Money::cents($this->collection_fee_amount)
+            + Money::cents($this->delinquency_amount);
     }
 
     public function loan(): BelongsTo

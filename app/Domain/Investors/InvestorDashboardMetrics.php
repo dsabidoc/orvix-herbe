@@ -2,6 +2,7 @@
 
 namespace App\Domain\Investors;
 
+use App\Domain\Loans\InstallmentPaymentPolicy;
 use App\Domain\Loans\LoanSettlementService;
 use App\Models\CollectionMovement;
 use App\Models\Investor;
@@ -20,11 +21,14 @@ class InvestorDashboardMetrics
         'returns_recorded' => 1,
     ];
 
-    public function __construct(private readonly LoanSettlementService $settlementService) {}
+    public function __construct(
+        private readonly LoanSettlementService $settlementService,
+        private readonly InstallmentPaymentPolicy $paymentPolicy,
+    ) {}
 
     /**
      * @param  Collection<int, Loan>  $loans
-     * @return array{settle_today_cents:int,expected_period_cents:int,collected_period_cents:int,overdue_cents:int,settlement_breakdown:array{capital_cents:int,current_month_cents:int,overdue_cents:int}}
+     * @return array{settle_today_cents:int,expected_period_cents:int,collected_period_cents:int,pending_period_cents:int,overdue_cents:int,settlement_breakdown:array{capital_cents:int,current_month_cents:int,overdue_cents:int}}
      */
     public function calculate(
         Investor $investor,
@@ -36,7 +40,7 @@ class InvestorDashboardMetrics
     ): array {
         $overdueThrough ??= $periodEnd->lt($today) ? $periodEnd : $today;
         $loans->load([
-            'installments',
+            'installments.allocations.movement:id,type',
             'investments' => fn ($query) => $query
                 ->where('investor_id', $investor->id)
                 ->where('status', 'active'),
@@ -44,12 +48,19 @@ class InvestorDashboardMetrics
 
         $settleTodayCents = 0;
         $expectedPeriodCents = 0;
+        $pendingPeriodCents = 0;
         $overdueCents = 0;
         $settlementBreakdown = [
             'capital_cents' => 0,
             'current_month_cents' => 0,
             'overdue_cents' => 0,
         ];
+
+        $quotes = $this->settlementService->quoteMany($loans->filter(function (Loan $loan) use ($today) {
+            $investment = $loan->investments->first();
+
+            return $investment && $this->investmentCoversDate($investment, $today);
+        }), $today);
 
         foreach ($loans as $loan) {
             $investment = $loan->investments->first();
@@ -58,8 +69,8 @@ class InvestorDashboardMetrics
                 continue;
             }
 
-            if ($this->investmentCoversDate($investment, $today)) {
-                foreach ($this->settlementService->quote($loan, $today)['rows'] as $row) {
+            if ($quote = $quotes->get($loan->id)) {
+                foreach ($quote['rows'] as $row) {
                     $shareCents = $this->shareCents(
                         $loan,
                         $investment,
@@ -87,6 +98,11 @@ class InvestorDashboardMetrics
 
                 if ($dueDate->betweenIncluded($periodStart, $periodEnd)) {
                     $expectedPeriodCents += $this->shareCents($loan, $investment, $principalCents, $interestCents);
+
+                    if (Money::cents($installment->remaining_amount) > 0) {
+                        $remaining = $this->paymentPolicy->remainingComponentsCents($installment);
+                        $pendingPeriodCents += max(0, $this->shareCents($loan, $investment, $remaining['principal'], $remaining['interest']));
+                    }
                 }
 
                 if ($dueDate->lt($overdueThrough) && Money::cents($installment->remaining_amount) > 0) {
@@ -110,6 +126,7 @@ class InvestorDashboardMetrics
             'settle_today_cents' => $settleTodayCents,
             'expected_period_cents' => $expectedPeriodCents,
             'collected_period_cents' => $this->collectedPeriodCents($investor, $loans, $periodStart, $periodEnd),
+            'pending_period_cents' => $pendingPeriodCents,
             'overdue_cents' => $overdueCents,
             'settlement_breakdown' => $settlementBreakdown,
         ];

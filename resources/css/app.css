@@ -10,8 +10,12 @@
 
 @layer base {
     *:focus-visible {
-        outline: 3px solid #14b8a6;
+        outline: 3px solid #0f766e;
         outline-offset: 2px;
+    }
+
+    html[data-theme='dark'] :focus-visible {
+        outline-color: #5eead4;
     }
 
     dialog[open] {
@@ -329,15 +333,16 @@ html[data-theme='dark'] .bg-slate-100 {
     background-color: #1e293b !important;
 }
 
+html[data-theme='dark'] .bg-slate-200 {
+    background-color: #263244 !important;
+}
+
 html[data-theme='dark'] .bg-slate-950 {
     background-color: #020617 !important;
 }
 
-html[data-theme='dark'] .hover\:bg-slate-100:hover {
-    background-color: #1f2a3d !important;
-}
-
 html[data-theme='dark'] .bg-\[\#e6f7f4\],
+html[data-theme='dark'] .bg-teal-50,
 html[data-theme='dark'] .bg-emerald-50,
 html[data-theme='dark'] .bg-emerald-50\/80,
 html[data-theme='dark'] .bg-blue-50,
@@ -362,11 +367,17 @@ html[data-theme='dark'] .bg-indigo-100 {
     background-color: rgba(99, 102, 241, 0.15) !important;
 }
 
+html[data-theme='dark'] .bg-cyan-50 {
+    background-color: rgba(34, 211, 238, 0.12) !important;
+}
+
+html[data-theme='dark'] .bg-orange-50,
 html[data-theme='dark'] .bg-orange-50\/80,
 html[data-theme='dark'] .bg-orange-100 {
     background-color: rgba(249, 115, 22, 0.13) !important;
 }
 
+html[data-theme='dark'] .bg-yellow-50,
 html[data-theme='dark'] .bg-yellow-50\/80,
 html[data-theme='dark'] .bg-yellow-100 {
     background-color: rgba(234, 179, 8, 0.13) !important;
@@ -412,29 +423,30 @@ html[data-theme='dark'] .text-slate-400 {
     color: #7f8da6 !important;
 }
 
-html[data-theme='dark'] .monthly-generated-interest-amount {
-    color: #0e7490 !important;
-}
-
+html[data-theme='dark'] .text-cyan-700,
+html[data-theme='dark'] .monthly-generated-interest-amount,
 html[data-theme='dark'] .monthly-return-actual-interest-amount {
-    color: #0e7490 !important;
+    color: #a5f3fc !important;
 }
 
 html[data-theme='dark'] .text-\[\#0f766e\],
 html[data-theme='dark'] .text-\[\#0d9488\],
-html[data-theme='dark'] .hover\:text-\[\#0f766e\]:hover,
+html[data-theme='dark'] .text-teal-800,
+html[data-theme='dark'] .text-teal-900,
 html[data-theme='dark'] .text-emerald-700,
 html[data-theme='dark'] .text-emerald-800 {
     color: #5eead4 !important;
 }
 
 html[data-theme='dark'] .text-blue-700,
-html[data-theme='dark'] .text-blue-800 {
+html[data-theme='dark'] .text-blue-800,
+html[data-theme='dark'] .text-sky-700 {
     color: #93c5fd !important;
 }
 
 html[data-theme='dark'] .text-indigo-700,
-html[data-theme='dark'] .text-indigo-800 {
+html[data-theme='dark'] .text-indigo-800,
+html[data-theme='dark'] .text-violet-700 {
     color: #a5b4fc !important;
 }
 
@@ -448,12 +460,14 @@ html[data-theme='dark'] .text-yellow-700 {
 
 html[data-theme='dark'] .text-red-600,
 html[data-theme='dark'] .text-red-700,
-html[data-theme='dark'] .text-red-800 {
+html[data-theme='dark'] .text-red-800,
+html[data-theme='dark'] .text-rose-700 {
     color: #fca5a5 !important;
 }
 
 html[data-theme='dark'] .text-amber-700,
-html[data-theme='dark'] .text-amber-800 {
+html[data-theme='dark'] .text-amber-800,
+html[data-theme='dark'] .text-amber-900 {
     color: #fcd34d !important;
 }
 
@@ -466,6 +480,7 @@ html[data-theme='dark'] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
 
 html[data-theme='dark'] .border-\[\#0d9488\],
 html[data-theme='dark'] .border-\[\#99f6e4\],
+html[data-theme='dark'] .border-teal-200,
 html[data-theme='dark'] .border-emerald-200 {
     border-color: rgba(45, 212, 191, 0.48) !important;
 }
@@ -478,6 +493,10 @@ html[data-theme='dark'] .ring-indigo-100 {
     --tw-ring-color: rgba(129, 140, 248, 0.42) !important;
 }
 
+html[data-theme='dark'] .ring-cyan-100 {
+    --tw-ring-color: rgba(34, 211, 238, 0.42) !important;
+}
+
 html[data-theme='dark'] .border-orange-200 {
     border-color: rgba(251, 146, 60, 0.42) !important;
 }
@@ -488,7 +507,8 @@ html[data-theme='dark'] .border-amber-200 {
 }
 
 html[data-theme='dark'] .border-red-100,
-html[data-theme='dark'] .border-red-200 {
+html[data-theme='dark'] .border-red-200,
+html[data-theme='dark'] .border-rose-200 {
     border-color: rgba(248, 113, 113, 0.42) !important;
 }
 
@@ -564,7 +584,7 @@ html[data-theme='dark'] .focus\:ring-\[\#99f6e4\]:focus {
 }
 
 html[data-theme='dark'] .bg-\[\#0d9488\] {
-    background-color: #0f9488 !important;
+    background-color: #0f766e !important;
 }
 
 html[data-theme='dark'] .bg-red-700 {
@@ -577,6 +597,66 @@ html[data-theme='dark'] .bg-blue-700 {
 
 html[data-theme='dark'] .bg-slate-950\/40 {
     background-color: rgba(2, 6, 23, 0.72) !important;
+}
+
+html[data-theme='dark'] :is([data-cut-tab-button], [data-loan-tab-button]).bg-slate-950 {
+    background-color: #134e4a !important;
+}
+
+[data-quick-payment-choice][aria-pressed='true'] {
+    background-color: #ccfbf1;
+    border-color: #0f766e;
+    color: #134e4a;
+}
+
+[data-quick-payment-choice]:focus-visible {
+    outline-color: #0f766e;
+}
+
+html[data-theme='dark'] [data-quick-payment-choice]:focus-visible {
+    outline-color: #5eead4;
+}
+
+html[data-theme='dark'] [data-quick-payment-choice][aria-pressed='true'] {
+    background-color: #134e4a !important;
+    border-color: #5eead4 !important;
+    color: #f0fdfa !important;
+}
+
+@media (hover: hover) {
+    html[data-theme='dark'] :is(.hover\:bg-slate-50, .hover\:bg-slate-100, .hover\:bg-slate-200, [data-cut-tab-button].bg-white, [data-loan-tab-button].bg-white):hover {
+        background-color: #263244 !important;
+    }
+
+    html[data-theme='dark'] .hover\:bg-red-50:hover {
+        background-color: #3a2029 !important;
+    }
+
+    html[data-theme='dark'] .hover\:bg-\[\#0f766e\]:hover {
+        background-color: #115e59 !important;
+    }
+
+    html[data-theme='dark'] :is(.hover\:text-\[\#0f766e\], .hover\:text-\[\#0b5f59\]):hover {
+        color: #5eead4 !important;
+    }
+
+    [data-quick-payment-choice]:hover {
+        background-color: #f0fdfa;
+        border-color: #0f766e;
+    }
+
+    [data-quick-payment-choice][aria-pressed='true']:hover {
+        background-color: #99f6e4;
+    }
+
+    html[data-theme='dark'] [data-quick-payment-choice]:hover {
+        background-color: #1e293b !important;
+        border-color: #5eead4 !important;
+    }
+
+    html[data-theme='dark'] [data-quick-payment-choice][aria-pressed='true']:hover {
+        background-color: #115e59 !important;
+    }
 }
 
 input[type='number'] {

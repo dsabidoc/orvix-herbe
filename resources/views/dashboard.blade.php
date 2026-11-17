@@ -35,17 +35,15 @@
         $settlementStops[] = '#e2e8f0 0% 100%';
     }
 
-    $expectedPeriodCents = max(0, (int) $expectedPeriodKpi['cents']);
-    $periodChartTotal = max(1, $expectedPeriodCents);
-    $periodSegments = collect([
-        ['title' => 'Cobrado', 'value' => $collectedPeriodKpi['value'], 'cents' => min($expectedPeriodCents, max(0, (int) $collectedPeriodKpi['cents'])), 'color' => 'green'],
-        ['title' => 'Pendiente', 'value' => $pendingPeriodKpi['value'], 'cents' => min($expectedPeriodCents, max(0, (int) $pendingPeriodKpi['cents'])), 'color' => 'orange'],
-    ]);
+    $expectedPeriodCents = (int) $expectedPeriodKpi['cents'];
+    $periodMetrics = [
+        ['title' => 'Cobrado', 'value' => $collectedPeriodKpi['value'], 'cents' => $collectedPeriodKpi['cents'], 'color' => 'green'],
+        ['title' => 'Pendiente', 'value' => $pendingPeriodKpi['value'], 'cents' => $pendingPeriodKpi['cents'], 'color' => 'orange'],
+    ];
 
     $dashboardUser = auth()->user();
     $canCreateLoan = $dashboardUser->can('loans.formalize');
     $canRequestLoan = $dashboardUser->can('applications.create') && ! $canCreateLoan;
-    $canRegisterPayment = $dashboardUser->hasRole('operador-cartera') || $dashboardUser->can('payments.confirm') || $dashboardUser->can('payments.report');
 @endphp
 
 <x-layouts.app title="Dashboard">
@@ -169,32 +167,26 @@
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h3 class="font-bold text-slate-950">Cobranza del periodo</h3>
-            <p class="mt-1 text-sm text-slate-500">Cobrado y pendiente dividen el esperado del periodo, sin mezclarse con la liquidación.</p>
-            <div class="mt-8">
-                <div class="flex items-end justify-between gap-3">
-                    <p class="text-sm font-semibold text-slate-700">Esperado del periodo</p>
-                    <p class="text-lg font-bold text-slate-950">{{ $expectedPeriodKpi['value'] }}</p>
-                </div>
-                <div class="mt-3 flex h-8 overflow-hidden rounded-full bg-slate-100">
-                    @foreach ($periodSegments as $segment)
-                        @php
-                            $percent = $segment['cents'] / $periodChartTotal * 100;
-                            $style = $kpiStyles[$segment['color']];
-                        @endphp
-                        <div class="{{ $style['bar'] }} h-full" style="width: {{ $percent }}%" title="{{ $segment['title'] }}: {{ $segment['value'] }}"></div>
-                    @endforeach
-                </div>
+            <p class="mt-1 text-sm text-slate-500">Los cobros registrados y el saldo vigente de las letras se muestran por separado.</p>
+            <div class="mt-8 flex items-end justify-between gap-3">
+                <p class="text-sm font-semibold text-slate-700">Esperado del periodo</p>
+                <p class="text-lg font-bold text-slate-950">{{ $expectedPeriodKpi['value'] }}</p>
             </div>
             <div class="mt-8 grid gap-4 sm:grid-cols-2">
-                @foreach ($periodSegments as $segment)
+                @foreach ($periodMetrics as $metric)
                     @php
-                        $style = $kpiStyles[$segment['color']];
-                        $percent = round($segment['cents'] / $periodChartTotal * 100);
+                        $style = $kpiStyles[$metric['color']];
+                        $percent = $expectedPeriodCents > 0 ? $metric['cents'] / $expectedPeriodCents * 100 : null;
                     @endphp
-                    <div class="rounded-md {{ $style['track'] }} p-4">
-                        <p class="flex items-center gap-2 text-sm font-semibold text-slate-800"><span class="size-2.5 rounded-full" style="background-color: {{ $style['dot'] }}"></span>{{ $segment['title'] }}</p>
-                        <p class="mt-2 text-xl font-bold text-slate-950">{{ $segment['value'] }}</p>
-                        <p class="mt-1 text-sm font-medium text-slate-500">{{ $percent }}% del esperado</p>
+                    <div class="rounded-md {{ $style['card'] }} p-4">
+                        <p class="flex items-center gap-2 text-sm font-semibold text-slate-800"><span class="size-2.5 rounded-full" style="background-color: {{ $style['dot'] }}"></span>{{ $metric['title'] }}</p>
+                        <p class="mt-2 text-xl font-bold text-slate-950">{{ $metric['value'] }}</p>
+                        @if ($percent !== null)
+                            <div class="{{ $style['track'] }} mt-2 h-2 overflow-hidden rounded-full">
+                                <div class="{{ $style['bar'] }} h-full" style="width: {{ min(100, max(0, $percent)) }}%"></div>
+                            </div>
+                            <p class="mt-1 text-sm font-medium text-slate-500">{{ round($percent) }}% del esperado</p>
+                        @endif
                     </div>
                 @endforeach
             </div>
@@ -319,75 +311,23 @@
                 <h3 class="mt-1 text-lg font-bold text-slate-950">Registrar Cobro</h3>
             </div>
             <div class="px-5 py-4">
-                <label class="text-sm font-semibold text-slate-700" for="quick_payment_loan">Cliente</label>
-                <select class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" id="quick_payment_loan" data-quick-payment-select>
+                <label class="text-sm font-semibold text-slate-700" for="quick_payment_loan_search">Buscar cartera</label>
+                <input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm" id="quick_payment_loan_search" type="search" placeholder="Cliente, folio o modelo" data-quick-payment-search="quick_payment_loan">
+                <p class="mt-2 text-xs text-slate-500" data-quick-payment-search-status="quick_payment_loan" aria-live="polite"></p>
+                <div class="mt-2 hidden max-h-52 space-y-2 overflow-y-auto" role="group" aria-label="Carteras encontradas" data-quick-payment-results="quick_payment_loan"></div>
+                <select class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" id="quick_payment_loan" aria-label="Seleccionar cartera" data-quick-payment-select>
                     <option value="">Selecciona un cliente o prestamo</option>
                     @foreach ($quickCollectionLoans as $loan)
-                        <option value="{{ $loan->public_id }}">{{ $loan->client->first_name }} {{ $loan->client->last_name }} · {{ $loan->folio }} · {{ $loan->vehicle?->model }}</option>
+                        <option value="{{ $loan->public_id }}" data-quick-payment-url="{{ route('dashboard.quick-payment', ['loan' => $loan, 'operator_id' => $filters['operator_id'], 'investor_id' => $filters['investor_id']]) }}">{{ $loan->client->first_name }} {{ $loan->client->last_name }} · {{ $loan->folio }} · {{ $loan->vehicle?->model }}</option>
                     @endforeach
                 </select>
 
                 <div class="mt-4 rounded-md border border-slate-200">
-                    @forelse ($quickCollectionLoans as $loan)
-                        <section class="hidden" data-quick-payment-panel="{{ $loan->public_id }}">
-                            <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                                <p class="font-bold text-slate-950">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</p>
-                                <p class="mt-1 text-sm text-slate-500">{{ $loan->folio }} · {{ $loan->vehicle?->model }} {{ $loan->vehicle?->year }} · {{ $loan->operator?->name }}</p>
-                            </div>
-                            <div class="max-h-[420px] overflow-auto">
-                                <table class="w-full text-left text-sm">
-                                    <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
-                                        <tr>
-                                            <th class="px-4 py-3">Letra</th>
-                                            <th class="px-4 py-3">Vence</th>
-                                            <th class="px-4 py-3 text-right">Saldo</th>
-                                            <th class="px-4 py-3 text-right">Accion</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100">
-                                        @foreach ($loan->installments as $installment)
-                                            @php
-                                                $isOverdue = $installment->due_date->toDateString() < now('America/Merida')->toDateString();
-                                                $delinquencyCents = app(\App\Domain\Loans\DelinquencyCalculator::class)
-                                                    ->forInstallment($installment, now('America/Merida')->toDateString());
-                                                $futurePrincipalOnly = app(\App\Domain\Loans\InstallmentPaymentPolicy::class)
-                                                    ->isFutureMonth($installment, now('America/Merida'));
-                                                $suggestedCapitalCents = ($loan->calculation_method ?? 'regular') === 'interest_only'
-                                                    ? Money::cents($installment->remaining_amount)
-                                                    : app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
-                                            @endphp
-                                            <tr class="{{ $isOverdue ? 'bg-red-50/40' : '' }}">
-                                                <td class="px-4 py-3 font-semibold">{{ $installment->number }}</td>
-                                                <td class="px-4 py-3">
-                                                    <span class="{{ $isOverdue ? 'font-semibold text-red-700' : '' }}">{{ $installment->due_date->format('d/m/Y') }}</span>
-                                                    @if ($isOverdue)
-                                                        <span class="ml-2 rounded bg-red-50 px-2 py-1 text-xs font-bold text-red-700">Vencida</span>
-                                                    @endif
-                                                </td>
-                                                <td class="px-4 py-3 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->remaining_amount) }}</td>
-                                                <td class="px-4 py-3 text-right">
-                                                    <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" @if ($futurePrincipalOnly) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif @if (($loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif>
-                                                        @csrf
-                                                        <input name="return_to" type="hidden" value="dashboard">
-                                                        <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
-                                                        <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
-                                                        <input name="operator_surcharge_amount" type="hidden" value="0">
-                                                        <input name="external_concepts_amount" type="hidden" value="0">
-                                                        <input name="additional_charge_amount" type="hidden" value="0">
-                                                        <input name="delinquency_amount" type="hidden" value="0">
-                                                        <button class="rounded-md bg-[#0d9488] px-3 py-2 text-xs font-bold text-white" type="submit">Pagado</button>
-                                                    </form>
-                                                </td>
-                                            </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-                    @empty
-                        <p class="px-4 py-6 text-sm text-slate-500">No hay pagos pendientes para registrar.</p>
-                    @endforelse
-                    <p class="px-4 py-6 text-sm text-slate-500" data-quick-payment-empty>Selecciona un cliente para ver sus pagos pendientes.</p>
+                    @include('partials.quick-payment-content', [
+                        'prompt' => $quickCollectionLoans->isEmpty()
+                            ? 'No hay pagos pendientes para registrar.'
+                            : 'Selecciona una cartera para ver sus pagos pendientes.',
+                    ])
                 </div>
             </div>
             <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4">

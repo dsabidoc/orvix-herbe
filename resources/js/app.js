@@ -144,6 +144,44 @@ const applyTheme = (theme) => {
     });
 };
 
+const syncCollectionFee = (dialog) => {
+    const form = pendingPaidForm;
+    const toggle = dialog.querySelector('#confirm-paid-include-collection-fee');
+    const section = dialog.querySelector('[data-confirm-paid-collection-fee-section]');
+    const total = dialog.querySelector('[data-confirm-paid-collection-total]');
+    const amount = dialog.querySelector('#confirm-paid-amount');
+    const date = dialog.querySelector('#confirm-paid-date');
+    const monthInterest = dialog.querySelector('#confirm-paid-include-month-interest');
+    const capitalAdvanceButton = dialog.querySelector('[data-capital-advance-action]');
+    const noInvestorsButton = dialog.querySelector('[data-no-investors-action]');
+
+    if (!form || !toggle || !section || !total) {
+        return;
+    }
+
+    const fee = Number(form.dataset.collectionFee || 0);
+    const paymentMonth = form.dataset.fixedPaymentMonth || date.value.slice(0, 7);
+    const forceCapitalAdvance = form.dataset.forceCapitalAdvance === 'true';
+    const includesMonthInterest = monthInterest.checked && !monthInterest.disabled;
+    const isAdvance = (forceCapitalAdvance || paymentMonth < form.dataset.installmentMonth) && !includesMonthInterest;
+    const paymentAmount = Number(amount.value.replace(/,/g, ''));
+    const canIncludeFee = fee > 0 && !isAdvance && paymentAmount === Number(form.dataset.suggestedPaymentAmount);
+
+    section.hidden = fee <= 0;
+    toggle.disabled = !canIncludeFee;
+    if (!canIncludeFee) {
+        toggle.checked = false;
+    }
+
+    const formatAmount = (value) => value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+    section.querySelector('[data-confirm-paid-collection-fee]').textContent = formatAmount(fee);
+    total.hidden = !toggle.checked;
+    total.querySelector('output').textContent = toggle.checked ? formatAmount(paymentAmount + fee) : '';
+
+    noInvestorsButton.disabled = forceCapitalAdvance || toggle.checked;
+    capitalAdvanceButton.disabled = capitalAdvanceButton.hidden || (toggle.checked && !includesMonthInterest);
+};
+
 document.addEventListener('submit', (event) => {
     const form = event.target;
 
@@ -195,6 +233,7 @@ document.addEventListener('submit', (event) => {
     const suggestedPaymentAmount = form.dataset.suggestedPaymentAmount || '0.00';
     const monthInterestSection = dialog.querySelector('[data-confirm-paid-month-interest-section]');
     const monthInterestToggle = dialog.querySelector('#confirm-paid-include-month-interest');
+    const collectionFeeToggle = dialog.querySelector('#confirm-paid-include-collection-fee');
     const canIncludeMonthInterest = form.dataset.monthInterestAllowed === 'true';
 
     if (delinquencyToggle instanceof HTMLInputElement) {
@@ -242,6 +281,11 @@ document.addEventListener('submit', (event) => {
     if (normalPaymentButton instanceof HTMLButtonElement) {
         normalPaymentButton.textContent = 'Pagado normal';
     }
+
+    if (collectionFeeToggle instanceof HTMLInputElement) {
+        collectionFeeToggle.checked = false;
+    }
+    syncCollectionFee(dialog);
 
     dialog.showModal();
 });
@@ -649,7 +693,13 @@ document.addEventListener('DOMContentLoaded', () => {
             delinquencyFields.hidden = !delinquencyToggle.checked;
         });
 
-        monthInterestToggle?.addEventListener('change', syncMonthInterestAmount);
+        monthInterestToggle?.addEventListener('change', () => {
+            syncMonthInterestAmount();
+            syncCollectionFee(dialog);
+        });
+        dialog.querySelector('#confirm-paid-amount')?.addEventListener('input', () => syncCollectionFee(dialog));
+        dialog.querySelector('#confirm-paid-date')?.addEventListener('change', () => syncCollectionFee(dialog));
+        dialog.querySelector('#confirm-paid-include-collection-fee')?.addEventListener('change', () => syncCollectionFee(dialog));
 
         dialog.addEventListener('close', () => {
             if (!['confirm', 'confirm-no-investors', 'confirm-capital-advance'].includes(dialog.returnValue) || !pendingPaidForm) {
@@ -731,6 +781,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 'confirm-capital-advance': 'capital_advance',
             }[shouldIncludeMonthInterest ? 'confirm' : confirmedAction] || 'normal';
             formMonthInterestInput.value = shouldIncludeMonthInterest ? '1' : '0';
+
+            const includeCollectionFee = dialog.querySelector('#confirm-paid-include-collection-fee');
+            if (pendingPaidForm.dataset.collectionFee !== undefined) {
+                let feeInput = pendingPaidForm.querySelector('input[name="include_collection_fee"]');
+                if (!feeInput) {
+                    feeInput = document.createElement('input');
+                    feeInput.type = 'hidden';
+                    feeInput.name = 'include_collection_fee';
+                    pendingPaidForm.appendChild(feeInput);
+                }
+
+                feeInput.value = includeCollectionFee.checked && !includeCollectionFee.disabled
+                    && (confirmedAction === 'confirm' || shouldIncludeMonthInterest) ? '1' : '0';
+            }
 
             const shouldIncludeDelinquency = confirmedAction === 'confirm'
                 && includeDelinquency instanceof HTMLInputElement
@@ -1053,21 +1117,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('[data-quick-payment-select]').forEach((select) => {
         const container = select.closest('dialog') || document;
-        const panels = Array.from(container.querySelectorAll('[data-quick-payment-panel]'));
-        const empty = container.querySelector('[data-quick-payment-empty]');
+        const content = container.querySelector('[data-quick-payment-content]');
+        const status = container.querySelector('[data-quick-payment-status]');
+        const retry = container.querySelector('[data-quick-payment-retry]');
 
-        const syncPanels = () => {
-            panels.forEach((panel) => {
-                panel.classList.toggle('hidden', panel.dataset.quickPaymentPanel !== select.value);
-            });
+        if (!content || !status || !retry) {
+            return;
+        }
 
-            if (empty instanceof HTMLElement) {
-                empty.classList.toggle('hidden', select.value !== '');
+        const prompt = status.textContent.trim();
+        let activeRequest;
+
+        const loadPanel = async () => {
+            activeRequest?.abort();
+            content.replaceChildren();
+            retry.hidden = true;
+            status.hidden = false;
+
+            const url = select.selectedOptions[0]?.dataset.quickPaymentUrl;
+            if (!url) {
+                status.textContent = prompt;
+                content.removeAttribute('aria-busy');
+                return;
+            }
+
+            const request = new AbortController();
+            activeRequest = request;
+            content.setAttribute('aria-busy', 'true');
+            status.textContent = 'Cargando letras…';
+
+            try {
+                const response = await fetch(url, { signal: request.signal, redirect: 'error', cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error('No se pudo cargar la cartera.');
+                }
+
+                const html = await response.text();
+                if (!request.signal.aborted) {
+                    content.innerHTML = html;
+                    status.hidden = true;
+                }
+            } catch {
+                if (!request.signal.aborted) {
+                    status.textContent = 'No se pudieron cargar las letras. Vuelve a intentarlo o selecciona otra cartera.';
+                    retry.hidden = false;
+                }
+            } finally {
+                if (!request.signal.aborted) {
+                    content.removeAttribute('aria-busy');
+                }
             }
         };
 
-        select.addEventListener('change', syncPanels);
-        syncPanels();
+        select.addEventListener('change', loadPanel);
+        retry.addEventListener('click', loadPanel);
+        if (select.value) {
+            void loadPanel();
+        }
     });
 
     const advanceLoanId = new URLSearchParams(window.location.search).get('advance_loan_id');
@@ -1098,10 +1204,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = selectId ? document.getElementById(selectId) : null;
         const container = input.closest('dialog') || document;
         const status = selectId ? container.querySelector(`[data-quick-payment-search-status="${selectId}"]`) : null;
+        const results = selectId ? container.querySelector(`[data-quick-payment-results="${selectId}"]`) : null;
 
-        if (!(input instanceof HTMLInputElement) || !(select instanceof HTMLSelectElement)) {
+        if (!(input instanceof HTMLInputElement) || !(select instanceof HTMLSelectElement) || !(results instanceof HTMLElement)) {
             return;
         }
+
+        // Keep the server's payment-day ordering and the complete source list.
+        // Visible buttons work on iPad Safari without hiding native options.
+        const options = Array.from(select.options).filter((option) => option.value !== '');
+        select.classList.add('hidden');
+        results.classList.remove('hidden');
 
         const normalize = (value) => value
             .toString()
@@ -1109,58 +1222,73 @@ document.addEventListener('DOMContentLoaded', () => {
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '');
 
-        const filterOptions = () => {
+        const syncSelection = () => {
+            results.querySelectorAll('button').forEach((button) => {
+                const selected = button.dataset.quickPaymentChoice === select.value;
+                button.setAttribute('aria-pressed', String(selected));
+                button.classList.toggle('border-slate-300', !selected);
+                button.classList.toggle('bg-white', !selected);
+                button.classList.toggle('border-teal-600', selected);
+                button.classList.toggle('bg-teal-50', selected);
+            });
+        };
+
+        const filterOptions = (clearSelection = true) => {
             const needle = normalize(input.value).trim();
-            const matches = Array.from(select.options).filter((option) => option.value !== ''
-                && normalize(option.getAttribute('data-search-text') || option.textContent || '').includes(needle));
+            const terms = needle.split(/\s+/).filter(Boolean);
+            const matches = options.filter((option) => {
+                const searchText = normalize(option.getAttribute('data-search-text') || option.textContent || '');
 
-            select.classList.toggle('border-amber-300', needle !== '' && matches.length === 0);
+                return terms.every((term) => searchText.includes(term));
+            });
 
-            if (needle === '') {
-                if (status instanceof HTMLElement) {
-                    status.textContent = 'Escribe y usa Buscar para abrir la primera cartera coincidente.';
-                }
-
-                return;
+            if (clearSelection) {
+                select.value = '';
+                select.dispatchEvent(new Event('change'));
             }
 
-            if (matches.length === 0) {
-                if (status instanceof HTMLElement) {
-                    status.textContent = 'No se encontró una cartera con ese dato. Intenta con modelo, día, folio o cliente.';
-                }
+            results.replaceChildren(...matches.map((option) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'block min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-left text-sm font-semibold text-slate-700 hover:border-teal-600 focus-visible:outline-2 focus-visible:outline-teal-600';
+                button.dataset.quickPaymentChoice = option.value;
+                button.textContent = option.textContent.trim();
+                button.addEventListener('click', () => {
+                    select.value = option.value;
+                    select.dispatchEvent(new Event('change'));
 
-                return;
-            }
+                    if (status instanceof HTMLElement) {
+                        status.textContent = `Cartera seleccionada: ${option.textContent.trim()}`;
+                    }
+                });
 
-            // iPad Safari does not reliably hide <option> elements in a native
-            // select. Selecting the first match directly makes the search useful
-            // on touch devices while leaving the full select as a fallback.
-            const firstMatch = matches[0];
-            select.value = firstMatch.value;
-            select.dispatchEvent(new Event('change'));
+                return button;
+            }));
+            syncSelection();
 
             if (status instanceof HTMLElement) {
-                status.textContent = matches.length === 1
-                    ? 'Se abrió la cartera encontrada.'
-                    : `Se abrió la primera de ${matches.length} carteras coincidentes.`;
+                status.textContent = matches.length === 0
+                    ? 'No se encontró una cartera con ese dato. Intenta con marca, modelo, año, placas, VIN, día, folio o cliente.'
+                    : `${matches.length} ${matches.length === 1 ? 'cartera encontrada' : 'carteras encontradas'}. Elige cuál abrir.`;
             }
-
-            const panel = document.getElementById(firstMatch.value);
-            panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
 
         const searchButton = container.querySelector(`[data-quick-payment-search-button="${selectId}"]`);
 
         if (searchButton instanceof HTMLButtonElement) {
-            searchButton.addEventListener('click', filterOptions);
+            searchButton.addEventListener('click', () => filterOptions());
         }
 
+        select.addEventListener('change', syncSelection);
+        input.addEventListener('input', () => filterOptions());
         input.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 filterOptions();
             }
         });
+
+        filterOptions(false);
     });
 
     document.querySelectorAll('[data-cut-pending-search]').forEach((input) => {

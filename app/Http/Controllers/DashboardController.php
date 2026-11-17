@@ -14,6 +14,7 @@ use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -54,6 +55,7 @@ class DashboardController extends Controller
             $settleTodayCents = $metrics['settle_today_cents'];
             $expectedPeriodCents = $metrics['expected_period_cents'];
             $collectedPeriodCents = $metrics['collected_period_cents'];
+            $pendingPeriodCents = $metrics['pending_period_cents'];
             $overdueCents = $metrics['overdue_cents'];
             $settlementBreakdown = $metrics['settlement_breakdown'];
         } else {
@@ -64,8 +66,7 @@ class DashboardController extends Controller
                 'overdue_cents' => 0,
             ];
 
-            foreach ($collectableLoans as $loan) {
-                $quote = $settlementService->quote($loan, $today);
+            foreach ($settlementService->quoteMany($collectableLoans, $today) as $quote) {
                 $settleTodayCents += (int) $quote['total_cents'];
 
                 foreach ($quote['rows'] as $row) {
@@ -76,11 +77,13 @@ class DashboardController extends Controller
                     }] += (int) $row['amount_cents'];
                 }
             }
-            $expectedPeriodCents = $this->operationalScheduledCents(
-                Installment::query()
-                    ->whereIn('loan_id', $collectableLoanIds)
-                    ->whereBetween('due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-            );
+            $periodInstallments = Installment::query()
+                ->whereIn('loan_id', $collectableLoanIds)
+                ->where('due_date', '>=', $periodStart->toDateString())
+                ->where('due_date', '<', $periodEnd->addDay()->toDateString());
+            $expectedPeriodCents = $this->operationalScheduledCents(clone $periodInstallments);
+            $pendingPeriodCents = Money::cents($periodInstallments->where('remaining_amount', '>', 0)->sum('remaining_amount'));
+
             // The dashboard represents cash received, including partial deliveries.
             // This intentionally differs from the schedule-level
             // "letters collected" measure, which only counts ordinary payments
@@ -93,7 +96,6 @@ class DashboardController extends Controller
                     ->where('remaining_amount', '>', 0)
             );
         }
-        $pendingPeriodCents = $expectedPeriodCents - $collectedPeriodCents;
 
         $loans = (clone $activeLoansQuery)
             ->with(['client', 'operator', 'vehicle', 'installments' => fn ($query) => $query->orderBy('number')])
@@ -110,24 +112,12 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
-        $quickCollectionLoans = (clone $activeLoansQuery)
-            ->with([
-                'client',
-                'vehicle',
-                'operator',
-                'installments' => fn ($query) => $query
-                    ->with(['reportedMovement', 'allocations.movement'])
-                    ->where('remaining_amount', '>', 0)
-                    ->whereDoesntHave('reportedMovement')
-                    ->orderBy('due_date')
-                    ->orderBy('number'),
-            ])
-            ->whereHas('installments', fn ($query) => $query
-                ->where('remaining_amount', '>', 0)
-                ->whereDoesntHave('reportedMovement'))
-            ->where('is_frozen', false)
-            ->orderBy('folio')
-            ->get();
+        $quickCollectionLoans = $this->canRegisterPayment($request)
+            ? $this->quickCollectionLoanQuery($request)
+                ->with(['client:id,first_name,last_name', 'vehicle:id,model'])
+                ->orderBy('folio')
+                ->get(['id', 'public_id', 'folio', 'client_id', 'vehicle_id'])
+            : collect();
 
         return view('dashboard', [
             'kpis' => [
@@ -137,13 +127,14 @@ class DashboardController extends Controller
                 ['title' => 'Esperado del periodo', 'value' => Money::mxn(Money::decimal((int) $expectedPeriodCents)), 'caption' => $selectedInvestor ? 'Programado para su participacion' : 'Total programado originalmente', 'cents' => (int) $expectedPeriodCents, 'color' => 'yellow'],
                 ['title' => 'Total a liquidar hoy', 'value' => Money::mxn(Money::decimal((int) $settleTodayCents)), 'caption' => $selectedInvestor ? 'Capital aportado e intereses correspondientes' : 'Capital futuro e intereses vigentes', 'cents' => (int) $settleTodayCents, 'color' => 'blue'],
                 ['title' => 'Cobrado del periodo', 'value' => Money::mxn(Money::decimal((int) $collectedPeriodCents)), 'caption' => $selectedInvestor ? 'Retornos de cortes confirmados' : 'Entregas recibidas, incluidos abonos', 'cents' => (int) $collectedPeriodCents, 'color' => 'green'],
-                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal((int) $pendingPeriodCents)), 'caption' => $selectedInvestor ? 'Esperado menos retornado' : 'Esperado menos cobrado', 'cents' => (int) $pendingPeriodCents, 'color' => 'orange'],
+                ['title' => 'Pendiente por cobrar', 'value' => Money::mxn(Money::decimal($pendingPeriodCents)), 'caption' => $selectedInvestor ? 'Su participación en el saldo vigente de las letras' : 'Saldo vigente de letras del periodo', 'cents' => $pendingPeriodCents, 'color' => 'orange'],
                 ['title' => 'Total vencidos', 'value' => Money::mxn(Money::decimal((int) $overdueCents)), 'caption' => $selectedInvestor ? 'Capital e interes vencido correspondientes' : 'Abono e interes vencido', 'cents' => (int) $overdueCents, 'color' => 'red'],
             ],
             'settlementBreakdown' => $settlementBreakdown,
             'loans' => $loans,
             'cuts' => $cuts,
             'quickCollectionLoans' => $quickCollectionLoans,
+            'canRegisterPayment' => $this->canRegisterPayment($request),
             'operators' => Operator::query()
                 ->when($user->hasRole('operador-cartera'), fn ($query) => $query->whereKey($user->operatorProfile?->id))
                 ->withCount([
@@ -160,6 +151,42 @@ class DashboardController extends Controller
                 'period' => $period,
             ],
         ]);
+    }
+
+    public function quickPayment(Request $request, Loan $loan): Response
+    {
+        abort_unless($this->canRegisterPayment($request), 403);
+
+        $loan = $this->quickCollectionLoanQuery($request)
+            ->with([
+                'client',
+                'vehicle',
+                'operator',
+                'installments' => fn ($query) => $query->chaperone()
+                    ->availableForQuickPayment()
+                    ->with('allocations.movement:id,type')
+                    ->orderBy('due_date')
+                    ->orderBy('number'),
+            ])
+            ->findOrFail($loan->id);
+
+        return response()->view('partials.dashboard-quick-payment', ['loan' => $loan])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    private function canRegisterPayment(Request $request): bool
+    {
+        $user = $request->user();
+
+        return (! $user->can('investments.view-own') || $user->can('investors.manage'))
+            && ($user->hasRole('operador-cartera') || $user->can('payments.confirm') || $user->can('payments.report'));
+    }
+
+    private function quickCollectionLoanQuery(Request $request)
+    {
+        return $this->visibleLoanQuery($request)
+            ->where('is_frozen', false)
+            ->whereHas('installments', fn ($query) => $query->availableForQuickPayment());
     }
 
     private function visibleLoanQuery(Request $request)

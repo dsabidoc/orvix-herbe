@@ -391,7 +391,7 @@
                                 <td class="px-3 py-2 {{ $isOverdue ? 'font-semibold text-red-700' : '' }}">{{ $installment->due_date->format('d/m/Y') }}</td>
                                 <td class="px-3 py-2 text-right">
                                     @if ($canOperateLoan && Money::cents($installment->remaining_amount) > 0 && ! $movement)
-                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}" data-suggested-delinquency="{{ Money::decimal($rowDelinquencyCents) }}" data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}" @if ($futurePrincipalOnly) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif @if (($loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif>
+                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-collection-fee="{{ Money::decimal(Money::cents($installment->administration_fee_amount)) }}" data-installment-month="{{ $installment->due_date->format('Y-m') }}" data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}" data-suggested-delinquency="{{ Money::decimal($rowDelinquencyCents) }}" data-capital-advance-allowed="{{ $capitalAdvanceAllowed ? 'true' : 'false' }}" @if ($futurePrincipalOnly) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif @if (($loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif>
                                             @csrf
                                             <input name="return_to" type="hidden" value="loan">
                                             <input name="operated_on" type="hidden" value="{{ now('America/Merida')->toDateString() }}">
@@ -475,6 +475,16 @@
                                 <dt class="text-slate-500">Morosidad</dt>
                                 <dd class="font-bold">{{ Money::mxn($movement->delinquency_amount ?? 0) }}</dd>
                             </div>
+                            @if (Money::cents($movement->collection_fee_amount) > 0)
+                                <div>
+                                    <dt class="text-slate-500">Cuota de cobranza</dt>
+                                    <dd class="font-bold">{{ Money::mxn($movement->collection_fee_amount) }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-slate-500">Total recibido</dt>
+                                    <dd class="font-bold">{{ Money::mxn(Money::decimal($movement->totalCents())) }}</dd>
+                                </div>
+                            @endif
                         </dl>
                         @if (! $isInvestorReadOnly && $loanUser->can('payments.confirm'))
                             @if ($movement->confirmation_status === 'reported')

@@ -27,6 +27,8 @@
         <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" data-open-modal="create-investor-modal">Nuevo inversionista</button>
     </div>
 
+    @include('partials.kpi-cards', ['kpis' => $kpis, 'gridClass' => 'grid-cols-2 md:grid-cols-4'])
+
     <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-5 py-3">
             @include('partials.table-pagination', ['paginator' => $investors])

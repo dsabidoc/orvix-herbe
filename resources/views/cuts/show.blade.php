@@ -20,11 +20,13 @@
         @endcan
         <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white" type="button" onclick="window.print()">Imprimir corte</button>
         @can('weekly-cuts.confirm')
-            <form method="POST" action="{{ route('cuts.destroy', $cut) }}" data-confirm-delete data-confirm-title="¿Eliminar este corte?" data-confirm-message="Se eliminara solo este corte. Los cobros, prestamos nuevos y movimientos relacionados se conservaran sin corte asignado.">
-                @csrf
-                @method('DELETE')
-                <button class="w-full rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 sm:w-auto" type="submit">Eliminar corte</button>
-            </form>
+            @if ($cut->status !== 'closed' && ! $cut->confirmed_at)
+                <form method="POST" action="{{ route('cuts.destroy', $cut) }}" data-confirm-delete data-confirm-title="¿Eliminar este corte?" data-confirm-message="Solo se eliminara este corte sin confirmar. Sus cobros reportados quedaran conservados como revertidos y las letras volveran a estar disponibles para marcarlas como pagadas.">
+                    @csrf
+                    @method('DELETE')
+                    <button class="w-full rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 sm:w-auto" type="submit">Eliminar corte</button>
+                </form>
+            @endif
         @endcan
     </div>
 
@@ -159,6 +161,10 @@
                                     <div class="no-print">
                                         <p class="text-xs text-slate-500">Monto recibido de la letra</p>
                                         <p class="font-semibold">{{ Money::mxn($item->movement->contract_amount) }}</p>
+                                        @if (Money::cents($movement->collection_fee_amount) > 0)
+                                            <p class="mt-2 text-xs text-slate-500">Cuota de cobranza</p>
+                                            <p>{{ Money::mxn($movement->collection_fee_amount) }}</p>
+                                        @endif
                                         <p class="mt-2 text-xs text-slate-500">Recargos/otros</p>
                                         <p>{{ Money::mxn(Money::decimal(Money::cents($item->movement->operator_surcharge_amount) + Money::cents($item->movement->external_concepts_amount) + Money::cents($item->movement->additional_charge_amount ?? 0) + Money::cents($item->movement->delinquency_amount ?? 0))) }}</p>
                                         <p class="mt-2 text-xs text-slate-500">Total</p>
@@ -254,7 +260,7 @@
                                     <td class="whitespace-nowrap px-3 py-3 text-right font-semibold {{ $isOverdue ? 'text-red-700' : '' }}">{{ Money::mxn($installment->remaining_amount) }}</td>
                                     @can('weekly-cuts.confirm')
                                         <td class="whitespace-nowrap px-3 py-3 text-right">
-                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}" @if (($installment->loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif>
+                                            <form method="POST" action="{{ route('collections.mark-paid', $installment) }}" data-confirm-paid data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}" data-collection-fee="{{ Money::decimal(Money::cents($installment->administration_fee_amount)) }}" data-installment-month="{{ $installment->due_date->format('Y-m') }}" data-fixed-payment-month="{{ $cut->period_starts_on->format('Y-m') }}" data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}" data-cut-pending-form="cut-pending-{{ $cut->id }}" @if (($installment->loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif>
                                                 @csrf
                                                 <input name="return_to" type="hidden" value="cut">
                                                 <input name="cut_id" type="hidden" value="{{ $cut->id }}">
@@ -457,129 +463,36 @@
                         <div class="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white px-4 pb-4 sm:-mx-5 sm:px-5">
                             <label class="text-sm font-semibold text-slate-700" for="cut_advance_loan_search">Buscar cartera</label>
                             <div class="mt-1 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                                <input class="w-full min-w-0 rounded-md border border-slate-300 px-3 py-2.5 text-base sm:text-sm" id="cut_advance_loan_search" type="search" inputmode="search" placeholder="Modelo, día, folio o cliente" data-quick-payment-search="cut_advance_loan" aria-describedby="cut_advance_loan_search_status">
+                                <input class="w-full min-w-0 rounded-md border border-slate-300 px-3 py-2.5 text-base sm:text-sm" id="cut_advance_loan_search" type="search" inputmode="search" placeholder="Marca, modelo, año, placas, VIN, día, folio o cliente" data-quick-payment-search="cut_advance_loan" aria-describedby="cut_advance_loan_search_status">
                                 <button class="min-h-11 rounded-md bg-[#0d9488] px-5 py-2.5 text-sm font-bold text-white" type="button" data-quick-payment-search-button="cut_advance_loan">Buscar</button>
                             </div>
-                            <p class="mt-2 min-h-5 text-xs text-slate-500" id="cut_advance_loan_search_status" aria-live="polite" data-quick-payment-search-status="cut_advance_loan">Escribe y usa Buscar para abrir la primera cartera coincidente.</p>
-                            <label class="mt-3 block text-sm font-semibold text-slate-700" for="cut_advance_loan">O selecciona una cartera</label>
-                            <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-base sm:text-sm" id="cut_advance_loan" data-quick-payment-select>
+                            <p class="mt-2 min-h-5 text-xs text-slate-500" id="cut_advance_loan_search_status" aria-live="polite" data-quick-payment-search-status="cut_advance_loan">Escribe para ver las coincidencias y elige la cartera que quieres abrir.</p>
+                            <p class="mt-3 text-sm font-semibold text-slate-700" id="cut_advance_loan_results_label">Carteras encontradas · Ordenadas por día de pago</p>
+                            <div class="mt-2 hidden max-h-52 space-y-2 overflow-y-auto overscroll-contain" role="group" aria-labelledby="cut_advance_loan_results_label" data-quick-payment-results="cut_advance_loan"></div>
+                            <select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-base sm:text-sm" id="cut_advance_loan" aria-label="Seleccionar cartera" data-quick-payment-select>
                                 <option value="">Seleccionar cartera</option>
                                 @foreach ($advanceLoans as $loan)
                                     @php
                                         $advanceSearchText = implode(' ', [
+                                            $loan->vehicle?->brand,
                                             $loan->vehicle?->model ?? 'Vehiculo',
+                                            $loan->vehicle?->year,
+                                            $loan->vehicle?->plates,
+                                            $loan->vehicle?->vin,
                                             $loan->payment_day,
                                             $loan->folio,
                                             $loan->client->first_name,
                                             $loan->client->last_name,
                                         ]);
                                     @endphp
-                                    <option value="cut-advance-loan-{{ $loan->id }}" data-search-text="{{ $advanceSearchText }}">
+                                    <option value="cut-advance-loan-{{ $loan->id }}" data-search-text="{{ $advanceSearchText }}" data-quick-payment-url="{{ route('cuts.advance-payment', ['cut' => $cut, 'loan' => $loan]) }}">
                                         {{ $loan->vehicle?->model ?? 'Vehiculo' }} · Dia {{ $loan->payment_day }} · {{ $loan->folio }} · {{ $loan->client->first_name }} {{ $loan->client->last_name }}
                                     </option>
                                 @endforeach
                             </select>
                         </div>
 
-                        @foreach ($advanceLoans as $loan)
-                            @php
-                                $quote = $loan->getAttribute('cut_settlement_quote');
-                                $cutDate = $cut->period_starts_on;
-                                $cutDateString = $cutDate->toDateString();
-                                $cutMonthEndString = $cutDate->copy()->endOfMonth()->toDateString();
-                            @endphp
-                            <section class="mt-4 hidden rounded-lg border border-slate-200" data-quick-payment-panel="cut-advance-loan-{{ $loan->id }}" id="cut-advance-loan-{{ $loan->id }}">
-                                <div class="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
-                                    <div>
-                                        <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{{ $loan->folio }}</p>
-                                        <h4 class="mt-1 text-lg font-bold text-slate-950">{{ $loan->vehicle?->model ?? 'Vehiculo' }} · Dia {{ $loan->payment_day }}</h4>
-                                        <p class="text-sm text-slate-500">{{ $loan->client->first_name }} {{ $loan->client->last_name }}</p>
-                                    </div>
-                                    <form class="w-full rounded-lg border border-red-200 bg-red-50 p-3 lg:w-auto lg:min-w-[330px]" method="POST" action="{{ route('loans.settle', $loan) }}">
-                                        @csrf
-                                        <input name="return_to" type="hidden" value="cut">
-                                        <input name="cut_id" type="hidden" value="{{ $cut->id }}">
-                                        <input name="advance_loan_id" type="hidden" value="{{ $loan->id }}">
-                                        <input name="settled_on" type="hidden" value="{{ $cutDateString }}">
-                                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                                            <div>
-                                                <label class="text-xs font-semibold text-red-700" for="settlement_reason_{{ $loan->id }}">Liquidar en este corte</label>
-                                                <select class="mt-1 w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm" id="settlement_reason_{{ $loan->id }}" name="settlement_reason" required>
-                                                    <option value="pronto_pago_cliente">Pronto pago del cliente</option>
-                                                    <option value="dejo_de_pagar">Dejo de pagar; cobrador liquida</option>
-                                                </select>
-                                                <p class="mt-1 text-xs text-red-700">Monto a liquidar: <strong>{{ Money::mxn(Money::decimal($quote['total_cents'] ?? 0)) }}</strong></p>
-                                                @if ($loan->getAttribute('cut_pending_payment_count') > 0)
-                                                    <p class="mt-1 text-xs font-semibold text-amber-700">Incluye los pagos reportados en este corte; se aplicaran al confirmarlo.</p>
-                                                @endif
-                                            </div>
-                                            <button class="min-h-11 rounded-md bg-red-700 px-5 py-2.5 text-sm font-bold text-white" type="submit">Liquidar</button>
-                                        </div>
-                                    </form>
-                                </div>
-                                <div class="max-h-[min(48vh,34rem)] overflow-auto overscroll-contain">
-                                    <table class="w-full min-w-[760px] text-left text-sm">
-                                        <thead class="bg-slate-50 text-xs uppercase text-slate-500">
-                                            <tr>
-                                                <th class="px-4 py-3">Letra</th>
-                                                <th class="px-4 py-3">Vence</th>
-                                                <th class="px-4 py-3 text-right">Abono capital</th>
-                                                <th class="px-4 py-3 text-right">Interes</th>
-                                                <th class="px-4 py-3 text-right">Subtotal</th>
-                                                <th class="px-4 py-3 text-right">Accion</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-100">
-                                            @foreach ($loan->installments as $installment)
-                                                @php
-                                                    $isAfterCutDate = $installment->due_date->toDateString() > $cutDateString;
-                                                    $isCapitalAdvance = $installment->due_date->toDateString() > $cutMonthEndString;
-                                                    $suggestedCapitalCents = ($loan->calculation_method ?? 'regular') === 'interest_only'
-                                                        ? Money::cents($installment->remaining_amount)
-                                                        : app(\App\Domain\Loans\InstallmentPaymentPolicy::class)->principalRemainingCents($installment);
-                                                    $canAdvanceCapital = $isCapitalAdvance && $suggestedCapitalCents > 0;
-                                                    $delinquencyCents = $isAfterCutDate
-                                                        ? 0
-                                                        : app(DelinquencyCalculator::class)->forInstallment($installment, $cutDateString);
-                                                @endphp
-                                                <tr>
-                                                    <td class="px-4 py-3 font-semibold">{{ $installment->number }}/{{ $loan->term_months }}</td>
-                                                    <td class="px-4 py-3">{{ $installment->due_date->format('d/m/Y') }}</td>
-                                                    <td class="px-4 py-3 text-right">{{ Money::mxn($installment->principal_amount) }}</td>
-                                                    <td class="px-4 py-3 text-right">{{ Money::mxn($installment->interest_amount) }}</td>
-                                                    <td class="px-4 py-3 text-right font-semibold">{{ Money::mxn(Money::decimal(Money::cents($installment->principal_amount) + Money::cents($installment->interest_amount))) }}</td>
-                                                    <td class="px-4 py-3 text-right">
-                                                        <form method="POST" action="{{ route('collections.mark-paid', $installment) }}"
-                                                            data-confirm-paid
-                                                            data-suggested-payment-amount="{{ Money::decimal(Money::cents($installment->remaining_amount)) }}"
-                                                            data-suggested-capital-amount="{{ Money::decimal($suggestedCapitalCents) }}"
-                                                            data-suggested-delinquency="{{ Money::decimal($delinquencyCents) }}"
-                                                            @if ($isCapitalAdvance) data-force-capital-advance="true" data-show-capital-advance-amount="true" @endif
-                                                            @if (($loan->calculation_method ?? 'regular') !== 'interest_only') data-month-interest-allowed="true" @endif
-                                                            @if ($canAdvanceCapital) data-capital-advance-allowed="true" @endif>
-                                                            @csrf
-                                                            <input name="return_to" type="hidden" value="cut">
-                                                            <input name="cut_id" type="hidden" value="{{ $cut->id }}">
-                                                            <input name="advance_loan_id" type="hidden" value="{{ $loan->id }}">
-                                                            <input name="operated_on" type="hidden" value="{{ $cutDateString }}">
-                                                            <input name="contract_amount" type="hidden" value="{{ $installment->remaining_amount }}">
-                                                            <input name="operator_surcharge_amount" type="hidden" value="0">
-                                                            <input name="external_concepts_amount" type="hidden" value="0">
-                                                            <input name="additional_charge_amount" type="hidden" value="0">
-                                                            <input name="delinquency_amount" type="hidden" value="0">
-                                                            <input name="notes" type="hidden" value="{{ $isCapitalAdvance ? 'Adelanto registrado desde corte' : 'Cobro registrado desde corte' }}">
-                                                            <button class="rounded-md px-3 py-1.5 text-xs font-bold {{ $isCapitalAdvance && ! $canAdvanceCapital ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'bg-[#0d9488] text-white' }}" type="submit" @disabled($isCapitalAdvance && ! $canAdvanceCapital)>
-                                                                {{ $isCapitalAdvance ? 'Abonar capital' : 'Pagado' }}
-                                                            </button>
-                                                        </form>
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </section>
-                        @endforeach
+                        @include('partials.quick-payment-content', ['prompt' => 'Selecciona una cartera para ver sus letras.'])
                     @endif
                     </div>
                     <div class="flex shrink-0 justify-end border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5 sm:py-4">

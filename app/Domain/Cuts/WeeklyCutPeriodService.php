@@ -167,7 +167,7 @@ class WeeklyCutPeriodService
                 ],
                 [
                     'expected_amount' => $movement->contract_amount,
-                    'reported_amount' => Money::decimal($this->movementTotalCents($movement)),
+                    'reported_amount' => Money::decimal($movement->totalCents()),
                     'received_amount' => '0.00',
                     'status' => 'included',
                 ],
@@ -218,6 +218,43 @@ class WeeklyCutPeriodService
         }
 
         return $this->attachMovementToCut($movement, $cut, $userId);
+    }
+
+    /**
+     * Obtiene el corte diario abierto de un operador o crea uno para la fecha
+     * indicada. Los cortes ya confirmados o cerrados nunca se reutilizan para
+     * registrar un cobro nuevo.
+     */
+    public function openDailyCutForOperatorDate(Operator|int $operator, CarbonInterface|string $cutDate, ?int $userId = null): WeeklyCut
+    {
+        $operatorId = $operator instanceof Operator ? $operator->id : $operator;
+        $date = CarbonImmutable::parse($cutDate, self::TIMEZONE)->toDateString();
+
+        return DB::transaction(function () use ($operatorId, $date, $userId) {
+            // Serializa la apertura por operador para no crear dos cortes para
+            // la misma fecha cuando se registran pagos simultaneamente.
+            Operator::query()->whereKey($operatorId)->lockForUpdate()->firstOrFail();
+
+            $cut = WeeklyCut::query()
+                ->where('operator_id', $operatorId)
+                ->whereDate('period_starts_on', $date)
+                ->whereDate('period_ends_on', $date)
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($cut) {
+                abort_if(
+                    $cut->status === 'closed' || $cut->confirmed_at !== null,
+                    422,
+                    'El corte de la fecha seleccionada ya fue confirmado o cerrado. Selecciona otra fecha de envio al corte.',
+                );
+
+                return $cut;
+            }
+
+            return $this->createCutForOperator($operatorId, $userId, CarbonImmutable::parse($date, self::TIMEZONE));
+        });
     }
 
     public function attachPendingMovementsForCut(WeeklyCut $cut, ?int $userId = null): WeeklyCut
@@ -273,7 +310,7 @@ class WeeklyCutPeriodService
                 ],
                 [
                     'expected_amount' => $movement->contract_amount,
-                    'reported_amount' => Money::decimal($this->movementTotalCents($movement)),
+                    'reported_amount' => Money::decimal($movement->totalCents()),
                     'received_amount' => '0.00',
                     'status' => 'included',
                 ],
@@ -342,15 +379,6 @@ class WeeklyCutPeriodService
                 ->where('status', 'active')
                 ->where('is_frozen', false))
             ->sum('remaining_amount') * 100);
-    }
-
-    private function movementTotalCents(CollectionMovement $movement): int
-    {
-        return Money::cents($movement->contract_amount)
-            + Money::cents($movement->operator_surcharge_amount)
-            + Money::cents($movement->external_concepts_amount)
-            + Money::cents($movement->additional_charge_amount ?? 0)
-            + Money::cents($movement->delinquency_amount ?? 0);
     }
 
     private function latestOperatorBalance(int $operatorId): int
