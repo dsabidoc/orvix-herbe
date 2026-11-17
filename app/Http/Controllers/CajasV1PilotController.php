@@ -16,6 +16,7 @@ use App\Models\Installment;
 use App\Models\Loan;
 use App\Models\Operator;
 use App\Support\LoanTerms;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,14 +35,17 @@ class CajasV1PilotController extends Controller
         $input = $this->validated($request->query(), [
             'operator' => ['required', self::ID], 'cut_on' => 'required|date_format:Y-m-d',
             'folio' => 'sometimes|string|max:80', 'model' => 'sometimes|string|max:120',
+            'client_name' => 'sometimes|nullable|string|max:150',
             'day' => 'sometimes|integer|between:1,31', 'page' => 'sometimes|integer|between:1,10000',
             'installment_id' => ['sometimes', self::ID],
         ]);
         $operator = $this->operator($input['operator'], readOnly: true);
         $exact = $input['installment_id'] ?? null;
+        $clientName = trim($input['client_name'] ?? '');
         $query = Installment::with(['loan.client', 'loan.vehicle', 'allocations.movement'])
             ->whereHas('loan', fn ($loan) => $loan->where('operator_id', $operator->id)
                 ->when(isset($input['folio']), fn ($q) => $q->where('folio', mb_strtoupper($input['folio'])))
+                ->when($clientName !== '', fn ($q) => $this->filterLoansByClientName($q, $clientName))
                 ->when(isset($input['day']), fn ($q) => $q->where('payment_day', $input['day']))
                 ->when(isset($input['model']), fn ($q) => $q->whereHas('vehicle',
                     fn ($vehicle) => $vehicle->whereRaw('LOWER(model) = ?', [mb_strtolower($input['model'])]))))
@@ -72,7 +76,8 @@ class CajasV1PilotController extends Controller
         }
         if ($exact && $rows === [] && $offset === 0) {
             $old = DB::table('cajas_v1_installment_replacements')->where('public_id', $exact)->first();
-            if ($old && Loan::where('public_id', $old->loan_public_id)->where('operator_id', $operator->id)->exists()) {
+            if ($old && Loan::where('public_id', $old->loan_public_id)->where('operator_id', $operator->id)
+                ->when($clientName !== '', fn ($q) => $this->filterLoansByClientName($q, $clientName))->exists()) {
                 $rows[] = [
                     'loan_id' => $old->loan_public_id, 'installment_id' => $exact, 'status' => 'replaced',
                     'version' => hash('sha256', 'replaced:'.$exact), 'allowed_payment_types' => [],
@@ -85,6 +90,16 @@ class CajasV1PilotController extends Controller
             'currency' => 'MXN', 'cut_on' => $input['cut_on'], 'data' => array_slice($rows, 0, 50),
             'has_more' => count($rows) > 50,
         ])->header('Cache-Control', 'private, no-store');
+    }
+
+    private function filterLoansByClientName(Builder $loans, string $clientName): Builder
+    {
+        $fragment = str_replace(['=', '%', '_'], ['==', '=%', '=_'], $clientName);
+
+        return $loans->whereHas('client', fn (Builder $clients) => $clients->whereRaw(
+            "TRIM(CONCAT(first_name, ' ', last_name)) COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '='",
+            ['%'.$fragment.'%'],
+        ));
     }
 
     public function validateCut(Request $request): JsonResponse
